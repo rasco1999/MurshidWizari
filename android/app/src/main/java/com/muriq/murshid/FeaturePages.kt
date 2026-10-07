@@ -83,8 +83,8 @@ import org.json.JSONObject
 }
 
 @Composable fun SubscriptionPage(app:AppState,openUrl:(String)->Unit) {
-    val context= LocalContext.current
-    var selected by remember { mutableStateOf("") }
+    var selected by remember { mutableStateOf(app.session.arr("plans").firstOrNull()?.str("key").orEmpty()) }
+    var lastOrder by remember { mutableIntStateOf(0) }
     PageColumn {
         Title("الاشتراك", "تفعيل حسابك يرتبط بالموقع والتطبيق معًا")
         Panel {
@@ -98,11 +98,29 @@ import org.json.JSONObject
             }){selected=key}
         }
         Text("طريقة الدفع تُفتح خارجيًا كما في الموقع.",style=MaterialTheme.typography.bodySmall)
-        Action("الانتقال إلى صفحة الاشتراك") {
-            openUrl("$SERVER/student/subscription.php")
+        Action("الانتقال إلى الدفع الخارجي",enabled=selected.isNotBlank() && !app.busy) {
+            app.job {
+                val d=app.api.call("api/payment-checkout.php",data=payload(
+                    "csrf" to app.csrf,"action" to "checkout","plan" to selected,
+                    "customer_name" to app.user.str("name").ifBlank{"طالب مشترك"},
+                    "customer_phone" to "07700000000"))
+                if(d.bool("subscribed")) { app.bootstrap();app.show("اشتراكك مفعّل بالفعل.") }
+                else {
+                    lastOrder=d.int("order_id")
+                    val link=d.str("redirect")
+                    if(link.startsWith("https://")) openUrl(link)
+                    else app.show("لم يرسل الخادم رابط الدفع.")
+                }
+            }
         }
-        OutlinedButton(onClick={app.job{app.bootstrap();app.show("تم تحديث حالة الاشتراك.")}},
-            modifier=Modifier.fillMaxWidth()){Text("التحقق من التفعيل")}
+        OutlinedButton(onClick={app.job{
+            if(lastOrder>0) {
+                val d=app.api.call("api/payment-checkout.php",data=payload(
+                    "csrf" to app.csrf,"action" to "status","order_id" to lastOrder))
+                app.show(d.readMessage("جارٍ التحقق من الاشتراك."))
+            }
+            app.bootstrap()
+        }},modifier=Modifier.fillMaxWidth()){Text("التحقق من التفعيل")}
     }
 }
 
