@@ -3997,7 +3997,6 @@ struct RegisterV3View: View {
             V3AuthPasswordField(title: "كلمة المرور", placeholder: "8 أحرف على الأقل", text: $password, reveal: $revealPassword)
             passwordStrength
             V3AuthPasswordField(title: "تأكيد كلمة المرور", placeholder: "أعد كتابة كلمة المرور", text: $confirm, reveal: $revealConfirm)
-
             if !confirm.isEmpty {
                 Label(password == confirm ? "كلمتا المرور متطابقتان" : "كلمتا المرور غير متطابقتين", systemImage: password == confirm ? "checkmark.circle.fill" : "xmark.circle.fill")
                     .font(.caption.weight(.semibold))
