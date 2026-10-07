@@ -3,6 +3,7 @@ import UIKit
 import SafariServices
 
 private enum AuthRoute: Hashable {
+    case login
     case register
     case forgot
     case verify(String, String, String)
@@ -14,19 +15,27 @@ struct AuthFlowView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            LoginView(
-                onRegister: { path.append(.register) },
-                onForgot: { path.append(.forgot) },
-                onVerify: { kind, destination, message in
-                    path.append(.verify(kind, destination, message))
-                }
+            GuestLandingView(
+                onLogin: { path.append(.login) },
+                onRegister: { path.append(.register) }
             )
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: AuthRoute.self) { route in
                 switch route {
+                case .login:
+                    LoginView(
+                        onRegister: { path.append(.register) },
+                        onForgot: { path.append(.forgot) },
+                        onVerify: { kind, destination, message in
+                            path.append(.verify(kind, destination, message))
+                        }
+                    )
+                    .navigationTitle("تسجيل الدخول")
+                    .murshidNavigation()
+
                 case .register:
                     RegisterView(
-                        onLogin: { path.removeAll() },
+                        onLogin: { path = [.login] },
                         onVerify: { kind, destination, message in
                             path.append(.verify(kind, destination, message))
                         }
@@ -46,20 +55,351 @@ struct AuthFlowView: View {
                         kind: kind,
                         destination: destination,
                         initialMessage: message,
-                        onCancel: { path.removeAll() }
+                        onCancel: { path = [.login] }
                     )
                     .navigationTitle("تأكيد الحساب")
                     .murshidNavigation()
 
                 case let .phoneReset(token):
                     PhonePasswordResetView(token: token) {
-                        path.removeAll()
+                        path = [.login]
                     }
                     .navigationTitle("كلمة مرور جديدة")
                     .murshidNavigation()
                 }
             }
         }
+    }
+}
+
+// MARK: - Native guest landing — same instructions and copy as mur-iq.com
+
+private struct LandingFeature: Identifiable {
+    let id = UUID()
+    let title: String
+    let text: String
+    let icon: String
+}
+
+private struct LandingInstruction: Identifiable {
+    let id: Int
+    let title: String
+    let text: String
+    let icon: String
+}
+
+struct GuestLandingView: View {
+    let onLogin: () -> Void
+    let onRegister: () -> Void
+
+    private let features: [LandingFeature] = [
+        .init(title: "أسئلة مرتبة حسب الموضوع", text: "تنقّل بين المواد والمواضيع المنشورة واعرف عدد الأسئلة قبل أن تبدأ.", icon: "list.bullet.rectangle.portrait.fill"),
+        .init(title: "تعلّم من إجابتك", text: "ارجع إلى الإجابات والتوضيحات المتاحة، وأبلغ عن أي ملاحظة لتُراجع.", icon: "brain.head.profile"),
+        .init(title: "اختبارات سريعة ومستقرة", text: "تجربة خفيفة وواضحة تحفظ التقدم والنتائج داخل الحساب.", icon: "bolt.shield.fill"),
+        .init(title: "تجربة مجانية حقيقية", text: "15 سؤالًا مجانيًا للحساب الجديد لتجربة المنصة قبل الاشتراك.", icon: "gift.fill"),
+        .init(title: "دفع إلكتروني سهل", text: "خطوات اشتراك واضحة مع تأكيد حالة الدفع داخل المنصة.", icon: "creditcard.fill"),
+        .init(title: "نتائج وتفسير للأخطاء", text: "متابعة المستوى ومعرفة نقاط القوة والموضوعات التي تحتاج مراجعة.", icon: "chart.bar.xaxis"),
+        .init(title: "تحديثات مستمرة", text: "إضافة ومراجعة المحتوى باستمرار استعدادًا لمواعيد الامتحانات.", icon: "arrow.triangle.2.circlepath"),
+        .init(title: "دعم سريع وموثوق", text: "خدمة عملاء واضحة لمتابعة مشكلات الحساب والاشتراك والاستخدام.", icon: "person.2.wave.2.fill")
+    ]
+
+    private let instructions: [LandingInstruction] = [
+        .init(id: 1, title: "الحساب وتسجيل الدخول", text: "استخدم بيانات صحيحة عند إنشاء الحساب، واحفظ كلمة المرور الخاصة بك. تسجيل الدخول متاح برقم الهاتف أو البريد الإلكتروني المسجل في الحساب.", icon: "person.crop.circle.badge.checkmark"),
+        .init(id: 2, title: "الاختبارات", text: "اختر الصف والمادة والموضوع ثم ابدأ الاختبار. يتم حفظ الإجابات والتقدم والنتائج داخل حساب الطالب، ويمكن متابعة الاختبار من الموضع المحفوظ.", icon: "checklist.checked"),
+        .init(id: 3, title: "الأسئلة المجانية", text: "يتوفر للحساب الجديد رصيد مقداره 15 سؤالًا مجانيًا بالضبط. بعد استهلاك الرصيد المجاني يتطلب الوصول إلى الأسئلة الإضافية اشتراكًا فعالًا.", icon: "15.square.fill"),
+        .init(id: 4, title: "الاشتراك والدفع", text: "يتم الاشتراك من داخل المنصة. مدة شهر واحد بسعر 8,000 د.ع، وثلاثة أشهر بسعر 15,000 د.ع. يعتبر الاشتراك فعالًا بعد تأكيد عملية الدفع.", icon: "creditcard.and.123"),
+        .init(id: 5, title: "قسم النجاح", text: "يعرض قسم النجاح أداء الطالب استنادًا إلى إجاباته وتقدمه، ويتضمن المواد الأقوى والموضوعات التي تحتاج إلى مراجعة. هذه المؤشرات خاصة بمتابعة المستوى داخل المنصة.", icon: "chart.line.uptrend.xyaxis"),
+        .init(id: 6, title: "تحدي المليون", text: "يعتمد الترتيب على النقاط المسجلة وفق نظام المنصة. يستطيع الطالب متابعة مركزه والمتصدرين والفارق بينه وبين المراكز الأعلى من صفحة التحدي.", icon: "trophy.fill"),
+        .init(id: 7, title: "بيانات الحساب", text: "لا تشارك كلمة المرور أو بيانات الدخول مع أي شخص. يجب استخدام الحساب من صاحبه فقط لضمان سلامة النتائج والنقاط وسجل الاختبارات.", icon: "lock.shield.fill"),
+        .init(id: 8, title: "خدمة العملاء", text: "عند وجود مشكلة في الحساب أو الاشتراك أو استخدام الموقع، استخدم زر خدمة العملاء الموجود داخل المنصة بعد الدخول لإرسال طلب الدعم.", icon: "headset")
+    ]
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 22) {
+                    landingTopBar
+                    hero(proxy: proxy)
+                    jumpMenu(proxy: proxy)
+                    platformValue
+                    instructionGrid
+                    finalActions
+                    footer
+                }
+                .padding(.horizontal, 18)
+                .padding(.bottom, 26)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .background(
+                LinearGradient(
+                    colors: [Color.murshidBackground, Color.murshidNavy.opacity(0.045), Color.murshidBackground],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
+            )
+        }
+    }
+
+    private var landingTopBar: some View {
+        HStack(spacing: 12) {
+            Image("WelcomeEmblem")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 48, height: 48)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("المرشد الوزاري").font(.headline.bold())
+                Text("مساحة تعلّمك").font(.caption).foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button("تسجيل الدخول", action: onLogin)
+                .buttonStyle(.bordered)
+                .tint(.murshidBlue)
+                .font(.subheadline.weight(.semibold))
+        }
+        .padding(.top, 10)
+    }
+
+    private func hero(proxy: ScrollViewProxy) -> some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("تعلّم بتركيز. تقدّم بثقة.")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(Color.murshidBlue)
+
+                Text("خطوة واضحة،\nنحو نجاحك.")
+                    .font(.system(size: 40, weight: .heavy, design: .rounded))
+                    .minimumScaleFactor(0.82)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("رتّب دراستك، اختبر فهمك، وارجع لما يحتاج مراجعة. مساحة هادئة تجمع رحلتك الدراسية في مكان واحد.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(5)
+
+                HStack(spacing: 10) {
+                    Button("ابدأ رحلتك", action: onRegister)
+                        .buttonStyle(PrimaryButtonStyle())
+
+                    Button("اكتشف المنصة") {
+                        withAnimation(.easeInOut(duration: 0.35)) {
+                            proxy.scrollTo("platform-value", anchor: .top)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                }
+
+                Label("منصة تعليمية مستقلة · غير تابعة لأي جهة حكومية", systemImage: "checkmark.shield.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            MurshidCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Label("مساحة التدريب", systemImage: "book.fill")
+                            .font(.headline)
+                        Spacer()
+                        Text("مثال توضيحي")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Text("كل سؤال، خطوة جديدة")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Color.murshidBlue)
+
+                    Text("ما ناتج 3² ؟")
+                        .font(.title2.bold())
+
+                    demoChoice("6", correct: false)
+                    demoChoice("9", correct: true)
+                    demoChoice("12", correct: false)
+
+                    Label("افهم الفكرة، ثم جرّب بنفسك.", systemImage: "brain.head.profile")
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .overlay(alignment: .topLeading) {
+                Label("تعلّم على مهل", systemImage: "checklist")
+                    .font(.caption.bold())
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .offset(x: 4, y: -14)
+            }
+        }
+        .padding(.top, 6)
+    }
+
+    private func demoChoice(_ value: String, correct: Bool) -> some View {
+        HStack {
+            Text(value).font(.headline)
+            Spacer()
+            Image(systemName: correct ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(correct ? Color.green : Color.secondary)
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 48)
+        .background(correct ? Color.green.opacity(0.11) : Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .stroke(correct ? Color.green.opacity(0.30) : Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+
+    private func jumpMenu(proxy: ScrollViewProxy) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                jumpButton("لماذا المنصة؟", id: "platform-value", proxy: proxy)
+                jumpButton("الحساب", id: "instruction-1", proxy: proxy)
+                jumpButton("الاختبارات", id: "instruction-2", proxy: proxy)
+                jumpButton("الأسئلة المجانية", id: "instruction-3", proxy: proxy)
+                jumpButton("الاشتراك", id: "instruction-4", proxy: proxy)
+                jumpButton("النجاح", id: "instruction-5", proxy: proxy)
+                jumpButton("تحدي المليون", id: "instruction-6", proxy: proxy)
+                jumpButton("خدمة العملاء", id: "instruction-8", proxy: proxy)
+            }
+        }
+    }
+
+    private func jumpButton(_ title: String, id: String, proxy: ScrollViewProxy) -> some View {
+        Button(title) {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                proxy.scrollTo(id, anchor: .top)
+            }
+        }
+        .font(.caption.weight(.semibold))
+        .buttonStyle(.bordered)
+        .tint(.secondary)
+    }
+
+    private var platformValue: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("مصممة لطريقتك في الدراسة")
+                .font(.subheadline.bold())
+                .foregroundStyle(Color.murshidBlue)
+
+            Text("لماذا تختار المرشد الوزاري؟")
+                .font(.title.bold())
+
+            Text("من اختيار موضوعك إلى مراجعة إجابتك، أدوات بسيطة تساعدك على معرفة خطوتك التالية.")
+                .foregroundStyle(.secondary)
+                .lineSpacing(4)
+
+            ForEach(features) { item in
+                MurshidCard {
+                    HStack(alignment: .top, spacing: 13) {
+                        Image(systemName: item.icon)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(Color.murshidBlue)
+                            .frame(width: 34, height: 34)
+                            .background(Color.murshidBlue.opacity(0.10), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(item.title).font(.headline)
+                            Text(item.text)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .lineSpacing(3)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+        }
+        .id("platform-value")
+    }
+
+    private var instructionGrid: some View {
+        VStack(spacing: 13) {
+            ForEach(instructions) { item in
+                MurshidCard {
+                    HStack(alignment: .top, spacing: 13) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.murshidBlue.opacity(0.10))
+                                .frame(width: 46, height: 46)
+                            Text(String(format: "%02d", item.id))
+                                .font(.caption.bold().monospacedDigit())
+                                .foregroundStyle(Color.murshidBlue)
+                        }
+
+                        VStack(alignment: .leading, spacing: 7) {
+                            Label(item.title, systemImage: item.icon)
+                                .font(.headline)
+                            Text(item.text)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .lineSpacing(4)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                }
+                .id("instruction-\(item.id)")
+            }
+        }
+    }
+
+    private var finalActions: some View {
+        MurshidCard {
+            VStack(spacing: 14) {
+                Text("بعد قراءة التعليمات")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(Color.murshidBlue)
+
+                Text("اختر طريقة الدخول إلى المنصة")
+                    .font(.title2.bold())
+                    .multilineTextAlignment(.center)
+
+                Button("تسجيل الدخول", action: onLogin)
+                    .buttonStyle(PrimaryButtonStyle())
+
+                Button("إنشاء حساب", action: onRegister)
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .foregroundStyle(Color.murshidNavy)
+                    .background(Color.murshidGold, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+            }
+        }
+    }
+
+    private var footer: some View {
+        VStack(spacing: 10) {
+            Text("© 2026 المرشد الوزاري · منصة تعليمية مستقلة")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 18) {
+                Link(destination: URL(string: "https://www.instagram.com/murshid.iq/")!) {
+                    Image(systemName: "camera")
+                }
+                Link(destination: URL(string: "https://www.facebook.com/Murshidiq/")!) {
+                    Image(systemName: "person.2.fill")
+                }
+                Link(destination: URL(string: "https://t.me/El_Murshed_iq")!) {
+                    Image(systemName: "paperplane.fill")
+                }
+            }
+            .foregroundStyle(Color.murshidBlue)
+
+            HStack(spacing: 6) {
+                Link("الخصوصية", destination: URL(string: "https://mur-iq.com/privacy.php")!)
+                Text("·").foregroundStyle(.secondary)
+                Link("شروط الاستخدام", destination: URL(string: "https://mur-iq.com/terms.php")!)
+            }
+            .font(.caption)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
     }
 }
 
@@ -261,7 +601,10 @@ struct RegisterView: View {
                             keyboard: .default,
                             contentType: .name
                         )
-                        .onChange(of: fullName) { _ in nameError = "" }
+                        .onChange(of: fullName) { value in
+                            let clean = normalizedPersonName(value)
+                            nameError = clean.split(separator: " ").count >= 3 ? "" : nameError
+                        }
 
                         if !nameError.isEmpty { FieldError(nameError) }
 
@@ -449,6 +792,8 @@ struct RegisterView: View {
             do {
                 let data = try await APIClient.shared.register([
                     "full_name": name,
+                    "name": name,
+                    "fullName": name,
                     "grade_id": gradeID,
                     "gender": gender,
                     "contact_type": contactType,
@@ -1002,15 +1347,16 @@ private extension View {
 }
 
 private func normalizedPersonName(_ value: String) -> String {
-    let mapped = value
-        .replacingOccurrences(of: "\u{00A0}", with: " ")
-        .replacingOccurrences(of: "\u{2007}", with: " ")
-        .replacingOccurrences(of: "\u{202F}", with: " ")
-        .replacingOccurrences(of: "\u{200E}", with: "")
-        .replacingOccurrences(of: "\u{200F}", with: "")
-        .replacingOccurrences(of: "\u{061C}", with: "")
+    // Arabic keyboards and autofill can insert bidi/format/non-breaking characters.
+    // Keep only Unicode letters/marks plus apostrophe/hyphen, and turn everything else into a normal space.
+    let canonical = value.precomposedStringWithCanonicalMapping
+    let cleaned = canonical.replacingOccurrences(
+        of: #"[^\\p{L}\\p{M}'’\\-]+"#,
+        with: " ",
+        options: .regularExpression
+    )
 
-    return mapped
+    return cleaned
         .components(separatedBy: .whitespacesAndNewlines)
         .filter { !$0.isEmpty }
         .joined(separator: " ")
