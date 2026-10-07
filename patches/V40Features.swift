@@ -1046,8 +1046,3 @@ struct V40QuestionSearchView: View {
         }
     }
 }
-
-
-typealias V40CustomExamBuilderView = V40PracticeBuilderView
-typealias V40StudentQuestionSubmitView = V40QuestionContributionView
-typealias V40AttemptHistoryView = V40HistoryView
