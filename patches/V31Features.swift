@@ -344,22 +344,40 @@ private struct V31WebsiteHeroSlider: View {
 
     @MainActor
     private func preloadAllImages() async {
-        guard images.count < V31SlideKind.allCases.count else { ready = true; return }
-        var loaded: [Int: UIImage] = [:]
-        for kind in V31SlideKind.allCases {
-            guard let url = kind.imageURL else { continue }
-            var request = URLRequest(url: url)
-            request.cachePolicy = .returnCacheDataElseLoad
-            request.timeoutInterval = 20
-            if let (data, response) = try? await URLSession.shared.data(for: request),
-               let http = response as? HTTPURLResponse,
-               (200...299).contains(http.statusCode),
-               let image = UIImage(data: data) {
-                loaded[kind.rawValue] = image
-            }
+        guard images.count < V31SlideKind.allCases.count else {
+            ready = true
+            return
         }
-        if !loaded.isEmpty {
-            images.merge(loaded) { _, new in new }
+
+        let requests: [(Int, URL)] = V31SlideKind.allCases.compactMap { kind in
+            guard let url = kind.imageURL else { return nil }
+            return (kind.rawValue, url)
+        }
+
+        let payloads: [(Int, Data)] = await withTaskGroup(of: (Int, Data?).self) { group in
+            for (id, url) in requests {
+                group.addTask {
+                    var request = URLRequest(url: url)
+                    request.cachePolicy = .returnCacheDataElseLoad
+                    request.timeoutInterval = 10
+                    guard let (data, response) = try? await URLSession.shared.data(for: request),
+                          let http = response as? HTTPURLResponse,
+                          (200...299).contains(http.statusCode) else {
+                        return (id, nil)
+                    }
+                    return (id, data)
+                }
+            }
+
+            var result: [(Int, Data)] = []
+            for await item in group {
+                if let data = item.1 { result.append((item.0, data)) }
+            }
+            return result
+        }
+
+        for (id, data) in payloads {
+            if let image = UIImage(data: data) { images[id] = image }
         }
         ready = images.count == V31SlideKind.allCases.count
     }
