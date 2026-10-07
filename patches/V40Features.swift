@@ -507,3 +507,102 @@ struct V40DailyChallengeView: View {
     private func load() async { do{let d=try await APIClient.shared.request("mobile/challenge.php");await MainActor.run{done=jBool(d["done"]);score=jInt(d["score"]);total=jInt(d["total"]);questions=jArray(d["questions"]).map(V40PracticeQuestion.init);loading=false}}catch{await MainActor.run{loading=false;message=error.localizedDescription}} }
     private func submit() async {busy=true;var payload:JSON=[:];for(id,v)in answers{payload[String(id)]=v};do{let d=try await APIClient.shared.request("mobile/challenge.php",method:"POST",body:["csrf":app.csrf,"answers":payload]);await MainActor.run{busy=false;done=jBool(d["done"]);score=jInt(d["score"]);total=jInt(d["total"]);haptic()}}catch{await MainActor.run{busy=false;message=error.localizedDescription;haptic(.error)}}}
 }
+
+
+struct V40ExamFilterSheet: View {
+    @Binding var type: String
+    @Binding var year: String
+    @Binding var round: String
+    @Binding var difficulty: String
+    @Binding var state: String
+    @Binding var shuffle: Bool
+    let availableTypes: [String]
+    let availableYears: [String]
+    let availableRounds: [String]
+    let availableDifficulties: [String]
+    let onApply: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("نوع السؤال") {
+                    Picker("النوع", selection: $type) {
+                        Text("الكل").tag("all")
+                        ForEach(availableTypes, id: \.self) { value in Text(typeLabel(value)).tag(value) }
+                    }
+                }
+                if !availableYears.isEmpty {
+                    Section("السنة الوزارية") {
+                        Picker("السنة", selection: $year) {
+                            Text("كل السنوات").tag("all")
+                            ForEach(availableYears, id: \.self) { Text($0).tag($0) }
+                        }
+                    }
+                }
+                if !availableRounds.isEmpty {
+                    Section("الدور") {
+                        Picker("الدور", selection: $round) {
+                            Text("كل الأدوار").tag("all")
+                            ForEach(availableRounds, id: \.self) { Text($0).tag($0) }
+                        }
+                    }
+                }
+                if !availableDifficulties.isEmpty {
+                    Section("الصعوبة") {
+                        Picker("الصعوبة", selection: $difficulty) {
+                            Text("كل المستويات").tag("all")
+                            ForEach(availableDifficulties, id: \.self) { Text(difficultyLabel($0)).tag($0) }
+                        }
+                    }
+                }
+                Section("حالة السؤال") {
+                    Picker("الحالة", selection: $state) {
+                        Text("الكل").tag("all")
+                        Text("لم أجب").tag("new")
+                        Text("أجبت سابقًا").tag("answered")
+                        Text("أخطأت به").tag("wrong")
+                        Text("المفضلة").tag("favorite")
+                    }
+                    Toggle("ترتيب عشوائي", isOn: $shuffle)
+                }
+                Section {
+                    Button("إعادة الضبط", role: .destructive) {
+                        type = "all"; year = "all"; round = "all"; difficulty = "all"; state = "all"; shuffle = false
+                    }
+                }
+            }
+            .navigationTitle("مرشحات الأسئلة")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { Button("إلغاء") { dismiss() } }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("تطبيق") { onApply(); dismiss() }.fontWeight(.semibold)
+                }
+            }
+        }
+    }
+
+    private func typeLabel(_ value: String) -> String {
+        switch value {
+        case "mcq": return "اختيارات"
+        case "text": return "نصي"
+        case "true_false": return "صح / خطأ"
+        case "fill": return "أكمل"
+        case "match": return "مطابقة"
+        case "meaning": return "معاني"
+        case "genetics": return "وراثة"
+        case "calculation": return "مسائل"
+        default: return value
+        }
+    }
+
+    private func difficultyLabel(_ value: String) -> String {
+        switch value.lowercased() {
+        case "easy": return "سهل"
+        case "medium": return "متوسط"
+        case "hard": return "صعب"
+        default: return value
+        }
+    }
+}
