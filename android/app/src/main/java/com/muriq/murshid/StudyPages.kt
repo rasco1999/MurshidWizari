@@ -363,6 +363,17 @@ fun validQuestion(q: Json): Boolean {
                         fontWeight=FontWeight.Bold)
                     listOf("chapter_name","subject_name","description","message","created_at","score","answer_text")
                         .forEach{ k -> if(row.str(k).isNotBlank())Text(row.str(k),style=MaterialTheme.typography.bodySmall)}
+                    if(row.str("correct_answer").isNotBlank())
+                        Text("الإجابة الصحيحة: ${row.str("correct_answer")}",
+                            color=MaterialTheme.colorScheme.primary)
+                    if(row.str("explanation").isNotBlank())
+                        Text(row.str("explanation"),style=MaterialTheme.typography.bodyMedium)
+                    if(row.int("chapter_id")>0) {
+                        OutlinedButton(onClick={app.push(Route("exam",row.int("chapter_id"),
+                            row.str("chapter_name").ifBlank{"الاختبار"},row.int("subject_id")))}) {
+                            Text("فتح الموضوع")
+                        }
+                    }
                 }
             }
         }
