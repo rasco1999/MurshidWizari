@@ -1,4 +1,22 @@
 import SwiftUI
+
+func murshidQuestionDisplayText(_ raw: String) -> String {
+    var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    let patterns = [
+        #"^\s*استرجاع\s+وزاري(?:\s+[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#,
+        #"^\s*وزاري(?:\s+[\p{N}٠-٩]{2,4})?(?:\s*[/\-–—]\s*[^:：\n]{1,48})?\s*[:：]\s*"#,
+        #"^\s*(?:سؤال\s+)?(?:تدريب|تدريبي|تدريبية)(?:\s+[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#
+    ]
+    for pattern in patterns {
+        if let range = text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) {
+            text.removeSubrange(range)
+            text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            break
+        }
+    }
+    return text
+}
+
 import Combine
 import UIKit
 import SafariServices
@@ -2688,13 +2706,12 @@ struct V3ExamView: View {
                     Text("سؤال \(current + 1)")
                         .font(.caption.bold())
                         .foregroundStyle(Color.murshidBlue)
-                    if !q.examYear.isEmpty {
-                        Label(q.examYear, systemImage: "calendar")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    if !q.examRound.isEmpty {
-                        Text(q.examRound).font(.caption).foregroundStyle(.secondary)
-                    }
+                    Text("وزاري")
+                        .font(.caption.bold())
+                        .foregroundStyle(Color.murshidBlue)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.murshidBlue.opacity(0.10), in: Capsule())
                     Spacer()
                 }
                 if !q.meaningWord.isEmpty {
@@ -2702,7 +2719,7 @@ struct V3ExamView: View {
                         .font(.headline)
                         .foregroundStyle(Color.murshidGold)
                 }
-                Text(q.text)
+                Text(murshidQuestionDisplayText(q.text))
                     .font(.title3.weight(.semibold))
                     .lineSpacing(5)
                     .fixedSize(horizontal: false, vertical: true)
