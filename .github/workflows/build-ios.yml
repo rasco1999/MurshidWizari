@@ -159,7 +159,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          RESP="$(curl -sS --max-time 20 'https://mur-iq.com/api/register.php'             -H 'Content-Type: application/json; charset=utf-8'             -H 'Accept: application/json'             --data '{"full_name":"احمد علي حسين ت","grade_id":0,"gender":"male","contact_type":"email","identifier":"name-probe-do-not-create@example.invalid","password":"12345678","password_confirmation":"12345678","company_website":""}')"
+          RESP="$(curl -sS -L --post301 --post302 --max-redirs 5 --max-time 20 'https://mur-iq.com/api/register.php'             -H 'Content-Type: application/json; charset=utf-8'             -H 'Accept: application/json'             --data '{"full_name":"احمد علي حسين ت","grade_id":0,"gender":"male","contact_type":"email","identifier":"name-probe-do-not-create@example.invalid","password":"12345678","password_confirmation":"12345678","company_website":""}')"
           echo "$RESP"
           python3 - "$RESP" <<'PY'
           import json, sys
