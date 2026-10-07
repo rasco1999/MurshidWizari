@@ -77,6 +77,7 @@ jobs:
                       '        MARKETING_VERSION: "3.1.0"',
                       '        CURRENT_PROJECT_VERSION: "310"',
                       '        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon',
+                      '        CODE_SIGN_ENTITLEMENTS: MurshidWizari/MurshidWizari.entitlements',
                   ])
                   inserted = True
           if not inserted:
@@ -86,10 +87,33 @@ jobs:
           p = Path('source/MurshidWizari/APIClient.swift')
           s = p.read_text()
           s = s.replace('final class APIClient {', '@MainActor\nfinal class APIClient {')
+          s = s.replace('"X-Murshid-App": "ios-native-3.0"', '"X-Murshid-App": "ios-native-3.1"')
           p.write_text(s)
 
           p = Path('source/MurshidWizari/Services.swift')
           s = p.read_text()
+          old = '''        let context = LAContext()
+        context.localizedCancelTitle = "إلغاء"
+        do {
+            let ok = try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "افتح المرشد الوزاري للعودة إلى دراستك")
+            isLocked = !ok
+        } catch { isLocked = true }'''
+          new = '''        let context = LAContext()
+        context.localizedCancelTitle = "إلغاء"
+        context.localizedFallbackTitle = ""
+        var authError: NSError?
+        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &authError), context.biometryType == .faceID else {
+            UserDefaults.standard.set(false, forKey: "biometric_lock")
+            isLocked = false
+            return
+        }
+        do {
+            let ok = try await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "افتح المرشد الوزاري باستخدام Face ID")
+            isLocked = !ok
+        } catch { isLocked = true }'''
+          if old not in s:
+              raise SystemExit('Expected biometric block not found')
+          s = s.replace(old, new)
           s = s.replace('final class KeychainVault {', '@MainActor\nfinal class KeychainVault {')
           s = s.replace('actor ResponseCache {', '@MainActor\nfinal class ResponseCache {')
           p.write_text(s)
