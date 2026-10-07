@@ -239,7 +239,14 @@ fun validQuestion(q: Json): Boolean {
                     }
                     englishLeft.length()>0 -> englishLeft.keys().asSequence().all { !specialMap[it].isNullOrBlank() }
                     stages.isNotEmpty() -> stages.filter { it.str("kind")!="info" && !it.bool("ungraded") }
-                        .all { !specialMap[it.str("key")].isNullOrBlank() }
+                        .all { stage ->
+                            val cells = stage.optJSONArray("cells")
+                            if(stage.str("kind")=="punnett" && cells!=null)
+                                (0 until cells.length()).all { index ->
+                                    !specialMap["${stage.str("key")}_$index"].isNullOrBlank()
+                                }
+                            else !specialMap[stage.str("key")].isNullOrBlank()
+                        }
                     else -> entry.isNotBlank()
                 }
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(14.dp),
@@ -283,9 +290,20 @@ fun validQuestion(q: Json): Boolean {
                                 if(stage.str("label").isNotBlank()) Text(stage.str("label"),fontWeight=FontWeight.SemiBold)
                                 val key=stage.str("key")
                                 if(stage.str("kind")!="info" && !stage.bool("ungraded")) {
-                                    OutlinedTextField(specialMap[key].orEmpty(),{specialMap[key]=it},
-                                        label={Text(stage.str("prompt").ifBlank {stage.str("label").ifBlank {"الإجابة"}})},
-                                        modifier=Modifier.fillMaxWidth(),enabled=!submitted)
+                                    val cells = stage.optJSONArray("cells")
+                                    if(stage.str("kind")=="punnett" && cells!=null) {
+                                        Text("أكمل خانات مربع بانيت",style=MaterialTheme.typography.bodySmall)
+                                        (0 until cells.length()).forEach { index ->
+                                            val cellKey="${key}_$index"
+                                            OutlinedTextField(specialMap[cellKey].orEmpty(),{specialMap[cellKey]=it},
+                                                label={Text("الخانة ${index+1}")},
+                                                modifier=Modifier.fillMaxWidth(),enabled=!submitted)
+                                        }
+                                    } else {
+                                        OutlinedTextField(specialMap[key].orEmpty(),{specialMap[key]=it},
+                                            label={Text(stage.str("prompt").ifBlank {stage.str("label").ifBlank {"الإجابة"}})},
+                                            modifier=Modifier.fillMaxWidth(),enabled=!submitted)
+                                    }
                                 }
                             }
                             else -> OutlinedTextField(entry,{entry=it}, enabled=!submitted,
