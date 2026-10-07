@@ -990,7 +990,7 @@ struct RegisterView: View {
                         .disabled(loading || gradesLoading)
                         .opacity((loading || gradesLoading) ? 0.62 : 1)
 
-                        Text("نسخة iPhone 3.8 • Build 380")
+                        Text("نسخة iPhone 4.0 • Build 400")
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.tertiary)
                             .frame(maxWidth: .infinity, alignment: .center)
@@ -2817,6 +2817,20 @@ struct V3ExamView: View {
     @State private var reportReason = "wrong_answer"
     @State private var reportMessage = ""
     @State private var reporting = false
+    @State private var showFilters = false
+    @State private var filterType = "all"
+    @State private var filterYear = "all"
+    @State private var filterRound = "all"
+    @State private var filterDifficulty = "all"
+    @State private var filterState = "all"
+    @State private var filterShuffle = false
+    @State private var availableFilterTypes: [String] = []
+    @State private var availableFilterYears: [String] = []
+    @State private var availableFilterRounds: [String] = []
+    @State private var availableFilterDifficulties: [String] = []
+    @State private var showNote = false
+    @State private var noteText = ""
+    @State private var savingNote = false
     @FocusState private var textAnswerFocused: Bool
 
     var body: some View {
@@ -2865,11 +2879,26 @@ struct V3ExamView: View {
                     .disabled(submitting)
                     .accessibilityLabel(questions[current].favorite ? "إزالة من المفضلة" : "إضافة إلى المفضلة")
 
-                    Button { showReport = true } label: {
-                        Image(systemName: "exclamationmark.bubble")
+                    Button { showFilters = true } label: {
+                        Image(systemName: activeFilterCount > 0 ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                     }
                     .disabled(submitting)
-                    .accessibilityLabel("الإبلاغ عن السؤال")
+                    .accessibilityLabel("تصفية الأسئلة")
+
+                    Menu {
+                        Button {
+                            Task { await loadCurrentNote() }
+                        } label: {
+                            Label("ملاحظتي الخاصة", systemImage: "note.text")
+                        }
+                        Button { showReport = true } label: {
+                            Label("الإبلاغ عن السؤال", systemImage: "exclamationmark.bubble")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .disabled(submitting)
+                    .accessibilityLabel("أدوات السؤال")
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -2890,6 +2919,22 @@ struct V3ExamView: View {
             .environmentObject(app)
         }
         .sheet(isPresented: $showReport) { reportSheet }
+        .sheet(isPresented: $showFilters) {
+            V40ExamFilterSheet(
+                type: $filterType,
+                year: $filterYear,
+                round: $filterRound,
+                difficulty: $filterDifficulty,
+                state: $filterState,
+                shuffle: $filterShuffle,
+                availableTypes: availableFilterTypes,
+                availableYears: availableFilterYears,
+                availableRounds: availableFilterRounds,
+                availableDifficulties: availableFilterDifficulties,
+                onApply: { Task { await load() } }
+            )
+        }
+        .sheet(isPresented: $showNote) { noteSheet }
     }
 
     private var examContent: some View {
@@ -2979,6 +3024,12 @@ struct V3ExamView: View {
                     .lineSpacing(5)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
+                let meta = [q.examYear, q.examRound].filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                if !meta.isEmpty {
+                    Label(meta.joined(separator: " • "), systemImage: "calendar")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
@@ -3187,8 +3238,12 @@ struct V3ExamView: View {
                 Section("سبب البلاغ") {
                     Picker("السبب", selection: $reportReason) {
                         Text("الإجابة غير صحيحة").tag("wrong_answer")
-                        Text("السؤال غير واضح").tag("unclear")
+                        Text("نوع السؤال خاطئ").tag("wrong_type")
+                        Text("الخيارات ناقصة").tag("missing_options")
                         Text("السؤال مكرر").tag("duplicate")
+                        Text("السؤال في موضوع غير صحيح").tag("wrong_topic")
+                        Text("الشرح غير صحيح").tag("wrong_explanation")
+                        Text("السؤال غير واضح").tag("unclear")
                         Text("مشكلة في المصدر").tag("source")
                         Text("سبب آخر").tag("other")
                     }
@@ -3215,6 +3270,46 @@ struct V3ExamView: View {
                 ToolbarItem(placement: .topBarLeading) { Button("إغلاق") { showReport = false } }
             }
         }
+    }
+
+    private var noteSheet: some View {
+        NavigationStack {
+            Form {
+                Section("ملاحظة خاصة") {
+                    TextField("مثال: راجع هذه القاعدة قبل الامتحان", text: $noteText, axis: .vertical)
+                        .lineLimit(3...8)
+                }
+                Section {
+                    Text("هذه الملاحظة خاصة بك ولا تظهر لأي طالب آخر.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("ملاحظتي")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("إغلاق") { showNote = false }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(savingNote ? "جاري الحفظ…" : "حفظ") {
+                        Task { await saveCurrentNote() }
+                    }
+                    .disabled(savingNote)
+                }
+            }
+        }
+    }
+
+    private var activeFilterCount: Int {
+        var n = 0
+        if filterType != "all" { n += 1 }
+        if filterYear != "all" { n += 1 }
+        if filterRound != "all" { n += 1 }
+        if filterDifficulty != "all" { n += 1 }
+        if filterState != "all" { n += 1 }
+        if filterShuffle { n += 1 }
+        return n
     }
 
     private var answeredCount: Int {
@@ -3257,7 +3352,14 @@ struct V3ExamView: View {
     private func load() async {
         await MainActor.run { loading = true; error = ""; startedAt = Date() }
         do {
-            let d = try await APIClient.shared.request("mobile/exam.php", query: [URLQueryItem(name: "chapter_id", value: "\(topic.id)")])
+            var query: [URLQueryItem] = [URLQueryItem(name: "chapter_id", value: "\(topic.id)")]
+            if filterType != "all" { query.append(URLQueryItem(name: "type", value: filterType)) }
+            if filterYear != "all" { query.append(URLQueryItem(name: "year", value: filterYear)) }
+            if filterRound != "all" { query.append(URLQueryItem(name: "round", value: filterRound)) }
+            if filterDifficulty != "all" { query.append(URLQueryItem(name: "difficulty", value: filterDifficulty)) }
+            if filterState != "all" { query.append(URLQueryItem(name: "state", value: filterState)) }
+            if filterShuffle { query.append(URLQueryItem(name: "shuffle", value: "1")) }
+            let d = try await APIClient.shared.request("mobile/exam.php", query: query)
             var seenQuestions = Set<String>()
             let qs = jArray(d["questions"])
                 .map(Question.init)
@@ -3269,8 +3371,19 @@ struct V3ExamView: View {
                     guard !key.isEmpty else { return false }
                     return seenQuestions.insert(key).inserted
                 }
+            let filterRoot = d["filters"] as? JSON ?? [:]
+            let available = filterRoot["available"] as? JSON ?? [:]
+            let typeValues = (available["types"] as? [String]) ?? jArray(available["types"]).map { jString($0["value"], default: jString($0["type"])) }.filter { !$0.isEmpty }
+            let yearValues = (available["years"] as? [String]) ?? []
+            let roundValues = (available["rounds"] as? [String]) ?? []
+            let difficultyValues = (available["difficulties"] as? [String]) ?? []
             await MainActor.run {
                 questions = qs
+                current = 0
+                availableFilterTypes = typeValues
+                availableFilterYears = yearValues
+                availableFilterRounds = roundValues
+                availableFilterDifficulties = difficultyValues
                 for q in qs where !q.storedAnswer.isEmpty { answers[q.id] = q.storedAnswer }
                 app.subscribed = jBool(d["subscribed"])
                 app.freeUsed = jInt(d["free_used"])
@@ -3396,6 +3509,51 @@ struct V3ExamView: View {
                 }
             } catch {
                 await MainActor.run { submitting = false; self.error = error.localizedDescription; haptic(.error) }
+            }
+        }
+    }
+
+    private func loadCurrentNote() async {
+        guard !questions.isEmpty else { return }
+        let q = questions[current]
+        do {
+            let d = try await APIClient.shared.request(
+                "mobile/question-notes.php",
+                query: [URLQueryItem(name: "question_id", value: "\(q.id)")]
+            )
+            await MainActor.run {
+                noteText = jString(d["note"])
+                showNote = true
+            }
+        } catch {
+            await MainActor.run {
+                alertMessage = error.localizedDescription
+                showAlert = true
+            }
+        }
+    }
+
+    private func saveCurrentNote() async {
+        guard !questions.isEmpty else { return }
+        let q = questions[current]
+        await MainActor.run { savingNote = true }
+        do {
+            _ = try await APIClient.shared.request(
+                "mobile/question-notes.php",
+                method: "POST",
+                body: ["csrf": app.csrf, "question_id": q.id, "note": noteText]
+            )
+            await MainActor.run {
+                savingNote = false
+                showNote = false
+                haptic()
+            }
+        } catch {
+            await MainActor.run {
+                savingNote = false
+                alertMessage = error.localizedDescription
+                showAlert = true
+                haptic(.error)
             }
         }
     }
@@ -4188,7 +4346,7 @@ struct RegisterV3View: View {
 
                             navigationButtons(proxy: proxy)
 
-                            Text("نسخة iPhone 3.8 • Build 380")
+                            Text("نسخة iPhone 4.0 • Build 400")
                                 .font(.caption2.monospacedDigit())
                                 .foregroundStyle(.tertiary)
                                 .frame(maxWidth: .infinity, alignment: .center)
