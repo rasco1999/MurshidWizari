@@ -63,20 +63,24 @@ jobs:
 
           # Ensure XcodeGen includes the full asset catalog and uses iPhone-only v2 metadata.
           p = Path('source/project.yml')
-          project = p.read_text()
-          project = project.replace('          - Assets.xcassets\\n', '')
-          anchor = '        PRODUCT_NAME: MurshidWizari\\n'
-          target_settings = (
-              '        PRODUCT_NAME: MurshidWizari\\n'
-              '        TARGETED_DEVICE_FAMILY: "1"\\n'
-              '        MARKETING_VERSION: "2.0.0"\\n'
-              '        CURRENT_PROJECT_VERSION: "200"\\n'
-              '        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon\\n'
-          )
-          if anchor not in project:
-              raise SystemExit('Expected target settings anchor not found')
-          project = project.replace(anchor, target_settings, 1)
-          p.write_text(project)
+          lines = p.read_text().splitlines()
+          out = []
+          inserted = False
+          for line in lines:
+              if line.strip() == '- Assets.xcassets':
+                  continue
+              out.append(line)
+              if line == '        PRODUCT_NAME: MurshidWizari':
+                  out.extend([
+                      '        TARGETED_DEVICE_FAMILY: "1"',
+                      '        MARKETING_VERSION: "2.0.0"',
+                      '        CURRENT_PROJECT_VERSION: "200"',
+                      '        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon',
+                  ])
+                  inserted = True
+          if not inserted:
+              raise SystemExit('Expected target PRODUCT_NAME setting not found')
+          p.write_text('\n'.join(out) + '\n')
 
           p = Path('source/MurshidWizari/APIClient.swift')
           s = p.read_text()
