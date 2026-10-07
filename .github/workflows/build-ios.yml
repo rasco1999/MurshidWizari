@@ -378,8 +378,13 @@ jobs:
           grep -Fq 'قفل حقيقي بـ Face ID' MurshidWizari/V31Features.swift
           grep -Fq 'طلب إعلان مدرسة' MurshidWizari/V31Features.swift
           grep -Fq 'الانتقال إلى الدفع الخارجي' MurshidWizari/V31Features.swift
-          if grep -Fq '"customer_phone": "07700000000"' MurshidWizari/V31Features.swift; then
-            echo 'ERROR: temporary checkout phone remains.' >&2
+          grep -Fq '"customer_phone": "07700000000"' MurshidWizari/V31Features.swift
+          if grep -A190 'struct V31SubscriptionView' MurshidWizari/V31Features.swift | grep -q 'TextField("رقم الهاتف'; then
+            echo 'ERROR: subscription still asks user for a phone number.' >&2
+            exit 1
+          fi
+          if grep -A260 'struct V31AccountView' MurshidWizari/V31Features.swift | grep -q 'طلب حذف الحساب'; then
+            echo 'ERROR: delete-account control remains in v3.1 account screen.' >&2
             exit 1
           fi
           echo "Assets.car present:"
