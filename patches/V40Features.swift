@@ -1226,3 +1226,354 @@ struct V40DailyChallengeView: View {
         } catch { await MainActor.run { busy = false; message = error.localizedDescription; haptic(.error) } }
     }
 }
+
+
+struct V40QuestionRequestHubView: View {
+    let subject: Subject
+    @State private var topics: [Topic] = []
+    @State private var loading = true
+    @State private var message = ""
+
+    var body: some View {
+        Group {
+            if loading {
+                ScrollView { LazyVStack(spacing: 12) { ForEach(0..<5, id: \.self) { _ in V3SkeletonCard(height: 92) } }.padding(16) }
+                    .background(Color.murshidBackground)
+            } else if topics.isEmpty {
+                EmptyStateView(systemImage: "tray", title: "لا توجد مواضيع", message: message.isEmpty ? "لا توجد مواضيع متاحة حاليًا." : message)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        V3IntroCard(
+                            eyebrow: subject.name,
+                            title: "اطلب أسئلة جديدة",
+                            text: "أكمل أسئلة الموضوع الحالية أولًا، وبعدها تستطيع إرسال طلب مباشر لفريق المحتوى لإضافة أسئلة جديدة.",
+                            icon: "plus.bubble.fill"
+                        )
+                        ForEach(topics) { topic in
+                            NavigationLink(destination: V40QuestionRequestDetailView(subject: subject, topic: topic)) {
+                                MurshidCard {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "doc.badge.plus")
+                                            .font(.title2)
+                                            .foregroundStyle(Color.murshidBlue)
+                                            .frame(width: 42, height: 42)
+                                            .background(Color.murshidBlue.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(topic.name).font(.headline).foregroundStyle(.primary)
+                                            Text("\(topic.count) سؤال حالي").font(.caption).foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.left").foregroundStyle(.tertiary)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(16)
+                    .padding(.bottom, 24)
+                }
+                .background(Color.murshidBackground)
+            }
+        }
+        .navigationTitle("طلب أسئلة")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+        .refreshable { await load() }
+    }
+
+    private func load() async {
+        do {
+            let d = try await APIClient.shared.request(
+                "mobile/topics.php",
+                query: [URLQueryItem(name: "subject_id", value: "\(subject.id)")]
+            )
+            let loaded = jArray(d["topics"]).map(Topic.init)
+            await MainActor.run { topics = loaded; loading = false; message = "" }
+        } catch {
+            await MainActor.run { loading = false; message = error.localizedDescription }
+        }
+    }
+}
+
+struct V40QuestionRequestDetailView: View {
+    @EnvironmentObject var app: AppSession
+    let subject: Subject
+    let topic: Topic
+    @State private var loading = true
+    @State private var complete = false
+    @State private var pending = false
+    @State private var answered = 0
+    @State private var total = 0
+    @State private var sending = false
+    @State private var message = ""
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                V3IntroCard(
+                    eyebrow: subject.name,
+                    title: topic.name,
+                    text: "بعد إكمال جميع الأسئلة الحالية يمكنك طلب دفعة جديدة لهذا الموضوع.",
+                    icon: "doc.badge.plus"
+                )
+                MurshidCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Label("تقدمك في الموضوع", systemImage: "chart.bar.fill").font(.headline)
+                            Spacer()
+                            Text("\(answered) / \(total)").font(.subheadline.bold().monospacedDigit())
+                        }
+                        ProgressView(value: Double(answered), total: Double(max(1, total))).tint(.murshidBlue)
+                        if pending {
+                            Label("طلبك موجود لدى الإدارة", systemImage: "clock.badge.checkmark")
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(.orange)
+                        } else if complete {
+                            Label("أكملت جميع الأسئلة الحالية", systemImage: "checkmark.seal.fill")
+                                .font(.subheadline.weight(.semibold)).foregroundStyle(.green)
+                        } else {
+                            Text("أكمل جميع أسئلة الموضوع حتى يفتح زر الطلب تلقائيًا.")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                Button {
+                    Task { await send() }
+                } label: {
+                    HStack {
+                        if sending { ProgressView().tint(.white) }
+                        Image(systemName: pending ? "checkmark.circle.fill" : "paperplane.fill")
+                        Text(pending ? "تم إرسال الطلب" : "إرسال طلب أسئلة جديدة")
+                    }
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(loading || sending || pending || !complete)
+
+                if !message.isEmpty {
+                    V3InlineMessage(text: message, icon: "info.circle.fill", tone: .info)
+                }
+            }
+            .padding(16)
+        }
+        .background(Color.murshidBackground.ignoresSafeArea())
+        .navigationTitle("طلب أسئلة")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+        .refreshable { await load() }
+    }
+
+    private func load() async {
+        do {
+            let d = try await APIClient.shared.request(
+                "mobile/question-request.php",
+                query: [URLQueryItem(name: "chapter_id", value: "\(topic.id)")]
+            )
+            await MainActor.run {
+                complete = jBool(d["complete"])
+                pending = jBool(d["pending"])
+                answered = jInt(d["answered"])
+                total = jInt(d["total"])
+                loading = false
+                message = ""
+            }
+        } catch {
+            await MainActor.run { loading = false; message = error.localizedDescription }
+        }
+    }
+
+    private func send() async {
+        await MainActor.run { sending = true; message = "" }
+        do {
+            let d = try await APIClient.shared.request(
+                "mobile/question-request.php",
+                method: "POST",
+                body: ["csrf": app.csrf, "chapter_id": topic.id]
+            )
+            await MainActor.run {
+                sending = false
+                pending = true
+                message = jString(d["message"], default: "تم إرسال طلبك إلى فريق المحتوى.")
+                haptic()
+            }
+        } catch {
+            await MainActor.run { sending = false; message = error.localizedDescription; haptic(.error) }
+        }
+    }
+}
+
+private struct V40DailyQuestion: Identifiable {
+    let id: Int
+    let type: String
+    let text: String
+    let options: [String]
+
+    init(_ json: JSON) {
+        id = jInt(json["id"])
+        type = jString(json["type"], default: "text")
+        text = jString(json["question_text"], default: jString(json["text"]))
+        if let raw = json["options"] as? [String] {
+            options = raw.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        } else {
+            options = jArray(json["options"]).map { jString($0["answer_text"], default: jString($0["text"])) }
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }
+    }
+}
+
+struct V40DailyChallengeView: View {
+    @EnvironmentObject var app: AppSession
+    @State private var questions: [V40DailyQuestion] = []
+    @State private var answers: [Int: String] = [:]
+    @State private var loading = true
+    @State private var busy = false
+    @State private var available = true
+    @State private var done = false
+    @State private var score = 0
+    @State private var total = 0
+    @State private var reward = 0
+    @State private var message = ""
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 14) {
+                V3IntroCard(
+                    eyebrow: "تحدي اليوم",
+                    title: done ? "أكملت تحدي اليوم" : "خمس دقائق تصنع فرقًا",
+                    text: done ? "عد غدًا لتحدٍ جديد." : "مجموعة قصيرة من أسئلة صفك. النتيجة تظهر بعد الإرسال مرة واحدة.",
+                    icon: "flame.fill"
+                )
+
+                if loading {
+                    V3SkeletonCard(height: 180)
+                    V3SkeletonCard(height: 140)
+                } else if !available {
+                    EmptyStateView(systemImage: "calendar.badge.clock", title: "لا يوجد تحدٍ الآن", message: "سيظهر التحدي اليومي فور توفره.")
+                } else if done {
+                    MurshidCard {
+                        VStack(spacing: 12) {
+                            Image(systemName: "trophy.fill").font(.system(size: 42)).foregroundStyle(Color.murshidGold)
+                            Text("\(score) / \(total)").font(.largeTitle.bold().monospacedDigit())
+                            if reward > 0 { Text("+\(reward) XP").font(.headline).foregroundStyle(.green) }
+                        }.frame(maxWidth: .infinity)
+                    }
+                } else {
+                    ForEach(Array(questions.enumerated()), id: \.element.id) { index, q in
+                        MurshidCard {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("سؤال \(index + 1)").font(.caption.bold()).foregroundStyle(Color.murshidBlue)
+                                Text(murshidQuestionDisplayText(q.text)).font(.headline).fixedSize(horizontal: false, vertical: true)
+                                if q.type == "true_false" && q.options.isEmpty {
+                                    choices(q, ["صح", "خطأ"])
+                                } else if !q.options.isEmpty {
+                                    choices(q, q.options)
+                                } else {
+                                    TextField("اكتب إجابتك", text: Binding(
+                                        get: { answers[q.id] ?? "" },
+                                        set: { answers[q.id] = $0 }
+                                    ), axis: .vertical)
+                                    .lineLimit(1...5)
+                                    .padding(11)
+                                    .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 12))
+                                }
+                            }
+                        }
+                    }
+                    Button {
+                        Task { await submit() }
+                    } label: {
+                        HStack {
+                            if busy { ProgressView().tint(.white) }
+                            Image(systemName: "checkmark.seal.fill")
+                            Text(busy ? "جاري التصحيح…" : "إنهاء تحدي اليوم")
+                        }
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(busy || !allAnswered)
+                    .opacity(allAnswered ? 1 : 0.55)
+                }
+
+                if !message.isEmpty {
+                    V3InlineMessage(text: message, icon: "info.circle.fill", tone: .info)
+                }
+            }
+            .padding(16)
+            .padding(.bottom, 26)
+        }
+        .background(Color.murshidBackground.ignoresSafeArea())
+        .navigationTitle("تحدي اليوم")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+        .refreshable { await load() }
+    }
+
+    private var allAnswered: Bool {
+        !questions.isEmpty && questions.allSatisfy {
+            !(answers[$0.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    private func choices(_ q: V40DailyQuestion, _ values: [String]) -> some View {
+        VStack(spacing: 8) {
+            ForEach(values, id: \.self) { value in
+                Button {
+                    answers[q.id] = value
+                    selectionHaptic()
+                } label: {
+                    HStack {
+                        Text(value).foregroundStyle(.primary).multilineTextAlignment(.leading)
+                        Spacer()
+                        Image(systemName: answers[q.id] == value ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(Color.murshidBlue)
+                    }
+                    .padding(10)
+                    .background(answers[q.id] == value ? Color.murshidBlue.opacity(0.10) : Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func load() async {
+        do {
+            let d = try await APIClient.shared.request("mobile/challenge.php")
+            await MainActor.run {
+                available = jBool(d["available"], default: true)
+                done = jBool(d["done"])
+                score = jInt(d["score"])
+                total = jInt(d["total"])
+                reward = jInt(d["reward"])
+                questions = jArray(d["questions"]).map(V40DailyQuestion.init)
+                loading = false
+                message = ""
+            }
+        } catch {
+            await MainActor.run { loading = false; message = error.localizedDescription }
+        }
+    }
+
+    private func submit() async {
+        await MainActor.run { busy = true; message = "" }
+        var payload: JSON = [:]
+        for (id, answer) in answers { payload[String(id)] = answer }
+        do {
+            let d = try await APIClient.shared.request(
+                "mobile/challenge.php",
+                method: "POST",
+                body: ["csrf": app.csrf, "answers": payload]
+            )
+            await MainActor.run {
+                busy = false
+                done = jBool(d["done"])
+                score = jInt(d["score"])
+                total = jInt(d["total"])
+                if jBool(d["quota_blocked"]) { message = "انتهى الرصيد المجاني أثناء التحدي." }
+                haptic(.success)
+            }
+        } catch {
+            await MainActor.run { busy = false; message = error.localizedDescription; haptic(.error) }
+        }
+    }
+}
