@@ -54,6 +54,36 @@ jobs:
           mkdir source
           unzip -q MurshidWizari_Production_v2_BUILD_SOURCE.zip -d source
 
+      - name: Apply Swift 6 concurrency fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('source/MurshidWizari/APIClient.swift')
+          s = p.read_text()
+          s = s.replace('final class APIClient {', '@MainActor\nfinal class APIClient {')
+          p.write_text(s)
+
+          p = Path('source/MurshidWizari/Services.swift')
+          s = p.read_text()
+          s = s.replace('final class KeychainVault {', '@MainActor\nfinal class KeychainVault {')
+          s = s.replace('actor ResponseCache {', '@MainActor\nfinal class ResponseCache {')
+          p.write_text(s)
+
+          p = Path('source/MurshidWizari/Theme.swift')
+          s = p.read_text()
+          s = s.replace('func haptic(_ type:', '@MainActor\nfunc haptic(_ type:')
+          s = s.replace('func selectionHaptic() {', '@MainActor\nfunc selectionHaptic() {')
+          p.write_text(s)
+
+          p = Path('source/MurshidWizari/AccountViews.swift')
+          s = p.read_text()
+          s = s.replace('throw APIError.message("رابط الدفع غير صالح.", 422)', 'throw APIError(message: "رابط الدفع غير صالح.", status: 422, paymentRequired: false)')
+          p.write_text(s)
+          PY
+
       - name: Apply Xcode 16 compatibility fixes
         shell: bash
         run: |
