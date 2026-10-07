@@ -132,7 +132,7 @@ struct ExamView: View {
                     Label(serverCorrect == true ? "إجابة صحيحة" : "راجع الإجابة", systemImage: serverCorrect == true ? "checkmark.seal.fill" : "xmark.octagon.fill")
                         .font(.headline).foregroundColor(serverCorrect == true ? .green : .orange)
                     let serverCorrectAnswer = jString(grade?["correct_answer"], default: q.correctAnswer)
-                    let serverExplanation = jString(grade?["explanation"], default: q.explanation)
+                    let serverExplanation = murshidUsefulExplanation(jString(grade?["explanation"], default: q.explanation))
                     if !serverCorrectAnswer.isEmpty { Text("الإجابة النموذجية: \(serverCorrectAnswer)").font(.subheadline.weight(.semibold)) }
                     Divider()
                     Text("شرح الإجابة").font(.caption.bold()).foregroundStyle(Color.murshidBlue)
@@ -162,7 +162,7 @@ struct ExamView: View {
         await MainActor.run { loading = true; error = "" }
         do {
             let d = try await APIClient.shared.request("mobile/exam.php", query: [URLQueryItem(name: "chapter_id", value: "\(topic.id)")])
-            let qs = jArray(d["questions"]).map(Question.init)
+            let qs = jArray(d["questions"]).map(Question.init).filter { murshidQuestionIsStudentReady($0.text) }
             await MainActor.run {
                 questions = qs
                 for q in qs where !q.storedAnswer.isEmpty { answers[q.id] = q.storedAnswer }
