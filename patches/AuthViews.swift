@@ -90,7 +90,7 @@ func murshidAnswerKey(_ raw: String) -> String {
         .replacingOccurrences(of: "ٱ", with: "ا")
         .replacingOccurrences(of: "ى", with: "ي")
         .replacingOccurrences(of: "ـ", with: "")
-    text = text.replacingOccurrences(of: #"[\u{064B}-\u{065F}\u{0670}]"#, with: "", options: .regularExpression)
+    text = text.replacingOccurrences(of: #"[ًٌٍَُِّْٰ]"#, with: "", options: .regularExpression)
     text = text.replacingOccurrences(of: #"[^\p{L}\p{N}]+"#, with: "", options: .regularExpression)
     return text
 }
@@ -917,7 +917,7 @@ struct RegisterView: View {
                         .disabled(loading || gradesLoading)
                         .opacity((loading || gradesLoading) ? 0.62 : 1)
 
-                        Text("نسخة iPhone 3.0 • Build 300")
+                        Text("نسخة iPhone 3.6 • Build 360")
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.tertiary)
                             .frame(maxWidth: .infinity, alignment: .center)
@@ -4109,7 +4109,7 @@ struct RegisterV3View: View {
 
                             navigationButtons(proxy: proxy)
 
-                            Text("نسخة iPhone 3.0 • Build 300")
+                            Text("نسخة iPhone 3.6 • Build 360")
                                 .font(.caption2.monospacedDigit())
                                 .foregroundStyle(.tertiary)
                                 .frame(maxWidth: .infinity, alignment: .center)
