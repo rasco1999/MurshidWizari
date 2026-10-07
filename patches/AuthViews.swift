@@ -1781,10 +1781,9 @@ struct V3HomeView: View {
     private func refreshAll() async {
         await MainActor.run { error = "" }
         do {
-            async let bootstrap = APIClient.shared.bootstrap()
-            async let insightResponse = APIClient.shared.request("mobile/insights.php", cacheKey: "insights")
-            async let notifications = APIClient.shared.request("mobile/notifications.php")
-            let (b, i, n) = try await (bootstrap, insightResponse, notifications)
+            let b = try await APIClient.shared.bootstrap()
+            let i = try await APIClient.shared.request("mobile/insights.php", cacheKey: "insights")
+            let n = try await APIClient.shared.request("mobile/notifications.php")
             await MainActor.run {
                 app.applyBootstrap(b)
                 insights = i["insights"] as? JSON ?? [:]
@@ -1948,13 +1947,12 @@ struct V3TopicsView: View {
     private func load() async {
         await MainActor.run { loading = true; error = "" }
         do {
-            async let topicsRequest = APIClient.shared.request(
+            let t = try await APIClient.shared.request(
                 "mobile/topics.php",
                 query: [URLQueryItem(name: "subject_id", value: "\(subject.id)")],
                 cacheKey: "topics-\(subject.id)"
             )
-            async let insightRequest = APIClient.shared.request("mobile/insights.php", cacheKey: "insights")
-            let (t, i) = try await (topicsRequest, insightRequest)
+            let i = try await APIClient.shared.request("mobile/insights.php", cacheKey: "insights")
             let loaded = jArray(t["topics"]).map(Topic.init)
             let ins = i["insights"] as? JSON ?? [:]
             var map: [Int: JSON] = [:]
@@ -2304,9 +2302,8 @@ struct V3ContestView: View {
     private func load() async {
         await MainActor.run { loading = true; error = "" }
         do {
-            async let c = APIClient.shared.request("mobile/contest.php")
-            async let s = APIClient.shared.request("mobile/season.php")
-            let (contestData, seasonData) = try await (c, s)
+            let contestData = try await APIClient.shared.request("mobile/contest.php")
+            let seasonData = try await APIClient.shared.request("mobile/season.php")
             await MainActor.run { contest = contestData; season = seasonData; loading = false }
         } catch {
             await MainActor.run { loading = false; self.error = error.localizedDescription }
