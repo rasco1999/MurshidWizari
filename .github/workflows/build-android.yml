@@ -1,0 +1,91 @@
+name: Build Murshid Android Native APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - '.github/workflows/build-android.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    name: Kotlin Compose Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK
+        run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Build APK
+        working-directory: android
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Validate APK
+        working-directory: android
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          unzip -l "$APK" | grep -F 'classes.dex'
+          sha256sum "$APK" | tee "app/build/outputs/apk/debug/Murshid_Android_v1_0_BUILD100_debug.sha256"
+          cp "$APK" "app/build/outputs/apk/debug/Murshid_Android_v1_0_BUILD100_debug.apk"
+      - name: Publish build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Murshid-Wizari-Android-Native-v1.0-Build100-Debug
+          path: |
+            android/app/build/outputs/apk/debug/Murshid_Android_v1_0_BUILD100_debug.apk
+            android/app/build/outputs/apk/debug/Murshid_Android_v1_0_BUILD100_debug.sha256
+          retention-days: 14
+          if-no-files-found: error
+      - name: Release Android beta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: android/app/build/outputs/apk/debug
+        shell: bash
+        run: |
+          TAG="android-v1.0-build100-beta"
+          APK="Murshid_Android_v1_0_BUILD100_debug.apk"
+          SHA="Murshid_Android_v1_0_BUILD100_debug.sha256"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" "$SHA" --clobber
+          else
+            gh release create "$TAG" "$APK" "$SHA" --title "Murshid Wizari Android Native v1.0 Build 100 (Beta)" --notes "Kotlin/Jetpack Compose native Android. Debug-signed beta APK for device testing; Play Store release requires a private production signing key."
+          fi
+
+  diagnostics:
+    needs: android
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record Android result
+        shell: bash
+        run: |
+          set -u
+          mkdir -p .build-status
+          {
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "commit=$GITHUB_SHA"
+            echo "result=${{ needs.android.result }}"
+          } >.build-status/android-v1.0-build100-status.txt
+          git config user.name "murshid-build-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .build-status/android-v1.0-build100-status.txt
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Record Android build result [skip ci]"
+          git pull --rebase origin main || true
+          git push origin HEAD:main
