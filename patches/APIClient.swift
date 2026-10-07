@@ -88,7 +88,7 @@ final class APIClient {
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         config.httpAdditionalHeaders = [
             "Accept": "application/json",
-            "X-Murshid-App": "ios-native-2.5",
+            "X-Murshid-App": "ios-native-3.0",
             "X-Murshid-Client": "SwiftUI"
         ]
         session = URLSession(configuration: config)
@@ -112,7 +112,17 @@ final class APIClient {
             guard let http = response as? HTTPURLResponse else { throw APIError(message: "استجابة الخادم غير صالحة.", status: 0, paymentRequired: false) }
             guard let object = try? JSONSerialization.jsonObject(with: data), let json = object as? JSON else {
                 let raw = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                throw APIError(message: raw.isEmpty ? "تعذر قراءة استجابة الخادم." : raw, status: http.statusCode, paymentRequired: false)
+                let contentType = http.value(forHTTPHeaderField: "Content-Type")?.lowercased() ?? ""
+                let looksLikeHTML = contentType.contains("text/html") || raw.lowercased().contains("<html") || raw.hasPrefix("<")
+                let message: String
+                if looksLikeHTML {
+                    message = "تعذر إكمال الطلب الآن. تحقق من الاتصال وحاول مجددًا."
+                } else if raw.isEmpty {
+                    message = "تعذر قراءة استجابة الخادم. حاول مجددًا."
+                } else {
+                    message = String(raw.prefix(240))
+                }
+                throw APIError(message: message, status: http.statusCode, paymentRequired: false)
             }
             if http.statusCode == 401 {
                 AppSession.shared.reset(expired: true)
