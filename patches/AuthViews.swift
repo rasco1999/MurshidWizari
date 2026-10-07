@@ -2781,10 +2781,6 @@ struct V3ExamView: View {
                     .disabled(submitting || !hasAnswer(q))
                     .opacity(hasAnswer(q) ? 1 : 0.55)
 
-                    Text("لا يُخصم من رصيدك المجاني إلا بعد إرسال الإجابة.")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
                 } else if !isAnswered(q) && !q.options.isEmpty && submitting {
                     HStack(spacing: 8) {
                         ProgressView()
