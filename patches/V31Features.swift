@@ -272,7 +272,7 @@ struct V31HomeView: View {
                 NavigationLink(destination: V3FocusView()) { V3ToolCard(title: "جلسة تركيز", subtitle: "25 · 45 · 60 دقيقة", icon: "timer") }
                 NavigationLink(destination: V3ContestView()) { V3ToolCard(title: "تحدي المليون", subtitle: "ترتيب ونقاط", icon: "trophy.fill") }
                 NavigationLink(destination: StoriesView()) { V3ToolCard(title: "غيّر جو", subtitle: "استراحة قصيرة", icon: "sparkles") }
-                NavigationLink(destination: V40WhatsNewView()) { V3ToolCard(title: "ما الجديد", subtitle: "الإصدار 4.1", icon: "sparkles.rectangle.stack.fill") }
+                NavigationLink(destination: V40WhatsNewView()) { V3ToolCard(title: "ما الجديد", subtitle: "الإصدار 4.2", icon: "sparkles.rectangle.stack.fill") }
             }
             .buttonStyle(.plain)
         }
