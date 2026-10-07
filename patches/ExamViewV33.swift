@@ -79,7 +79,6 @@ struct ExamView: View {
                         .background(Color.murshidBlue.opacity(0.10), in: Capsule())
                     Spacer()
                 }
-                if !q.meaningWord.isEmpty { Text(q.meaningWord).font(.headline).foregroundColor(.murshidGold) }
                 Text(murshidQuestionDisplayText(q.text)).font(.title3.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -88,14 +87,15 @@ struct ExamView: View {
     @ViewBuilder
     private func answerArea(_ q: Question) -> some View {
         MurshidCard {
+            let options = visibleOptions(q)
             VStack(alignment: .leading, spacing: 12) {
                 Text("إجابتك").font(.headline)
                 if q.submitted || grades[q.id] != nil {
                     Text(answerDisplay(q)).foregroundStyle(.secondary).textSelection(.enabled)
                 } else if let em = q.englishMatch {
                     EnglishMatchInput(definition: em, values: bindingEnglish(q.id))
-                } else if !q.options.isEmpty {
-                    ForEach(q.options) { option in
+                } else if !options.isEmpty {
+                    ForEach(options) { option in
                         Button {
                             guard !q.submitted, grades[q.id] == nil, !submitting else { return }
                             answers[q.id] = option.text
@@ -115,7 +115,7 @@ struct ExamView: View {
                 } else {
                     TextEditor(text: bindingAnswer(q.id)).frame(minHeight: 110).padding(8).scrollContentBackground(.hidden).background(Color(uiColor: .tertiarySystemFill)).clipShape(RoundedRectangle(cornerRadius: 14))
                 }
-                if !q.submitted && grades[q.id] == nil && q.options.isEmpty {
+                if !q.submitted && grades[q.id] == nil && options.isEmpty {
                     Button(action: { submitCurrent() }) { HStack { if submitting { ProgressView().tint(.white) }; Text(submitting ? "جاري تصحيح الإجابة…" : "إرسال الإجابة") } }.buttonStyle(PrimaryButtonStyle()).disabled(submitting || !hasAnswer(q))
                 }
             }
@@ -132,13 +132,20 @@ struct ExamView: View {
                     Label(serverCorrect == true ? "إجابة صحيحة" : "راجع الإجابة", systemImage: serverCorrect == true ? "checkmark.seal.fill" : "xmark.octagon.fill")
                         .font(.headline).foregroundColor(serverCorrect == true ? .green : .orange)
                     let serverCorrectAnswer = jString(grade?["correct_answer"], default: q.correctAnswer)
-                    let serverExplanation = murshidUsefulExplanation(jString(grade?["explanation"], default: q.explanation))
-                    if !serverCorrectAnswer.isEmpty { Text("الإجابة النموذجية: \(serverCorrectAnswer)").font(.subheadline.weight(.semibold)) }
-                    Divider()
-                    Text("شرح الإجابة").font(.caption.bold()).foregroundStyle(Color.murshidBlue)
-                    if !serverExplanation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text(serverExplanation).font(.subheadline).foregroundStyle(.secondary)
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    let serverExplanation = murshidExplanationText(
+                        question: q.text,
+                        correctAnswer: serverCorrectAnswer,
+                        raw: jString(grade?["explanation"], default: q.explanation)
+                    )
+                    if !serverCorrectAnswer.isEmpty {
+                        Text("الإجابة النموذجية: \(serverCorrectAnswer)")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.green)
                     }
+                    Divider()
+                    Text("لماذا؟").font(.caption.bold()).foregroundStyle(Color.murshidBlue)
+                    Text(serverExplanation).font(.subheadline).foregroundStyle(.secondary)
                 }
             }
         }
@@ -162,7 +169,15 @@ struct ExamView: View {
         await MainActor.run { loading = true; error = "" }
         do {
             let d = try await APIClient.shared.request("mobile/exam.php", query: [URLQueryItem(name: "chapter_id", value: "\(topic.id)")])
-            let qs = jArray(d["questions"]).map(Question.init).filter { murshidQuestionIsStudentReady($0.text) }
+            var seenQuestions = Set<String>()
+            let qs = jArray(d["questions"])
+                .map(Question.init)
+                .filter { question in
+                    guard murshidQuestionIsStudentReady(question.text) else { return false }
+                    let key = murshidAnswerKey(murshidQuestionDisplayText(question.text))
+                    guard !key.isEmpty else { return false }
+                    return seenQuestions.insert(key).inserted
+                }
             await MainActor.run {
                 questions = qs
                 for q in qs where !q.storedAnswer.isEmpty { answers[q.id] = q.storedAnswer }
@@ -180,9 +195,18 @@ struct ExamView: View {
     private func bindingMatches(_ id: Int) -> Binding<[Int:MatchDraft]> { Binding(get: { matches[id] ?? [:] }, set: { matches[id] = $0 }) }
     private func bindingEnglish(_ id: Int) -> Binding<[String:String]> { Binding(get: { english[id] ?? [:] }, set: { english[id] = $0 }) }
 
+    private func visibleOptions(_ q: Question) -> [QuestionOption] {
+        var seen = Set<String>()
+        return q.options.filter { option in
+            let key = murshidAnswerKey(option.text)
+            guard !key.isEmpty else { return false }
+            return seen.insert(key).inserted
+        }
+    }
+
     private func hasAnswer(_ q: Question) -> Bool {
         if q.englishMatch != nil { return !(english[q.id] ?? [:]).isEmpty }
-        if !q.options.isEmpty { return !(answers[q.id] ?? "").isEmpty }
+        if !visibleOptions(q).isEmpty { return !(answers[q.id] ?? "").isEmpty }
         if q.type == "match" { return q.matchItems.allSatisfy { let d = matches[q.id]?[$0.id]; return !(d?.type ?? "").isEmpty && !(d?.reason ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } }
         if !q.stages.isEmpty {
             let editable = q.stages.filter { $0.kind != "info" }
