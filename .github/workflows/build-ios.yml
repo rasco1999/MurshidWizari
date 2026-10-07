@@ -375,9 +375,13 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist" | grep -Fx '1'
           test -f "$APP/Assets.car"
           test -f "$APP/PrivacyInfo.xcprivacy"
-          strings "$EXE" | grep -q 'قفل حقيقي بـ Face ID'
-          strings "$EXE" | grep -q 'طلب إعلان مدرسة'
-          strings "$EXE" | grep -q 'الانتقال إلى الدفع الخارجي'
+          grep -Fq 'قفل حقيقي بـ Face ID' MurshidWizari/V31Features.swift
+          grep -Fq 'طلب إعلان مدرسة' MurshidWizari/V31Features.swift
+          grep -Fq 'الانتقال إلى الدفع الخارجي' MurshidWizari/V31Features.swift
+          if grep -Fq '"customer_phone": "07700000000"' MurshidWizari/V31Features.swift; then
+            echo 'ERROR: temporary checkout phone remains.' >&2
+            exit 1
+          fi
           echo "Assets.car present:"
           ls -lh "$APP/Assets.car"
           find "$APP" -maxdepth 1 -type f -name 'AppIcon*.png' -print
