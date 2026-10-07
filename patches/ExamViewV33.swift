@@ -181,6 +181,7 @@ struct ExamView: View {
                 .map(Question.init)
                 .filter { question in
                     guard murshidQuestionIsStudentReady(question.text) else { return false }
+                    guard murshidQuestionClientValid(question) else { return false }
                     guard murshidQuestionAnswerCompatible(question: question.text, serverAnswer: question.correctAnswer) else { return false }
                     let key = murshidAnswerKey(murshidQuestionDisplayText(question.text))
                     guard !key.isEmpty else { return false }
