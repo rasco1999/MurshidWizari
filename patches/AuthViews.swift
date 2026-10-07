@@ -1,11 +1,40 @@
 import SwiftUI
 
+func murshidQuestionIsStudentReady(_ raw: String) -> Bool {
+    let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !text.isEmpty else { return false }
+    let blockedPatterns = [
+        #"^\s*تحقق\s+بصري\b.*(?:v\s*25|v25)"#,
+        #"(?:v\s*25|v25).*تحقق\s+بصري"#,
+        #"هل\s+الإجابة\s+[«"“][^»"”]+[»"”]\s+صحيحة\s*[؟?]?\s*$"#,
+        #"^\s*(?:صح\s+أم\s+خطأ\s*:\s*)?الإجابة\s+عن\s+[«"“].+?[»"”]\s+هي\s+[«"“].+?[»"”]"#,
+        #"تدريب\s+تحقق\s+وزاري\s*:"#
+    ]
+    return !blockedPatterns.contains { pattern in
+        text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+}
+
 func murshidQuestionDisplayText(_ raw: String) -> String {
     var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !text.isEmpty else { return "" }
+
+    // لا نحذف فعل «عرّف»؛ نحذف فقط الوصف التحريري والترقيم.
+    text = text.replacingOccurrences(
+        of: #"^\s*عرّف\s+المصطلح\s+الوزاري(?:\s+[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#,
+        with: "عرّف ",
+        options: [.regularExpression, .caseInsensitive]
+    )
+
     let patterns = [
         #"^\s*استرجاع\s+وزاري(?:\s+[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#,
         #"^\s*وزاري(?:\s+[\p{N}٠-٩]{2,4})?(?:\s*[/\-–—]\s*[^:：\n]{1,48})?\s*[:：]\s*"#,
-        #"^\s*(?:سؤال\s+)?(?:تدريب|تدريبي|تدريبية)(?:\s+[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#
+        #"^\s*(?:سؤال\s+)?(?:تدريب|تدريبي|تدريبية)(?:\s+[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#,
+        #"^\s*(?:سؤال\s+)?مراجعة(?:\s+[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#,
+        #"^\s*اختيار\s+تحليلي(?:\s+[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#,
+        #"^\s*إجابة\s+مركزة(?:\s+[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#,
+        #"^\s*أكمل\s+المعنى\s+الوزاري(?:\s+[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#,
+        #"^\s*تحقق\s+بصري(?:\s+[\p{N}٠-٩]{1,4})?\s*[\-–—]?\s*(?:v\s*25|v25)?\s*[:：]\s*"#
     ]
     for pattern in patterns {
         if let range = text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) {
@@ -14,6 +43,22 @@ func murshidQuestionDisplayText(_ raw: String) -> String {
             break
         }
     }
+    while text.contains("  ") { text = text.replacingOccurrences(of: "  ", with: " ") }
+    return text
+}
+
+func murshidUsefulExplanation(_ raw: String) -> String {
+    let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !text.isEmpty else { return "" }
+    let genericPrefixes = [
+        "تدريب مشتق من مفهوم موثق في هذا المحور",
+        "تدريب مشتق موثق",
+        "هذا تدريب تحقق مشتق",
+        "هذا تدريب مشتق",
+        "صيغة تدريب جديدة مشتقة",
+        "راجع الإجابة النموذجية"
+    ]
+    if genericPrefixes.contains(where: { text.hasPrefix($0) }) { return "" }
     return text
 }
 
@@ -2879,26 +2924,22 @@ struct V3ExamView: View {
                         }
                     }
                     let serverCorrectAnswer = jString(grades[q.id]?["correct_answer"], default: q.correctAnswer)
-                    let serverExplanation = jString(grades[q.id]?["explanation"], default: q.explanation)
-                    if !serverCorrectAnswer.isEmpty && correct != true {
+                    let serverExplanation = murshidUsefulExplanation(jString(grades[q.id]?["explanation"], default: q.explanation))
+                    if !serverCorrectAnswer.isEmpty {
                         Text("الإجابة الصحيحة")
                             .font(.caption.bold()).foregroundStyle(.secondary)
                         Text(serverCorrectAnswer)
                             .font(.body.weight(.semibold))
                             .foregroundStyle(.green)
                     }
-                    Divider()
-                    Text("شرح الإجابة").font(.caption.bold()).foregroundStyle(Color.murshidBlue)
-                    if !serverExplanation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    if !serverExplanation.isEmpty {
+                        Divider()
+                        Text("شرح الإجابة").font(.caption.bold()).foregroundStyle(Color.murshidBlue)
                         Text(serverExplanation)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .lineSpacing(5)
                             .fixedSize(horizontal: false, vertical: true)
-                    } else {
-                        Text("لم تتم إضافة شرح تفصيلي لهذا السؤال في بنك الأسئلة بعد.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -3017,7 +3058,7 @@ struct V3ExamView: View {
         await MainActor.run { loading = true; error = ""; startedAt = Date() }
         do {
             let d = try await APIClient.shared.request("mobile/exam.php", query: [URLQueryItem(name: "chapter_id", value: "\(topic.id)")])
-            let qs = jArray(d["questions"]).map(Question.init)
+            let qs = jArray(d["questions"]).map(Question.init).filter { murshidQuestionIsStudentReady($0.text) }
             await MainActor.run {
                 questions = qs
                 for q in qs where !q.storedAnswer.isEmpty { answers[q.id] = q.storedAnswer }
