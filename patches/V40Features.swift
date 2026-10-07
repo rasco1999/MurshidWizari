@@ -975,3 +975,79 @@ struct V40WhatsNewView: View {
         }
     }
 }
+
+
+struct V40QuestionSearchView: View {
+    @State private var query = ""
+    @State private var results: [JSON] = []
+    @State private var loading = false
+    @State private var message = ""
+
+    var body: some View {
+        List {
+            Section {
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField("ابحث في الأسئلة والمواضيع", text: $query)
+                        .textInputAutocapitalization(.never)
+                        .submitLabel(.search)
+                        .onSubmit { Task { await search() } }
+                }
+            }
+            if loading {
+                Section { HStack { Spacer(); ProgressView(); Spacer() } }
+            } else if !message.isEmpty {
+                Section { Text(message).foregroundStyle(.secondary) }
+            } else if results.isEmpty && query.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 {
+                Section { Text("لا توجد نتائج مطابقة.").foregroundStyle(.secondary) }
+            } else {
+                ForEach(Array(results.enumerated()), id: \.offset) { _, row in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(jString(row["type"]))
+                                .font(.caption.bold())
+                                .foregroundStyle(Color.murshidBlue)
+                            Spacer()
+                        }
+                        Text(murshidQuestionDisplayText(jString(row["title"])))
+                            .font(.subheadline.weight(.semibold))
+                            .fixedSize(horizontal: false, vertical: true)
+                        let meta = jString(row["meta"])
+                        if !meta.isEmpty {
+                            Text(meta).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 5)
+                }
+            }
+        }
+        .navigationTitle("البحث في الأسئلة")
+        .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: query) { value in
+            if value.trimmingCharacters(in: .whitespacesAndNewlines).count < 2 {
+                results = []
+                message = ""
+            }
+        }
+    }
+
+    private func search() async {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard q.count >= 2 else {
+            await MainActor.run { results = []; message = "اكتب حرفين على الأقل."; loading = false }
+            return
+        }
+        await MainActor.run { loading = true; message = "" }
+        do {
+            let d = try await APIClient.shared.request("api/search.php", query: [URLQueryItem(name: "q", value: q)])
+            await MainActor.run { results = jArray(d["results"]); loading = false }
+        } catch {
+            await MainActor.run { loading = false; message = error.localizedDescription }
+        }
+    }
+}
+
+
+typealias V40CustomExamBuilderView = V40PracticeBuilderView
+typealias V40StudentQuestionSubmitView = V40QuestionContributionView
+typealias V40AttemptHistoryView = V40HistoryView
