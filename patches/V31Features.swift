@@ -247,6 +247,8 @@ struct V31HomeView: View {
 
 private struct V31WebsiteHeroSlider: View {
     @State private var selection = 0
+    @State private var images: [Int: UIImage] = [:]
+    @State private var ready = false
     private let timer = Timer.publish(every: 5.5, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -263,7 +265,10 @@ private struct V31WebsiteHeroSlider: View {
             .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color.primary.opacity(0.05)))
             .shadow(color: Color.black.opacity(0.08), radius: 18, y: 8)
             .onReceive(timer) { _ in
-                withAnimation(.easeInOut(duration: 0.35)) { selection = (selection + 1) % V31SlideKind.allCases.count }
+                guard ready else { return }
+                withAnimation(.easeInOut(duration: 0.35)) {
+                    selection = (selection + 1) % V31SlideKind.allCases.count
+                }
             }
 
             HStack(spacing: 7) {
@@ -275,6 +280,7 @@ private struct V31WebsiteHeroSlider: View {
                 }
             }
         }
+        .task { await preloadAllImages() }
         .accessibilityLabel("سلايدر منصة المرشد الوزاري")
     }
 
@@ -290,14 +296,19 @@ private struct V31WebsiteHeroSlider: View {
         } label: {
             ZStack {
                 LinearGradient(colors: [.murshidNavy, .murshidBlue], startPoint: .topLeading, endPoint: .bottomTrailing)
-                if let url = kind.imageURL {
-                    AsyncImage(url: url, transaction: Transaction(animation: .easeInOut(duration: 0.25))) { phase in
-                        switch phase {
-                        case .success(let image): image.resizable().scaledToFill()
-                        case .failure: fallback(kind)
-                        default: ProgressView().tint(.white)
+                if let image = images[kind.rawValue] {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .transition(.opacity)
+                } else {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(Color.murshidBlue.opacity(0.16))
+                        .overlay {
+                            Image(systemName: "photo")
+                                .font(.title2)
+                                .foregroundStyle(.white.opacity(0.28))
                         }
-                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -307,12 +318,26 @@ private struct V31WebsiteHeroSlider: View {
         .accessibilityLabel(kind.title)
     }
 
-    private func fallback(_ kind: V31SlideKind) -> some View {
-        VStack(spacing: 10) {
-            Image(systemName: kind == .million ? "trophy.fill" : kind == .advertise ? "megaphone.fill" : kind == .tests ? "checklist.checked" : "chart.line.uptrend.xyaxis")
-                .font(.system(size: 42, weight: .semibold))
-            Text(kind.title).font(.title2.bold())
-        }.foregroundStyle(.white)
+    @MainActor
+    private func preloadAllImages() async {
+        guard images.count < V31SlideKind.allCases.count else { ready = true; return }
+        var loaded: [Int: UIImage] = [:]
+        for kind in V31SlideKind.allCases {
+            guard let url = kind.imageURL else { continue }
+            var request = URLRequest(url: url)
+            request.cachePolicy = .returnCacheDataElseLoad
+            request.timeoutInterval = 20
+            if let (data, response) = try? await URLSession.shared.data(for: request),
+               let http = response as? HTTPURLResponse,
+               (200...299).contains(http.statusCode),
+               let image = UIImage(data: data) {
+                loaded[kind.rawValue] = image
+            }
+        }
+        if !loaded.isEmpty {
+            images.merge(loaded) { _, new in new }
+        }
+        ready = images.count == V31SlideKind.allCases.count
     }
 }
 
@@ -323,26 +348,19 @@ struct V31SubscriptionView: View {
     @Environment(\.openURL) private var openURL
     @AppStorage("last_payment_order") private var storedOrderID = 0
     @State private var plan = ""
-    @State private var method = "zaincash"
-    @State private var loading = false
+        @State private var loading = false
     @State private var error = ""
     @State private var statusMessage = ""
 
-    private let methods: [(id: String, title: String, subtitle: String, icon: String)] = [
-        ("zaincash", "زين كاش", "إكمال الدفع خارج التطبيق", "iphone.gen3"),
-        ("rafidain", "مصرف الرافدين", "إكمال الدفع خارج التطبيق", "building.columns.fill"),
-        ("rasheed", "مصرف الرشيد", "إكمال الدفع خارج التطبيق", "creditcard.fill")
-    ]
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
-                V3IntroCard(eyebrow: "الاشتراك", title: app.subscribed ? "اشتراكك مفعّل" : "افتح كامل الأسئلة", text: app.subscribed ? "يمكنك الوصول إلى كامل المحتوى المتاح في صفك." : "اختر الباقة وطريقة الدفع. سيُفتح الدفع في المتصفح الخارجي، ولن نطلب رقم هاتف إضافيًا هنا.", icon: app.subscribed ? "checkmark.seal.fill" : "arrow.up.forward.app.fill")
+                V3IntroCard(eyebrow: "الاشتراك", title: app.subscribed ? "اشتراكك مفعّل" : "افتح كامل الأسئلة", text: app.subscribed ? "يمكنك الوصول إلى كامل المحتوى المتاح في صفك." : "اختر الباقة فقط، ثم انتقل مباشرة إلى صفحة الدفع الخارجية الآمنة.", icon: app.subscribed ? "checkmark.seal.fill" : "arrow.up.forward.app.fill")
                 if app.subscribed {
                     MurshidCard { Label("لا تحتاج إلى أي عملية دفع الآن.", systemImage: "checkmark.circle.fill").font(.headline).foregroundStyle(.green) }
                 } else {
                     plansSection
-                    methodsSection
                     actionSection
                 }
             }.padding(16).padding(.bottom, 28)
@@ -375,26 +393,6 @@ struct V31SubscriptionView: View {
         }
     }
 
-    private var methodsSection: some View {
-        VStack(alignment: .leading, spacing: 11) {
-            V3SectionHeader(title: "طريقة الدفع", subtitle: "اختر الجهة المناسبة", icon: "wallet.pass.fill")
-            ForEach(methods, id: \.id) { item in
-                Button { method = item.id; selectionHaptic() } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: item.icon).foregroundStyle(Color.murshidBlue).frame(width: 38, height: 38).background(Color.murshidBlue.opacity(0.09), in: RoundedRectangle(cornerRadius: 11))
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(item.title).font(.headline).foregroundStyle(.primary)
-                            Text(item.subtitle).font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer(); Image(systemName: method == item.id ? "checkmark.circle.fill" : "circle").foregroundStyle(method == item.id ? Color.murshidBlue : Color.secondary)
-                    }
-                    .padding(14)
-                    .background(method == item.id ? Color.murshidBlue.opacity(0.06) : Color.murshidSurface, in: RoundedRectangle(cornerRadius: 17))
-                }.buttonStyle(.plain)
-            }
-        }
-    }
-
     private var actionSection: some View {
         VStack(spacing: 12) {
             if !statusMessage.isEmpty { V3InlineMessage(text: statusMessage, icon: "checkmark.circle.fill", tone: .success) }
@@ -411,7 +409,7 @@ struct V31SubscriptionView: View {
             if storedOrderID > 0 {
                 Button("تحقق من حالة آخر عملية") { Task { await checkStatus() } }.font(.headline).foregroundStyle(Color.murshidBlue).padding(.vertical, 8)
             }
-            Label("الدفع يتم خارج التطبيق لدى مزود الدفع. التطبيق لا يطلب بيانات البطاقة أو المحفظة.", systemImage: "rectangle.and.hand.point.up.left.fill")
+            Label("بعد اختيار الباقة ستنتقل إلى صفحة الدفع الخارجية الآمنة. لا توجد طريقة دفع يختارها الطالب داخل التطبيق.", systemImage: "rectangle.and.hand.point.up.left.fill")
                 .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
     }
@@ -424,7 +422,6 @@ struct V31SubscriptionView: View {
                     "csrf": app.csrf,
                     "action": "checkout",
                     "plan": plan,
-                    "payment_method": method,
                     "customer_name": app.user?.name ?? "طالب مشترك",
                     "customer_phone": "07700000000"
                 ])
