@@ -15,18 +15,53 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
-      - name: Reconstruct source
+
+      - name: Reconstruct source ZIP
+        shell: bash
         run: |
-          cat build-src/chunk*.b64 | base64 --decode > source.zip
+          set -euo pipefail
+          rm -f source.zip
+          for f in build-src/chunk*.b64; do
+            base64 --decode "$f" >> source.zip
+          done
+          unzip -t source.zip
           unzip -q source.zip
-      - name: Install XcodeGen
-        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
-      - name: Generate project
-        run: xcodegen generate
-      - name: Build
+          test -f project.yml
+          test -f MurshidWizari/MurshidWizariApp.swift
+
+      - name: Show Xcode
         run: |
-          xcodebuild -project MurshidWizari.xcodeproj -scheme MurshidWizari -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' clean build
-      - name: Validate and package
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Install XcodeGen
+        run: |
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          xcodegen --version
+
+      - name: Generate Xcode project
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          test -d MurshidWizari.xcodeproj
+
+      - name: Build Release for iPhone
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project MurshidWizari.xcodeproj \
+            -scheme MurshidWizari \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            clean build
+
+      - name: Validate and package IPA
         shell: bash
         run: |
           set -euo pipefail
@@ -34,18 +69,31 @@ jobs:
           test -n "$APP"
           BIN="$APP/MurshidWizari"
           test -f "$BIN"
+
           file "$BIN"
           lipo -info "$BIN"
+          otool -L "$BIN"
+
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" | grep -Fx 'المرشد الوزاري'
-          if otool -L "$BIN" | grep -q '/WebKit.framework/'; then exit 1; fi
-          mkdir -p Payload
+
+          if otool -L "$BIN" | grep -q '/WebKit.framework/'; then
+            echo "WebKit must not be linked" >&2
+            exit 1
+          fi
+
+          rm -rf Payload
+          mkdir Payload
           cp -R "$APP" Payload/
           zip -qry Murshid_Wizari_iOS_Production_v2_unsigned.ipa Payload
           shasum -a 256 Murshid_Wizari_iOS_Production_v2_unsigned.ipa > Murshid_Wizari_iOS_Production_v2_unsigned.sha256
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
         with:
           name: Murshid-Wizari-iOS-Production-v2-Unsigned
           path: |
             Murshid_Wizari_iOS_Production_v2_unsigned.ipa
             Murshid_Wizari_iOS_Production_v2_unsigned.sha256
+          if-no-files-found: error
+          retention-days: 14
