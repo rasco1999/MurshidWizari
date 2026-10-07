@@ -154,7 +154,7 @@ struct V31HomeView: View {
     private var releaseUpdateStrip: some View {
         let serverVersion = jString(app.releaseInfo["version"])
         let download = jString(app.releaseInfo["download_url"])
-        if !serverVersion.isEmpty && serverVersion != "4.1.0" {
+        if isVersion(serverVersion, newerThan: "4.1.0") {
             MurshidCard {
                 HStack(spacing: 12) {
                     Image(systemName: "arrow.down.app.fill")
@@ -174,6 +174,18 @@ struct V31HomeView: View {
                 }
             }
         }
+    }
+
+    private func isVersion(_ candidate: String, newerThan current: String) -> Bool {
+        let lhs = candidate.split(separator: ".").map { Int($0) ?? 0 }
+        let rhs = current.split(separator: ".").map { Int($0) ?? 0 }
+        let count = max(lhs.count, rhs.count)
+        for index in 0..<count {
+            let l = index < lhs.count ? lhs[index] : 0
+            let r = index < rhs.count ? rhs[index] : 0
+            if l != r { return l > r }
+        }
+        return false
     }
 
     private var performanceStrip: some View {
@@ -894,10 +906,24 @@ struct V31AccountView: View {
         }
     }
 
+    private func visionOrientation(for orientation: UIImage.Orientation) -> CGImagePropertyOrientation {
+        switch orientation {
+        case .up: return .up
+        case .down: return .down
+        case .left: return .left
+        case .right: return .right
+        case .upMirrored: return .upMirrored
+        case .downMirrored: return .downMirrored
+        case .leftMirrored: return .leftMirrored
+        case .rightMirrored: return .rightMirrored
+        @unknown default: return .up
+        }
+    }
+
     private func avatarHasSingleFace(_ image: UIImage) -> Bool {
         guard let cgImage = image.cgImage else { return false }
         let request = VNDetectFaceRectanglesRequest()
-        let handler = VNImageRequestHandler(cgImage: cgImage, orientation: .up, options: [:])
+        let handler = VNImageRequestHandler(cgImage: cgImage, orientation: visionOrientation(for: image.imageOrientation), options: [:])
         do {
             try handler.perform([request])
             let faces = request.results ?? []
