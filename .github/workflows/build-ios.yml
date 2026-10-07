@@ -1,16 +1,18 @@
-name: Build Murshid iOS Production IPA
+name: Build Murshid iOS Production v2 IPA
 
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
+    paths:
+      - '.github/workflows/build-ios.yml'
 
 permissions:
   contents: read
 
 jobs:
   build:
-    name: Build unsigned iPhone IPA
+    name: Build Production v2 unsigned iPhone IPA
     runs-on: macos-15
     timeout-minutes: 35
 
@@ -18,12 +20,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Show Xcode
+      - name: Xcode environment
         run: |
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
 
-      - name: Reconstruct source
+      - name: Reconstruct exact Production v2 source
         shell: bash
         run: |
           set -euo pipefail
@@ -48,8 +50,31 @@ jobs:
           echo "Expected SHA256: $EXPECTED"
           echo "Actual SHA256:   $ACTUAL"
           test "$ACTUAL" = "$EXPECTED"
+          rm -rf source
           mkdir source
           unzip -q MurshidWizari_Production_v2_BUILD_SOURCE.zip -d source
+
+      - name: Apply Xcode 16 compatibility fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('source/project.yml')
+          s = p.read_text()
+          s = s.replace('SWIFT_VERSION: "6.0"', 'SWIFT_VERSION: "5.0"')
+          s = s.replace('SWIFT_STRICT_CONCURRENCY: targeted', 'SWIFT_STRICT_CONCURRENCY: minimal')
+          p.write_text(s)
+
+          p = Path('source/MurshidWizari/AccountViews.swift')
+          s = p.read_text()
+          old = 'throw APIError.message("رابط الدفع غير صالح.", 422)'
+          new = 'throw APIError(message: "رابط الدفع غير صالح.", status: 422, paymentRequired: false)'
+          if old not in s:
+              raise SystemExit('Expected APIError call not found')
+          p.write_text(s.replace(old, new))
+          PY
 
       - name: Install XcodeGen
         run: |
@@ -62,6 +87,7 @@ jobs:
           set -euo pipefail
           xcodegen generate
           test -d MurshidWizari.xcodeproj
+          xcodebuild -project MurshidWizari.xcodeproj -scheme MurshidWizari -showBuildSettings > /tmp/murshid-build-settings.txt
 
       - name: Build Release for iPhone
         working-directory: source
@@ -87,16 +113,22 @@ jobs:
           set -euo pipefail
           APP="$(find build/Build/Products/Release-iphoneos -maxdepth 1 -type d -name '*.app' -print -quit)"
           test -n "$APP"
-          EXE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")"
-          test -f "$APP/$EXE"
+          test -f "$APP/MurshidWizari"
+          EXE="$APP/MurshidWizari"
           echo "App path: $APP"
-          file "$APP/$EXE"
-          lipo -info "$APP/$EXE"
-          otool -L "$APP/$EXE"
+          file "$EXE"
+          lipo -info "$EXE"
+          otool -L "$EXE"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" | grep -Fx 'المرشد الوزاري'
-          if otool -L "$APP/$EXE" | grep -q '/WebKit.framework/'; then
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist"
+          if otool -L "$EXE" | grep -q '/WebKit.framework/'; then
             echo 'ERROR: WebKit linked unexpectedly.' >&2
+            exit 1
+          fi
+          if strings "$EXE" | grep -Eiq 'WKWebView|Capacitor|Cordova'; then
+            echo 'ERROR: Web wrapper marker found unexpectedly.' >&2
             exit 1
           fi
           rm -rf Payload Murshid_Wizari_iOS_Production_v2_unsigned.ipa
