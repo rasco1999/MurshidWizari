@@ -1,0 +1,51 @@
+name: Build Murshid iOS Production IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build unsigned iPhone IPA
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct source
+        run: |
+          cat build-src/chunk*.b64 | base64 --decode > source.zip
+          unzip -q source.zip
+      - name: Install XcodeGen
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: Generate project
+        run: xcodegen generate
+      - name: Build
+        run: |
+          xcodebuild -project MurshidWizari.xcodeproj -scheme MurshidWizari -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' clean build
+      - name: Validate and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="$(find build/Build/Products/Release-iphoneos -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$APP"
+          BIN="$APP/MurshidWizari"
+          test -f "$BIN"
+          file "$BIN"
+          lipo -info "$BIN"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" | grep -Fx 'المرشد الوزاري'
+          if otool -L "$BIN" | grep -q '/WebKit.framework/'; then exit 1; fi
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry Murshid_Wizari_iOS_Production_v2_unsigned.ipa Payload
+          shasum -a 256 Murshid_Wizari_iOS_Production_v2_unsigned.ipa > Murshid_Wizari_iOS_Production_v2_unsigned.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Murshid-Wizari-iOS-Production-v2-Unsigned
+          path: |
+            Murshid_Wizari_iOS_Production_v2_unsigned.ipa
+            Murshid_Wizari_iOS_Production_v2_unsigned.sha256
