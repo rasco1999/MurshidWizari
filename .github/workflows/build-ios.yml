@@ -391,6 +391,11 @@ jobs:
           grep -Fq 'toggleAppearance' MurshidWizari/V31Features.swift
           grep -Fq 'ios_rev=' MurshidWizari/V31Features.swift
           grep -Fq 'تم تغيير صورة الحساب فورًا' MurshidWizari/V31Features.swift
+          grep -Fq 'avatarHasSingleFace' MurshidWizari/V31Features.swift
+          grep -Fq 'visionOrientation(for:' MurshidWizari/V31Features.swift
+          grep -Fq 'app-config.php' MurshidWizari/V31Features.swift
+          grep -Fq 'featureEnabled(' MurshidWizari/V31Features.swift
+          grep -Fq 'releaseUpdateStrip' MurshidWizari/V31Features.swift
           grep -Fq 'showLogoutConfirm' MurshidWizari/V31Features.swift
           grep -Fq 'withTaskGroup' MurshidWizari/V31Features.swift
           grep -Fq '.toolbar(.hidden, for: .tabBar)' MurshidWizari/AuthViews.swift
@@ -415,6 +420,10 @@ jobs:
           grep -Fq 'V40DailyChallengeView' MurshidWizari/V40Features.swift
           grep -Fq 'V40QuestionSearchView' MurshidWizari/V40Features.swift
           grep -Fq 'V40MoreQuestionsRequestView' MurshidWizari/V40Features.swift
+          grep -Fq 'V40DailyQuestion' MurshidWizari/V40Features.swift
+          test "$(grep -c '^struct V40DailyChallengeView' MurshidWizari/V40Features.swift)" -eq 1
+          test "$(grep -c '^struct V40MoreQuestionsRequestView' MurshidWizari/V40Features.swift)" -eq 1
+          test "$(grep -c '^struct V40QuestionSearchView' MurshidWizari/V40Features.swift)" -eq 1
           grep -Fq 'ShareLink' MurshidWizari/AuthViews.swift
           grep -Fq 'murshidQuestionRequiresChoices' MurshidWizari/AuthViews.swift
           grep -Fq 'URLCache(memoryCapacity:' MurshidWizari/APIClient.swift
