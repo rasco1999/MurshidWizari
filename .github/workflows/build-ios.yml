@@ -84,28 +84,6 @@ jobs:
           p.write_text(s)
           PY
 
-      - name: Apply Xcode 16 compatibility fixes
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          p = Path('source/project.yml')
-          s = p.read_text()
-          s = s.replace('SWIFT_VERSION: "6.0"', 'SWIFT_VERSION: "5.0"')
-          s = s.replace('SWIFT_STRICT_CONCURRENCY: targeted', 'SWIFT_STRICT_CONCURRENCY: minimal')
-          p.write_text(s)
-
-          p = Path('source/MurshidWizari/AccountViews.swift')
-          s = p.read_text()
-          old = 'throw APIError.message("رابط الدفع غير صالح.", 422)'
-          new = 'throw APIError(message: "رابط الدفع غير صالح.", status: 422, paymentRequired: false)'
-          if old not in s:
-              raise SystemExit('Expected APIError call not found')
-          p.write_text(s.replace(old, new))
-          PY
-
       - name: Install XcodeGen
         run: |
           brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
