@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import SafariServices
 
 private enum AuthRoute: Hashable {
     case register
@@ -1048,4 +1049,15 @@ private func isValidEmail(_ value: String) -> Bool {
 
 private func isValidIraqiPhone(_ value: String) -> Bool {
     value.range(of: #"^07\d{9}$"#, options: .regularExpression) != nil
+}
+
+
+struct SafariSheet: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        SFSafariViewController(url: url)
+    }
+
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
