@@ -152,6 +152,64 @@ jobs:
           s=s.replace('استخدم Face ID أو رمز الجهاز للعودة إلى حسابك.','استخدم Face ID للعودة إلى حسابك.')
           p.write_text(s)
           PY
+          # Reconstruct the exact user-selected icon and replace the AppIcon set.
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, hashlib
+          chunks=sorted(Path('patches/v31-icon').glob('chunk*.b64'))
+          encoded=''.join(''.join(p.read_text().split()) for p in chunks)
+          raw=base64.b64decode(encoded)
+          digest=hashlib.sha256(raw).hexdigest()
+          print("v3.1 icon SHA256:", digest)
+          expected='52ba1df0de3ef2f98eb85c1cfb61421245d59e53ce38d811a71a820e354c225d'
+          if digest != expected:
+              raise SystemExit("App icon digest mismatch")
+          Path('/tmp/murshid-v31-icon.jpg').write_bytes(raw)
+          PY
+          ICONSET="source/MurshidWizari/Assets.xcassets/AppIcon.appiconset"
+          mkdir -p "$ICONSET"
+          rm -f "$ICONSET"/*.png
+          sips -s format png -z 1024 1024 /tmp/murshid-v31-icon.jpg --out "$ICONSET/AppIcon-Light.png" >/dev/null
+          cp "$ICONSET/AppIcon-Light.png" "$ICONSET/AppIcon-Dark.png"
+          cp "$ICONSET/AppIcon-Light.png" "$ICONSET/AppIcon-Tinted.png"
+          cat > "$ICONSET/Contents.json" <<'JSON'
+          {
+            "images" : [
+              {"filename":"AppIcon-Light.png","idiom":"universal","platform":"ios","size":"1024x1024"},
+              {"appearances":[{"appearance":"luminosity","value":"dark"}],"filename":"AppIcon-Dark.png","idiom":"universal","platform":"ios","size":"1024x1024"},
+              {"appearances":[{"appearance":"luminosity","value":"tinted"}],"filename":"AppIcon-Tinted.png","idiom":"universal","platform":"ios","size":"1024x1024"}
+            ],
+            "info":{"author":"xcode","version":1}
+          }
+          JSON
+
+          # Privacy manifest required for UserDefaults use.
+          cat > source/MurshidWizari/PrivacyInfo.xcprivacy <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>NSPrivacyTracking</key><false/>
+            <key>NSPrivacyTrackingDomains</key><array/>
+            <key>NSPrivacyCollectedDataTypes</key><array/>
+            <key>NSPrivacyAccessedAPITypes</key>
+            <array>
+              <dict>
+                <key>NSPrivacyAccessedAPIType</key><string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+                <key>NSPrivacyAccessedAPITypeReasons</key><array><string>CA92.1</string></array>
+              </dict>
+            </array>
+          </dict></plist>
+          PLIST
+
+          # APNs entitlement. The final signed build must use a provisioning profile with Push enabled.
+          cat > source/MurshidWizari/MurshidWizari.entitlements <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>aps-environment</key><string>production</string>
+          </dict></plist>
+          PLIST
+
           swiftc -parse source/MurshidWizari/AuthViews.swift
           swiftc -parse source/MurshidWizari/APIClient.swift
           swiftc -parse source/MurshidWizari/MurshidWizariApp.swift
@@ -264,6 +322,8 @@ jobs:
             --app-icon AppIcon \
             --output-partial-info-plist /tmp/murshid-asset-info.plist
           test -f "$APP/Assets.car"
+          cp MurshidWizari/PrivacyInfo.xcprivacy "$APP/PrivacyInfo.xcprivacy"
+          test -f "$APP/PrivacyInfo.xcprivacy"
           python3 - <<'PY'
           import plistlib, glob
           app = glob.glob('build/Build/Products/Release-iphoneos/*.app')[0]
@@ -275,7 +335,7 @@ jobs:
           info['CFBundleName'] = 'منصة المرشد الوزاري'
           info['CFBundleShortVersionString'] = '3.1.0'
           info['CFBundleVersion'] = '310'
-          info['NSFaceIDUsageDescription'] = 'استخدم Face ID لفتح المرشد الوزاري وحماية حسابك الدراسي.'
+          info['NSFaceIDUsageDescription'] = 'يستخدم المرشد الوزاري Face ID لحماية حسابك عند العودة إلى التطبيق.'
           info['UISupportedInterfaceOrientations'] = ['UIInterfaceOrientationPortrait']
           info['UILaunchScreen'] = {'UIColorName': 'LaunchBackground'}
           info['UIDeviceFamily'] = [1]
@@ -310,6 +370,10 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '310'
           /usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist" | grep -Fx '1'
           test -f "$APP/Assets.car"
+          test -f "$APP/PrivacyInfo.xcprivacy"
+          strings "$EXE" | grep -q 'قفل حقيقي بـ Face ID'
+          strings "$EXE" | grep -q 'طلب إعلان مدرسة'
+          strings "$EXE" | grep -q 'الانتقال إلى الدفع الخارجي'
           echo "Assets.car present:"
           ls -lh "$APP/Assets.car"
           find "$APP" -maxdepth 1 -type f -name 'AppIcon*.png' -print
