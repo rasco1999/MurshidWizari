@@ -610,19 +610,14 @@ struct RegisterView: View {
                             keyboard: .default,
                             contentType: .name
                         )
-                        .onChange(of: fullName) { value in
-                            let count = personNameWords(value).count
-                            if count >= 3 {
-                                nameError = ""
-                            } else if !nameError.isEmpty {
-                                nameError = "اكتب الاسم الثلاثي على الأقل، مثل: أحمد علي حسن."
-                            }
+                        .onChange(of: fullName) { _ in
+                            nameError = ""
                         }
 
                         if !nameError.isEmpty {
                             FieldError(nameError)
-                        } else if personNameWords(fullName).count > 0 && personNameWords(fullName).count < 3 {
-                            Text("أدخل ثلاثة أسماء على الأقل.")
+                        } else {
+                            Text("اكتب اسمك الثلاثي كما هو في بياناتك الرسمية.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -733,6 +728,11 @@ struct RegisterView: View {
                         .buttonStyle(PrimaryButtonStyle())
                         .disabled(loading || gradesLoading)
                         .opacity((loading || gradesLoading) ? 0.62 : 1)
+
+                        Text("نسخة iPhone 2.4 • Build 240")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.tertiary)
+                            .frame(maxWidth: .infinity, alignment: .center)
                     }
                 }
 
@@ -765,10 +765,9 @@ struct RegisterView: View {
     private func submit() {
         clearErrors()
 
-        let words = personNameWords(fullName)
-        let name = words.joined(separator: " ")
-        if words.count < 3 {
-            nameError = "اكتب الاسم الثلاثي على الأقل، مثل: أحمد علي حسن."
+        let name = normalizedPersonName(fullName)
+        if name.isEmpty {
+            nameError = "أدخل اسم الطالب."
         }
 
         if gradeID <= 0 {
@@ -1365,23 +1364,36 @@ private extension View {
     }
 }
 
-private func personNameWords(_ value: String) -> [String] {
-    let canonical = value.precomposedStringWithCanonicalMapping
-    guard let regex = try? NSRegularExpression(
-        pattern: #"[\p{L}\p{M}]+(?:['’-][\p{L}\p{M}]+)*"#,
-        options: []
-    ) else { return [] }
-
-    let range = NSRange(canonical.startIndex..., in: canonical)
-    return regex.matches(in: canonical, range: range).compactMap { match in
-        guard let r = Range(match.range, in: canonical) else { return nil }
-        let token = String(canonical[r]).trimmingCharacters(in: .whitespacesAndNewlines)
-        return token.isEmpty ? nil : token
-    }
-}
-
 private func normalizedPersonName(_ value: String) -> String {
-    personNameWords(value).joined(separator: " ")
+    // Transport-safe normalization only. The backend is the single authority
+    // for deciding whether the name is three-part and acceptable.
+    let hidden: Set<UInt32> = [
+        0x200E, 0x200F, 0x061C,
+        0x202A, 0x202B, 0x202C, 0x202D, 0x202E,
+        0x2066, 0x2067, 0x2068, 0x2069,
+        0xFEFF
+    ]
+
+    var result = ""
+    var pendingSpace = false
+
+    for scalar in value.precomposedStringWithCanonicalMapping.unicodeScalars {
+        if hidden.contains(scalar.value) { continue }
+
+        if CharacterSet.whitespacesAndNewlines.contains(scalar) {
+            if !result.isEmpty { pendingSpace = true }
+            continue
+        }
+
+        if pendingSpace {
+            result.append(" ")
+            pendingSpace = false
+        }
+
+        result.unicodeScalars.append(scalar)
+    }
+
+    return result.trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
 private func normalizedIdentifier(_ value: String) -> String {
