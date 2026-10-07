@@ -1,0 +1,42 @@
+name: MurshidWizari
+options:
+  bundleIdPrefix: com.muriq
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    MARKETING_VERSION: "3.1.0"
+    CURRENT_PROJECT_VERSION: "310"
+    CODE_SIGNING_ALLOWED: NO
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGN_IDENTITY: ""
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    DEVELOPMENT_LANGUAGE: ar
+    CLANG_ENABLE_MODULES: YES
+    SWIFT_STRICT_CONCURRENCY: targeted
+targets:
+  MurshidWizari:
+    type: application
+    platform: iOS
+    sources:
+      - path: MurshidWizari
+        excludes:
+          - Info.plist
+          - Assets.xcassets
+          - PrivacyInfo.xcprivacy
+          - MurshidWizari.entitlements
+    resources:
+      - MurshidWizari/Assets.xcassets
+      - MurshidWizari/PrivacyInfo.xcprivacy
+    info:
+      path: MurshidWizari/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.muriq.murshid
+        PRODUCT_NAME: MurshidWizari
+        INFOPLIST_FILE: MurshidWizari/Info.plist
+        CODE_SIGN_ENTITLEMENTS: MurshidWizari/MurshidWizari.entitlements
+    scheme: {}
