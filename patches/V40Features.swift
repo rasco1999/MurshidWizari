@@ -941,7 +941,7 @@ struct V40WhatsNewView: View {
         ScrollView {
             VStack(spacing: 14) {
                 V3IntroCard(
-                    eyebrow: "الإصدار 4.1",
+                    eyebrow: "الإصدار 4.2",
                     title: "ما الجديد؟",
                     text: "تحديث شامل لتجربة الطالب، بنك الأسئلة، والملف الشخصي.",
                     icon: "sparkles"
@@ -951,7 +951,7 @@ struct V40WhatsNewView: View {
                 feature("plus.bubble.fill", "اقترح سؤالًا", "أرسل سؤالًا مع الإجابة والمصدر وتابع حالته.")
                 feature("note.text", "ملاحظات خاصة", "احفظ ملاحظة خاصة على أي سؤال.")
                 feature("shield.checkered", "سلامة أعلى", "فحص نوع السؤال وخياراته وإجابته ومساره قبل عرضه.")
-                feature("person.crop.circle.badge.checkmark", "صورة الحساب فورًا", "تتغير الصورة مباشرة بعد فحص السلامة الآلي بدون انتظار موافقة يدوية.")
+                feature("person.crop.circle.badge.checkmark", "صورة الحساب فورًا", "تتغير الصورة مباشرة بدون انتظار موافقة يدوية أو خدمة فحص خارجية.")
                 feature("magnifyingglass", "بحث في الأسئلة", "ابحث داخل بنك الأسئلة والمواضيع بسرعة.")
             }
             .padding(16)
