@@ -394,7 +394,7 @@ struct V40MyQuestionSubmissionsView: View {
             let d = try await APIClient.shared.request("mobile/question-submit.php")
             await MainActor.run { rows = jArray(d["submissions"]); loading = false; error = "" }
         } catch {
-            await MainActor.run { loading = false; self.self.error = error.localizedDescription }
+            await MainActor.run { loading = false; self.error = error.localizedDescription }
         }
     }
 
@@ -792,7 +792,7 @@ struct V40CustomExamSessionView: View {
                 error = ""
             }
         } catch {
-            await MainActor.run { loading = false; self.self.error = error.localizedDescription }
+            await MainActor.run { loading = false; self.error = error.localizedDescription }
         }
     }
 
@@ -821,7 +821,7 @@ struct V40CustomExamSessionView: View {
         } catch {
             await MainActor.run {
                 submitting = false
-                self.self.error = error.localizedDescription
+                self.error = error.localizedDescription
                 haptic(.error)
             }
         }
@@ -931,7 +931,7 @@ struct V40AttemptHistoryView: View {
             )
             await MainActor.run { rows = jArray(d["history"]); loading = false; error = "" }
         } catch {
-            await MainActor.run { loading = false; self.self.error = error.localizedDescription }
+            await MainActor.run { loading = false; self.error = error.localizedDescription }
         }
     }
 }
@@ -941,9 +941,9 @@ struct V40WhatsNewView: View {
         ScrollView {
             VStack(spacing: 14) {
                 V3IntroCard(
-                    eyebrow: "الإصدار 4.0",
+                    eyebrow: "الإصدار 4.1",
                     title: "ما الجديد؟",
-                    text: "تحديث تجربة الطالب وبنك الأسئلة.",
+                    text: "تحديث شامل لتجربة الطالب، بنك الأسئلة، والملف الشخصي.",
                     icon: "sparkles"
                 )
                 feature("line.3.horizontal.decrease.circle.fill", "مرشحات متقدمة", "فلترة حسب النوع والسنة والدور والصعوبة وحالتك السابقة.")
@@ -951,6 +951,8 @@ struct V40WhatsNewView: View {
                 feature("plus.bubble.fill", "اقترح سؤالًا", "أرسل سؤالًا مع الإجابة والمصدر وتابع حالته.")
                 feature("note.text", "ملاحظات خاصة", "احفظ ملاحظة خاصة على أي سؤال.")
                 feature("shield.checkered", "سلامة أعلى", "فحص نوع السؤال وخياراته وإجابته ومساره قبل عرضه.")
+                feature("person.crop.circle.badge.checkmark", "صورة الحساب فورًا", "تتغير الصورة مباشرة بعد فحص السلامة الآلي بدون انتظار موافقة يدوية.")
+                feature("magnifyingglass", "بحث في الأسئلة", "ابحث داخل بنك الأسئلة والمواضيع بسرعة.")
             }
             .padding(16)
         }
@@ -1044,5 +1046,183 @@ struct V40QuestionSearchView: View {
         } catch {
             await MainActor.run { loading = false; message = error.localizedDescription }
         }
+    }
+}
+
+
+struct V40MoreQuestionsRequestView: View {
+    @EnvironmentObject var app: AppSession
+    let topic: Topic
+    let subject: Subject
+    @State private var loading = true
+    @State private var complete = false
+    @State private var pending = false
+    @State private var answered = 0
+    @State private var total = 0
+    @State private var sending = false
+    @State private var message = ""
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                V3IntroCard(eyebrow: subject.name, title: "طلب أسئلة جديدة", text: "بعد إكمال أسئلة الموضوع الحالية يمكنك إرسال طلب مباشر لفريق المحتوى.", icon: "plus.bubble.fill")
+                MurshidCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text(topic.name).font(.headline)
+                            Spacer()
+                            Text("\(answered) / \(total)").font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+                        }
+                        ProgressView(value: Double(answered), total: Double(max(1, total))).tint(.murshidBlue)
+                        if pending {
+                            Label("تم إرسال الطلب وهو لدى فريق المحتوى", systemImage: "clock.badge.checkmark").foregroundStyle(.orange)
+                        } else if complete {
+                            Label("أكملت جميع الأسئلة الحالية", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
+                        } else {
+                            Text("أكمل الأسئلة الحالية أولًا ثم سيتاح الطلب تلقائيًا.").font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Button { Task { await send() } } label: {
+                    HStack {
+                        if sending { ProgressView().tint(.white) }
+                        Image(systemName: "paperplane.fill")
+                        Text(pending ? "تم إرسال الطلب" : "إرسال طلب أسئلة جديدة")
+                    }
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(loading || sending || pending || !complete)
+                if !message.isEmpty { V3InlineMessage(text: message, icon: "info.circle.fill", tone: .info) }
+            }.padding(16)
+        }
+        .background(Color.murshidBackground.ignoresSafeArea())
+        .navigationTitle("طلب أسئلة")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+    }
+
+    private func load() async {
+        do {
+            let d = try await APIClient.shared.request("mobile/question-request.php", query: [URLQueryItem(name: "chapter_id", value: "\(topic.id)")])
+            await MainActor.run {
+                complete = jBool(d["complete"])
+                pending = jBool(d["pending"])
+                answered = jInt(d["answered"])
+                total = jInt(d["total"])
+                loading = false
+                message = ""
+            }
+        } catch { await MainActor.run { loading = false; message = error.localizedDescription } }
+    }
+
+    private func send() async {
+        sending = true
+        do {
+            let d = try await APIClient.shared.request("mobile/question-request.php", method: "POST", body: ["csrf": app.csrf, "chapter_id": topic.id])
+            await MainActor.run {
+                sending = false
+                pending = true
+                message = jString(d["message"], default: "تم إرسال الطلب.")
+                haptic()
+            }
+        } catch {
+            await MainActor.run { sending = false; message = error.localizedDescription; haptic(.error) }
+        }
+    }
+}
+
+struct V40DailyChallengeView: View {
+    @EnvironmentObject var app: AppSession
+    @State private var rows: [JSON] = []
+    @State private var answers: [Int:String] = [:]
+    @State private var loading = true
+    @State private var done = false
+    @State private var score = 0
+    @State private var total = 0
+    @State private var busy = false
+    @State private var message = ""
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                V3IntroCard(eyebrow: "تحدي اليوم", title: done ? "أنجزت تحدي اليوم" : "خمسة أسئلة سريعة", text: done ? "نتيجتك \(score) من \(total)." : "أجب مرة واحدة اليوم وحافظ على استمراريتك.", icon: "flame.fill")
+                if loading {
+                    ProgressView().padding()
+                } else if done {
+                    MurshidCard {
+                        Label("\(score) / \(total)", systemImage: "trophy.fill").font(.title2.bold()).foregroundStyle(.green).frame(maxWidth: .infinity)
+                    }
+                } else {
+                    ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                        let qid = jInt(row["id"])
+                        let opts = jArray(row["options"]).map { jString($0["text"], default: jString($0["answer_text"])) }.filter { !$0.isEmpty }
+                        MurshidCard {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("\(index + 1). \(murshidQuestionDisplayText(jString(row["text"], default: jString(row["question_text"]))))").font(.headline)
+                                if !opts.isEmpty {
+                                    ForEach(opts, id: \.self) { option in
+                                        let selected = answers[qid] == option
+                                        Button {
+                                            answers[qid] = option
+                                            selectionHaptic()
+                                        } label: {
+                                            HStack {
+                                                Text(option).foregroundStyle(.primary)
+                                                Spacer()
+                                                Image(systemName: selected ? "checkmark.circle.fill" : "circle").foregroundStyle(Color.murshidBlue)
+                                            }.padding(10).background(selected ? Color.murshidBlue.opacity(0.09) : Color.primary.opacity(0.02), in: RoundedRectangle(cornerRadius: 12))
+                                        }.buttonStyle(.plain)
+                                    }
+                                } else {
+                                    TextField("إجابتك", text: Binding(get: { answers[qid] ?? "" }, set: { answers[qid] = $0 })).textFieldStyle(.roundedBorder)
+                                }
+                            }
+                        }
+                    }
+                    Button { Task { await submit() } } label: {
+                        HStack {
+                            if busy { ProgressView().tint(.white) }
+                            Text(busy ? "جاري التصحيح…" : "إرسال تحدي اليوم")
+                        }
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(busy || rows.isEmpty || rows.contains { (answers[jInt($0["id"])] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+                }
+                if !message.isEmpty { V3InlineMessage(text: message, icon: "info.circle.fill", tone: .info) }
+            }.padding(16)
+        }
+        .background(Color.murshidBackground.ignoresSafeArea())
+        .navigationTitle("تحدي اليوم")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+    }
+
+    private func load() async {
+        do {
+            let d = try await APIClient.shared.request("mobile/challenge.php")
+            await MainActor.run {
+                done = jBool(d["done"])
+                score = jInt(d["score"])
+                total = jInt(d["total"])
+                rows = jArray(d["questions"])
+                loading = false
+            }
+        } catch { await MainActor.run { loading = false; message = error.localizedDescription } }
+    }
+
+    private func submit() async {
+        busy = true
+        var payload: JSON = [:]
+        for (id, value) in answers { payload[String(id)] = value }
+        do {
+            let d = try await APIClient.shared.request("mobile/challenge.php", method: "POST", body: ["csrf": app.csrf, "answers": payload])
+            await MainActor.run {
+                busy = false
+                done = jBool(d["done"])
+                score = jInt(d["score"])
+                total = jInt(d["total"])
+                haptic()
+            }
+        } catch { await MainActor.run { busy = false; message = error.localizedDescription; haptic(.error) } }
     }
 }
