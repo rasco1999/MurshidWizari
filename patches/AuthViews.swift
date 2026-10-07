@@ -611,10 +611,21 @@ struct RegisterView: View {
                             contentType: .name
                         )
                         .onChange(of: fullName) { value in
-                            nameError = personNameWords(value).count >= 3 ? "" : nameError
+                            let count = personNameWords(value).count
+                            if count >= 3 {
+                                nameError = ""
+                            } else if !nameError.isEmpty {
+                                nameError = "اكتب الاسم الثلاثي على الأقل، مثل: أحمد علي حسن."
+                            }
                         }
 
-                        if !nameError.isEmpty { FieldError(nameError) }
+                        if !nameError.isEmpty {
+                            FieldError(nameError)
+                        } else if personNameWords(fullName).count > 0 && personNameWords(fullName).count < 3 {
+                            Text("أدخل ثلاثة أسماء على الأقل.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
 
                         VStack(alignment: .leading, spacing: 8) {
                             FieldLabel("الصف الدراسي", icon: "books.vertical.fill")
@@ -1357,7 +1368,7 @@ private extension View {
 private func personNameWords(_ value: String) -> [String] {
     let canonical = value.precomposedStringWithCanonicalMapping
     guard let regex = try? NSRegularExpression(
-        pattern: #"[\\p{L}\\p{M}]+(?:['’\\-][\\p{L}\\p{M}]+)*"#,
+        pattern: #"[\p{L}\p{M}]+(?:['’-][\p{L}\p{M}]+)*"#,
         options: []
     ) else { return [] }
 
