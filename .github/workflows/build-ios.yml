@@ -31,8 +31,8 @@ jobs:
           import base64, glob, pathlib
           chunks = sorted(glob.glob('build-src/chunk*.b64'))
           assert len(chunks) == 8, f'Expected 8 chunks, got {len(chunks)}'
-          data = ''.join(pathlib.Path(p).read_text().strip() for p in chunks)
-          pathlib.Path('MurshidWizari_Production_v2_BUILD_SOURCE.zip').write_bytes(base64.b64decode(data))
+          payload = b''.join(base64.b64decode(pathlib.Path(p).read_text().strip()) for p in chunks)
+          pathlib.Path('MurshidWizari_Production_v2_BUILD_SOURCE.zip').write_bytes(payload)
           PY
           EXPECTED="9786c1fe6e7a96ec0c5476925cc505eeb14c1a5d7d9126f3824e2694e7107838"
           ACTUAL="$(shasum -a 256 MurshidWizari_Production_v2_BUILD_SOURCE.zip | awk '{print $1}')"
