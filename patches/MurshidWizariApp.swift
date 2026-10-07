@@ -126,8 +126,8 @@ struct LockShieldView: View {
             VStack(spacing: 16) {
                 Image(systemName: "lock.shield.fill").font(.system(size: 48)).foregroundStyle(Color.murshidBlue)
                 Text("التطبيق مقفل").font(.title2.bold())
-                Text("استخدم Face ID أو رمز الجهاز للعودة إلى حسابك.").multilineTextAlignment(.center).foregroundStyle(.secondary)
-                Button("فتح") { Task { await device.didBecomeActive() } }.buttonStyle(PrimaryButtonStyle()).frame(maxWidth: 260)
+                Text("استخدم Face ID للعودة إلى حسابك.").multilineTextAlignment(.center).foregroundStyle(.secondary)
+                Button("فتح باستخدام Face ID") { Task { await device.unlockWithFaceID(force: true) } }.buttonStyle(PrimaryButtonStyle()).frame(maxWidth: 260)
             }.padding(28)
         }
     }
