@@ -388,11 +388,8 @@ jobs:
           grep -Fq 'الانتقال إلى الدفع الخارجي' MurshidWizari/V31Features.swift
           grep -Fq 'preloadAllImages' MurshidWizari/V31Features.swift
           grep -Fq 'toggleAppearance' MurshidWizari/V31Features.swift
-          grep -Fq 'pollAvatarApproval' MurshidWizari/V31Features.swift
-          grep -Fq 'avatarPollGeneration' MurshidWizari/V31Features.swift
           grep -Fq 'ios_rev=' MurshidWizari/V31Features.swift
           grep -Fq 'تم تغيير صورة الحساب فورًا' MurshidWizari/V31Features.swift
-          if grep -Fq 'pollAvatarApproval' MurshidWizari/V31Features.swift; then
             echo 'ERROR: obsolete avatar approval polling remains in v4.0.' >&2
             exit 1
           fi
