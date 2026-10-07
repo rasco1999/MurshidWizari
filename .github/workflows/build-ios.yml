@@ -174,6 +174,11 @@ jobs:
           info['CFBundleName'] = 'منصة المرشد الوزاري'
           info['CFBundleShortVersionString'] = '2.1.0'
           info['CFBundleVersion'] = '210'
+          info['NSFaceIDUsageDescription'] = 'استخدم Face ID لفتح المرشد الوزاري وحماية حسابك الدراسي.'
+          info['UISupportedInterfaceOrientations'] = ['UIInterfaceOrientationPortrait']
+          info['UILaunchScreen'] = {'UIColorName': 'LaunchBackground'}
+          info['UIDeviceFamily'] = [1]
+          info.pop('CFBundleIcons~ipad', None)
           with open(info_path,'wb') as f: plistlib.dump(info,f,fmt=plistlib.FMT_BINARY)
           PY
 
