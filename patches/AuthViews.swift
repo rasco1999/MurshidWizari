@@ -1881,6 +1881,13 @@ struct V3TopicsView: View {
     @State private var metrics: [Int: JSON] = [:]
     @State private var loading = true
     @State private var error = ""
+    @State private var search = ""
+
+    private var filteredTopics: [Topic] {
+        let q = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return topics }
+        return topics.filter { $0.name.localizedCaseInsensitiveContains(q) }
+    }
 
     var body: some View {
         Group {
@@ -1900,11 +1907,16 @@ struct V3TopicsView: View {
                             text: "شاهد تقدمك وعدد الأسئلة قبل البدء.",
                             icon: "book.pages.fill"
                         )
-                        ForEach(Array(topics.enumerated()), id: \.element.id) { index, topic in
-                            NavigationLink(destination: V3ExamView(topic: topic, subject: subject)) {
-                                topicRow(topic, index: index)
+                        if filteredTopics.isEmpty {
+                            EmptyStateView(systemImage: "magnifyingglass", title: "لا توجد نتيجة", message: "جرّب البحث باسم آخر من مواضيع \(subject.name).")
+                                .frame(minHeight: 240)
+                        } else {
+                            ForEach(Array(filteredTopics.enumerated()), id: \.element.id) { index, topic in
+                                NavigationLink(destination: V3ExamView(topic: topic, subject: subject)) {
+                                    topicRow(topic, index: index)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                     .padding(16)
@@ -1915,6 +1927,7 @@ struct V3TopicsView: View {
         }
         .navigationTitle(subject.name)
         .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: "ابحث عن موضوع")
         .task { await load() }
         .refreshable { await load() }
     }
@@ -2572,6 +2585,7 @@ struct V3ExamView: View {
     @State private var reportReason = "wrong_answer"
     @State private var reportMessage = ""
     @State private var reporting = false
+    @FocusState private var textAnswerFocused: Bool
 
     var body: some View {
         Group {
@@ -2608,6 +2622,7 @@ struct V3ExamView: View {
         }
         .navigationTitle(showResult ? "نتيجة الاختبار" : topic.name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .toolbar {
             if !questions.isEmpty && !showResult {
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -2615,12 +2630,19 @@ struct V3ExamView: View {
                         Image(systemName: questions[current].favorite ? "heart.fill" : "heart")
                             .foregroundStyle(questions[current].favorite ? .red : Color.murshidBlue)
                     }
+                    .disabled(submitting)
                     .accessibilityLabel(questions[current].favorite ? "إزالة من المفضلة" : "إضافة إلى المفضلة")
 
                     Button { showReport = true } label: {
                         Image(systemName: "exclamationmark.bubble")
                     }
+                    .disabled(submitting)
                     .accessibilityLabel("الإبلاغ عن السؤال")
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("تم") { textAnswerFocused = false }
+                        .font(.headline)
                 }
             }
         }
@@ -2647,6 +2669,8 @@ struct V3ExamView: View {
                         questionCard(questions[current])
                         answerArea(questions[current])
                         feedbackArea(questions[current])
+                            .id("feedback")
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                         if !error.isEmpty {
                             V3InlineMessage(text: error, icon: "exclamationmark.triangle.fill", tone: .warning)
                         }
@@ -2655,6 +2679,10 @@ struct V3ExamView: View {
                 }
                 .onChange(of: current) { _ in
                     withAnimation(.easeOut(duration: 0.22)) { proxy.scrollTo("top", anchor: .top) }
+                }
+                .onChange(of: grades.count) { _ in
+                    guard !submitting else { return }
+                    withAnimation(.easeInOut(duration: 0.28)) { proxy.scrollTo("feedback", anchor: .center) }
                 }
             }
             Divider()
@@ -2741,7 +2769,13 @@ struct V3ExamView: View {
                     }
                 }
 
-                if isAnswered(q) {
+                if !q.options.isEmpty {
+                    VStack(spacing: 10) {
+                        ForEach(Array(q.options.enumerated()), id: \.element.id) { index, option in
+                            optionButton(q: q, option: option, index: index)
+                        }
+                    }
+                } else if isAnswered(q) {
                     Text(answerDisplay(q))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -2751,18 +2785,13 @@ struct V3ExamView: View {
                         .textSelection(.enabled)
                 } else if let em = q.englishMatch {
                     EnglishMatchInput(definition: em, values: bindingEnglish(q.id))
-                } else if !q.options.isEmpty {
-                    VStack(spacing: 10) {
-                        ForEach(Array(q.options.enumerated()), id: \.element.id) { index, option in
-                            optionButton(q: q, option: option, index: index)
-                        }
-                    }
                 } else if q.type == "match" && !q.matchItems.isEmpty {
                     MatchInput(items: q.matchItems, drafts: bindingMatches(q.id))
                 } else if !q.stages.isEmpty {
                     InteractiveInput(stages: q.stages, values: bindingInteractive(q.id))
                 } else {
                     TextEditor(text: bindingAnswer(q.id))
+                        .focused($textAnswerFocused)
                         .frame(minHeight: 120)
                         .padding(10)
                         .scrollContentBackground(.hidden)
@@ -2794,8 +2823,17 @@ struct V3ExamView: View {
 
     private func optionButton(q: Question, option: QuestionOption, index: Int) -> some View {
         let selected = answers[q.id] == option.text
+        let graded = isAnswered(q)
+        let correctText = jString(grades[q.id]?["correct_answer"], default: q.correctAnswer)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let optionText = option.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let correctOption = graded && !correctText.isEmpty && optionText == correctText
+        let wrongSelected = graded && selected && !correctOption
+        let accent: Color = correctOption ? .green : (wrongSelected ? .red : Color.murshidBlue)
+        let icon = correctOption ? "checkmark.circle.fill" : (wrongSelected ? "xmark.circle.fill" : (selected ? "checkmark.circle.fill" : "circle"))
+
         return Button {
-            guard !isAnswered(q), !submitting else { return }
+            guard !graded, !submitting else { return }
             answers[q.id] = option.text
             selectionHaptic()
             submitCurrent(answerOverride: option.text)
@@ -2804,22 +2842,23 @@ struct V3ExamView: View {
                 Text(optionLetter(index))
                     .font(.subheadline.bold())
                     .frame(width: 34, height: 34)
-                    .foregroundStyle(selected ? .white : Color.murshidBlue)
-                    .background(selected ? Color.murshidBlue : Color.murshidBlue.opacity(0.10), in: Circle())
+                    .foregroundStyle((selected || correctOption) ? .white : accent)
+                    .background((selected || correctOption) ? accent : accent.opacity(0.10), in: Circle())
                 Text(option.text)
                     .font(.body.weight(.medium))
                     .multilineTextAlignment(.leading)
                     .foregroundStyle(.primary)
                 Spacer(minLength: 0)
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(selected ? Color.murshidBlue : Color.secondary)
+                Image(systemName: icon)
+                    .foregroundStyle((selected || correctOption) ? accent : Color.secondary)
             }
             .padding(12)
-            .background(selected ? Color.murshidBlue.opacity(0.08) : Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).stroke(selected ? Color.murshidBlue.opacity(0.30) : Color.primary.opacity(0.05), lineWidth: 1))
+            .background((selected || correctOption) ? accent.opacity(0.10) : Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).stroke((selected || correctOption) ? accent.opacity(0.42) : Color.primary.opacity(0.05), lineWidth: 1))
         }
         .buttonStyle(.plain)
-        .disabled(isAnswered(q) || submitting)
+        .disabled(graded || submitting)
+        .animation(.easeInOut(duration: 0.2), value: graded)
     }
 
     @ViewBuilder
@@ -2872,7 +2911,7 @@ struct V3ExamView: View {
                 selectionHaptic()
             } label: {
                 Label("السابق", systemImage: "chevron.right")
-                    .frame(minWidth: 80)
+                    .frame(minWidth: 88, minHeight: 46)
             }
             .buttonStyle(.bordered)
             .disabled(current == 0)
@@ -2886,6 +2925,7 @@ struct V3ExamView: View {
                 } label: {
                     Label("النتيجة", systemImage: "chart.bar.fill")
                         .font(.headline)
+                        .frame(minHeight: 46)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.murshidBlue)
@@ -2897,7 +2937,7 @@ struct V3ExamView: View {
                     selectionHaptic()
                 } label: {
                     Label("التالي", systemImage: "chevron.left")
-                        .frame(minWidth: 80)
+                        .frame(minWidth: 88, minHeight: 46)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.murshidBlue)
@@ -3079,7 +3119,10 @@ struct V3ExamView: View {
                 var grade: JSON? = nil
                 if let g = d["grades"] as? JSON { grade = g[String(q.id)] as? JSON }
                 await MainActor.run {
-                    if let grade { grades[q.id] = grade }
+                    textAnswerFocused = false
+                    if let grade {
+                        withAnimation(.easeInOut(duration: 0.22)) { grades[q.id] = grade }
+                    }
                     app.subscribed = jBool(d["subscribed"], default: app.subscribed)
                     app.freeUsed = jInt(d["free_used"], default: app.freeUsed)
                     app.freeRemaining = d["free_remaining"] is NSNull ? nil : jInt(d["free_remaining"], default: app.freeRemaining ?? 0)
