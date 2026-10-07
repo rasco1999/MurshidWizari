@@ -209,18 +209,23 @@ struct V31HomeView: View {
 
     private var quickTools: some View {
         VStack(alignment: .leading, spacing: 12) {
-            V3SectionHeader(title: "أدواتك السريعة", subtitle: "كل ما تحتاجه بعد اختيار موادك", icon: "bolt.fill")
+            V3SectionHeader(title: "أدواتك السريعة", subtitle: "اختبارات ومراجعة وبحث ومساهمات", icon: "bolt.fill")
             LazyVGrid(columns: columns, spacing: 12) {
                 NavigationLink(destination: ReviewView()) { V3ToolCard(title: "راجع أخطاءك", subtitle: "مراجعة ذكية", icon: "brain.head.profile") }
                 NavigationLink(destination: V40CustomExamBuilderView()) { V3ToolCard(title: "اختبار مخصص", subtitle: "عدد · نوع · مؤقت", icon: "slider.horizontal.3") }
+                NavigationLink(destination: V40DailyChallengeView()) { V3ToolCard(title: "تحدي اليوم", subtitle: "خمسة أسئلة سريعة", icon: "flame.fill") }
+                NavigationLink(destination: V40QuestionSearchView()) { V3ToolCard(title: "ابحث عن سؤال", subtitle: "في بنك الأسئلة", icon: "magnifyingglass") }
                 NavigationLink(destination: V40StudentQuestionSubmitView()) { V3ToolCard(title: "اقترح سؤالًا", subtitle: "ساهم في البنك", icon: "plus.bubble.fill") }
                 NavigationLink(destination: V40MyQuestionSubmissionsView()) { V3ToolCard(title: "طلباتك", subtitle: "تابع المراجعة", icon: "tray.full.fill") }
                 NavigationLink(destination: V40AttemptHistoryView()) { V3ToolCard(title: "سجل الاختبارات", subtitle: "نتائجك السابقة", icon: "clock.arrow.circlepath") }
+                NavigationLink(destination: StudyPlanView()) { V3ToolCard(title: "خطة الدراسة", subtitle: "هدف يومي", icon: "calendar") }
+                NavigationLink(destination: AchievementsView()) { V3ToolCard(title: "الإنجازات", subtitle: "XP والمستوى", icon: "medal.fill") }
                 NavigationLink(destination: V3FocusView()) { V3ToolCard(title: "جلسة تركيز", subtitle: "25 · 45 · 60 دقيقة", icon: "timer") }
                 NavigationLink(destination: V3ContestView()) { V3ToolCard(title: "تحدي المليون", subtitle: "ترتيب ونقاط", icon: "trophy.fill") }
                 NavigationLink(destination: StoriesView()) { V3ToolCard(title: "غيّر جو", subtitle: "استراحة قصيرة", icon: "sparkles") }
-                NavigationLink(destination: V40WhatsNewView()) { V3ToolCard(title: "ما الجديد", subtitle: "الإصدار 4.0", icon: "sparkles.rectangle.stack.fill") }
-            }.buttonStyle(.plain)
+                NavigationLink(destination: V40WhatsNewView()) { V3ToolCard(title: "ما الجديد", subtitle: "الإصدار 4.1", icon: "sparkles.rectangle.stack.fill") }
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -739,7 +744,7 @@ struct V31AccountView: View {
     private var appInfo: some View {
         MurshidCard {
             VStack(alignment: .leading, spacing: 8) {
-                HStack { Label("منصة المرشد الوزاري", systemImage: "graduationcap.fill").font(.headline); Spacer(); Text("4.0 • 400").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
+                HStack { Label("منصة المرشد الوزاري", systemImage: "graduationcap.fill").font(.headline); Spacer(); Text("4.1 • 410").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
                 Text("تطبيق iPhone أصلي مرتبط مباشرة بحسابك في المنصة.").font(.footnote).foregroundStyle(.secondary)
                 HStack(spacing: 14) {
                     Link("الخصوصية", destination: URL(string: "https://www.mur-iq.com/privacy.php")!)
