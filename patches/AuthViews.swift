@@ -2824,23 +2824,25 @@ struct V3ExamView: View {
                             Text("أحسنت").font(.caption.bold()).foregroundStyle(.green)
                         }
                     }
-                    if !q.correctAnswer.isEmpty && correct != true {
+                    let serverCorrectAnswer = jString(grades[q.id]?["correct_answer"], default: q.correctAnswer)
+                    let serverExplanation = jString(grades[q.id]?["explanation"], default: q.explanation)
+                    if !serverCorrectAnswer.isEmpty && correct != true {
                         Text("الإجابة الصحيحة")
                             .font(.caption.bold()).foregroundStyle(.secondary)
-                        Text(q.correctAnswer)
+                        Text(serverCorrectAnswer)
                             .font(.body.weight(.semibold))
                             .foregroundStyle(.green)
                     }
                     Divider()
                     Text("شرح الإجابة").font(.caption.bold()).foregroundStyle(Color.murshidBlue)
-                    if !q.explanation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text(q.explanation)
+                    if !serverExplanation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(serverExplanation)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .lineSpacing(5)
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
-                        Text("لا يوجد شرح تفصيلي مضاف لهذا السؤال حاليًا.")
+                        Text("لم تتم إضافة شرح تفصيلي لهذا السؤال في بنك الأسئلة بعد.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
