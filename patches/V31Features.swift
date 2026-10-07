@@ -4,6 +4,7 @@ import LocalAuthentication
 import UserNotifications
 import UIKit
 import Combine
+import Vision
 
 // MARK: - v3.1 Home: mirrors the live website slider and keeps study actions below subjects
 
@@ -825,6 +826,9 @@ struct V31AccountView: View {
                   let jpeg = image.jpegData(compressionQuality: 0.88) else {
                 throw APIError(message: "تعذر قراءة الصورة المختارة.", status: 422, paymentRequired: false)
             }
+            guard avatarHasSingleFace(image) else {
+                throw APIError(message: "استخدم صورة شخصية واضحة لشخص واحد فقط. الصور بدون وجه واضح أو التي تحتوي عدة أشخاص غير مقبولة.", status: 422, paymentRequired: false)
+            }
             await MainActor.run {
                 avatarPreview = image
                 uploadingAvatar = true
@@ -848,6 +852,21 @@ struct V31AccountView: View {
                 self.error = error.localizedDescription
                 haptic(.error)
             }
+        }
+    }
+
+    private func avatarHasSingleFace(_ image: UIImage) -> Bool {
+        guard let cgImage = image.cgImage else { return false }
+        let request = VNDetectFaceRectanglesRequest()
+        let handler = VNImageRequestHandler(cgImage: cgImage, orientation: .up, options: [:])
+        do {
+            try handler.perform([request])
+            let faces = request.results ?? []
+            guard faces.count == 1, let face = faces.first else { return false }
+            // نرفض الوجوه الصغيرة جدًا داخل صورة بعيدة أو غير مخصصة للملف الشخصي.
+            return face.boundingBox.width >= 0.12 && face.boundingBox.height >= 0.12
+        } catch {
+            return false
         }
     }
 
