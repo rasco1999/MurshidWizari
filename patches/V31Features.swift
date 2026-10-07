@@ -212,9 +212,14 @@ struct V31HomeView: View {
             V3SectionHeader(title: "أدواتك السريعة", subtitle: "كل ما تحتاجه بعد اختيار موادك", icon: "bolt.fill")
             LazyVGrid(columns: columns, spacing: 12) {
                 NavigationLink(destination: ReviewView()) { V3ToolCard(title: "راجع أخطاءك", subtitle: "مراجعة ذكية", icon: "brain.head.profile") }
+                NavigationLink(destination: V40CustomExamBuilderView()) { V3ToolCard(title: "اختبار مخصص", subtitle: "عدد · نوع · مؤقت", icon: "slider.horizontal.3") }
+                NavigationLink(destination: V40StudentQuestionSubmitView()) { V3ToolCard(title: "اقترح سؤالًا", subtitle: "ساهم في البنك", icon: "plus.bubble.fill") }
+                NavigationLink(destination: V40MyQuestionSubmissionsView()) { V3ToolCard(title: "طلباتك", subtitle: "تابع المراجعة", icon: "tray.full.fill") }
+                NavigationLink(destination: V40AttemptHistoryView()) { V3ToolCard(title: "سجل الاختبارات", subtitle: "نتائجك السابقة", icon: "clock.arrow.circlepath") }
                 NavigationLink(destination: V3FocusView()) { V3ToolCard(title: "جلسة تركيز", subtitle: "25 · 45 · 60 دقيقة", icon: "timer") }
                 NavigationLink(destination: V3ContestView()) { V3ToolCard(title: "تحدي المليون", subtitle: "ترتيب ونقاط", icon: "trophy.fill") }
                 NavigationLink(destination: StoriesView()) { V3ToolCard(title: "غيّر جو", subtitle: "استراحة قصيرة", icon: "sparkles") }
+                NavigationLink(destination: V40WhatsNewView()) { V3ToolCard(title: "ما الجديد", subtitle: "الإصدار 4.0", icon: "sparkles.rectangle.stack.fill") }
             }.buttonStyle(.plain)
         }
     }
@@ -556,7 +561,7 @@ struct V31AccountView: View {
     @State private var avatarPreview: UIImage?
     @State private var uploadingAvatar = false
     @State private var faceIDMessage = ""
-    @State private var avatarPollGeneration = 0
+    @State private var avatarMessage = ""
 
     var body: some View {
         ScrollView {
@@ -568,6 +573,7 @@ struct V31AccountView: View {
                 securitySection
                 logoutSection
                 appInfo
+                if !avatarMessage.isEmpty { V3InlineMessage(text: avatarMessage, icon: "person.crop.circle.badge.checkmark", tone: .success) }
                 if !faceIDMessage.isEmpty { V3InlineMessage(text: faceIDMessage, icon: "faceid", tone: .info) }
                 if !error.isEmpty { V3InlineMessage(text: error, icon: "exclamationmark.triangle.fill", tone: .warning) }
             }.padding(16).padding(.bottom, 28)
@@ -575,10 +581,7 @@ struct V31AccountView: View {
         .background(Color.murshidBackground.ignoresSafeArea())
         .navigationTitle("حسابي")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            await load()
-            await pollAvatarApproval()
-        }
+        .task { await load() }
         .refreshable { await load() }
         .onChange(of: avatarItem) { _ in Task { await processAvatarSelection() } }
         .alert("تغيير الاسم", isPresented: $showRename) {
@@ -636,7 +639,7 @@ struct V31AccountView: View {
             Image(uiImage: preview).resizable().scaledToFill().frame(width: 78, height: 78).clipShape(Circle()).overlay(Circle().stroke(.white.opacity(0.34), lineWidth: 2))
         } else {
             let raw = jString(account["avatar_url"])
-            let revision = jString(account["avatar_revision"], default: "\(avatarPollGeneration)")
+            let revision = jString(account["avatar_revision"], default: "0")
             let joined = raw.isEmpty ? raw : raw + (raw.contains("?") ? "&" : "?") + "ios_rev=" + revision
             if let url = URL(string: joined), !raw.isEmpty {
                 AsyncImage(url: url) { phase in
@@ -655,9 +658,8 @@ struct V31AccountView: View {
 
     private var avatarStatusText: String {
         switch jString(account["avatar_status"]) {
-        case "pending": return "الصورة قيد المراجعة"
-        case "rejected": return "الصورة تحتاج تغييرًا"
-        case "approved": return "الصورة معتمدة"
+        case "approved": return "الصورة مفعلة"
+        case "blocked", "rejected": return "الصورة غير مقبولة"
         default: return "اضغط لتغيير الصورة"
         }
     }
@@ -737,7 +739,7 @@ struct V31AccountView: View {
     private var appInfo: some View {
         MurshidCard {
             VStack(alignment: .leading, spacing: 8) {
-                HStack { Label("منصة المرشد الوزاري", systemImage: "graduationcap.fill").font(.headline); Spacer(); Text("3.8 • 380").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
+                HStack { Label("منصة المرشد الوزاري", systemImage: "graduationcap.fill").font(.headline); Spacer(); Text("4.0 • 400").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
                 Text("تطبيق iPhone أصلي مرتبط مباشرة بحسابك في المنصة.").font(.footnote).foregroundStyle(.secondary)
                 HStack(spacing: 14) {
                     Link("الخصوصية", destination: URL(string: "https://www.mur-iq.com/privacy.php")!)
@@ -788,26 +790,14 @@ struct V31AccountView: View {
                 account = d
                 loading = false
                 error = ""
-                avatarPollGeneration &+= 1
                 let status = jString(d["avatar_status"])
-                if status == "approved" || status == "rejected" || status == "none" {
+                if status == "approved" || status == "blocked" || status == "rejected" || status == "none" {
                     avatarPreview = nil
                     avatarItem = nil
                 }
             }
         } catch {
             await MainActor.run { loading = false; self.error = error.localizedDescription }
-        }
-    }
-
-    private func pollAvatarApproval() async {
-        for _ in 0..<60 {
-            if Task.isCancelled { return }
-            let status = await MainActor.run { jString(account["avatar_status"]) }
-            guard status == "pending" else { return }
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            if Task.isCancelled { return }
-            await load()
         }
     }
 
@@ -825,16 +815,34 @@ struct V31AccountView: View {
     private func processAvatarSelection() async {
         guard let item = avatarItem else { return }
         do {
-            guard let data = try await item.loadTransferable(type: Data.self), let image = UIImage(data: data), let jpeg = image.jpegData(compressionQuality: 0.88) else {
+            guard let data = try await item.loadTransferable(type: Data.self),
+                  let image = UIImage(data: data),
+                  let jpeg = image.jpegData(compressionQuality: 0.88) else {
                 throw APIError(message: "تعذر قراءة الصورة المختارة.", status: 422, paymentRequired: false)
             }
-            await MainActor.run { avatarPreview = image; uploadingAvatar = true; error = "" }
+            await MainActor.run {
+                avatarPreview = image
+                uploadingAvatar = true
+                error = ""
+                avatarMessage = ""
+            }
             let d = try await APIClient.shared.uploadAvatarJPEG(jpeg, csrf: app.csrf)
-            await MainActor.run { uploadingAvatar = false; error = jString(d["message"], default: "تم رفع الصورة للمراجعة."); haptic() }
+            await MainActor.run {
+                uploadingAvatar = false
+                avatarPreview = nil
+                avatarItem = nil
+                avatarMessage = jString(d["message"], default: "تم تغيير صورة الحساب فورًا.")
+                haptic()
+            }
             await load()
-            await pollAvatarApproval()
         } catch {
-            await MainActor.run { uploadingAvatar = false; self.error = error.localizedDescription; haptic(.error) }
+            await MainActor.run {
+                uploadingAvatar = false
+                avatarPreview = nil
+                avatarItem = nil
+                self.error = error.localizedDescription
+                haptic(.error)
+            }
         }
     }
 
