@@ -1,47 +1,117 @@
-name: Build Native iOS IPA
+name: Build Murshid iOS Production IPA
+
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
-    paths: ['MurshidWizari/**','project.yml','.github/workflows/build-ios.yml']
+
 permissions:
   contents: read
+
 jobs:
   build:
+    name: Build unsigned iPhone IPA
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 35
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Xcode environment
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Xcode
         run: |
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
-      - name: Install XcodeGen
-        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
-      - name: Generate project
-        run: xcodegen generate
-      - name: Build unsigned native app
-        run: xcodebuild -project MurshidWizari.xcodeproj -scheme MurshidWizari -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" clean build
-      - name: Validate and package
+
+      - name: Reconstruct source
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, pathlib
+          parts = [
+              'build-src/chunk00.b64',
+              'build-src/chunk01.b64',
+              'build-src/chunk02.b64',
+              'build-src/chunk03.b64',
+              'build-src/chunk04.b64',
+              'build-src/fix05a.b64',
+              'build-src/fix05b.b64',
+              'build-src/chunk06.b64',
+              'build-src/chunk07.b64',
+          ]
+          payload = b''.join(base64.b64decode(pathlib.Path(p).read_text().strip()) for p in parts)
+          pathlib.Path('MurshidWizari_Production_v2_BUILD_SOURCE.zip').write_bytes(payload)
+          PY
+          EXPECTED="9786c1fe6e7a96ec0c5476925cc505eeb14c1a5d7d9126f3824e2694e7107838"
+          ACTUAL="$(shasum -a 256 MurshidWizari_Production_v2_BUILD_SOURCE.zip | awk '{print $1}')"
+          echo "Expected SHA256: $EXPECTED"
+          echo "Actual SHA256:   $ACTUAL"
+          test "$ACTUAL" = "$EXPECTED"
+          mkdir source
+          unzip -q MurshidWizari_Production_v2_BUILD_SOURCE.zip -d source
+
+      - name: Install XcodeGen
+        run: |
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          xcodegen --version
+
+      - name: Generate Xcode project
+        working-directory: source
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          test -d MurshidWizari.xcodeproj
+
+      - name: Build Release for iPhone
+        working-directory: source
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project MurshidWizari.xcodeproj \
+            -scheme MurshidWizari \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            clean build
+
+      - name: Validate and package IPA
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
           APP="$(find build/Build/Products/Release-iphoneos -maxdepth 1 -type d -name '*.app' -print -quit)"
           test -n "$APP"
-          EXE="$APP/MurshidWizari"
-          test -f "$EXE"
-          file "$EXE"
-          lipo -info "$EXE"
+          EXE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")"
+          test -f "$APP/$EXE"
+          echo "App path: $APP"
+          file "$APP/$EXE"
+          lipo -info "$APP/$EXE"
+          otool -L "$APP/$EXE"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid'
-          if otool -L "$EXE" | grep -q '/WebKit.framework/'; then echo "WebKit found"; exit 1; fi
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" | grep -Fx 'المرشد الوزاري'
+          if otool -L "$APP/$EXE" | grep -q '/WebKit.framework/'; then
+            echo 'ERROR: WebKit linked unexpectedly.' >&2
+            exit 1
+          fi
+          rm -rf Payload Murshid_Wizari_iOS_Production_v2_unsigned.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/
-          zip -qry Murshid_Wizari_Native_unsigned.ipa Payload
-          shasum -a 256 Murshid_Wizari_Native_unsigned.ipa > SHA256.txt
-      - uses: actions/upload-artifact@v4
+          /usr/bin/zip -qry Murshid_Wizari_iOS_Production_v2_unsigned.ipa Payload
+          test -s Murshid_Wizari_iOS_Production_v2_unsigned.ipa
+          shasum -a 256 Murshid_Wizari_iOS_Production_v2_unsigned.ipa | tee Murshid_Wizari_iOS_Production_v2_unsigned.sha256
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Wizari-Native-IPA
+          name: Murshid-Wizari-iOS-Production-v2-Unsigned
           path: |
-            Murshid_Wizari_Native_unsigned.ipa
-            SHA256.txt
+            source/Murshid_Wizari_iOS_Production_v2_unsigned.ipa
+            source/Murshid_Wizari_iOS_Production_v2_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
