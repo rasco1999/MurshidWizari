@@ -133,7 +133,39 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \
+            MARKETING_VERSION='2.0.0' \
+            CURRENT_PROJECT_VERSION='200' \
             clean build
+
+      - name: Compile Apple asset catalog
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="$(find build/Build/Products/Release-iphoneos -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$APP"
+          rm -f /tmp/murshid-asset-info.plist
+          xcrun actool MurshidWizari/Assets.xcassets \
+            --compile "$APP" \
+            --platform iphoneos \
+            --minimum-deployment-target 16.0 \
+            --target-device iphone \
+            --app-icon AppIcon \
+            --output-partial-info-plist /tmp/murshid-asset-info.plist
+          test -f "$APP/Assets.car"
+          python3 - <<'PY'
+          import plistlib, glob
+          app = glob.glob('build/Build/Products/Release-iphoneos/*.app')[0]
+          info_path = app + '/Info.plist'
+          with open(info_path,'rb') as f: info = plistlib.load(f)
+          with open('/tmp/murshid-asset-info.plist','rb') as f: partial = plistlib.load(f)
+          info.update(partial)
+          info['CFBundleDisplayName'] = 'المرشد الوزاري'
+          info['CFBundleName'] = 'منصة المرشد الوزاري'
+          info['CFBundleShortVersionString'] = '2.0.0'
+          info['CFBundleVersion'] = '200'
+          with open(info_path,'wb') as f: plistlib.dump(info,f,fmt=plistlib.FMT_BINARY)
+          PY
 
       - name: Validate and package IPA
         working-directory: source
