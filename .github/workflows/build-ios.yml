@@ -1,4 +1,4 @@
-name: Build Murshid iOS Production v2 IPA
+name: Build Murshid iOS Production v3.1 IPA
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build:
-    name: Build Production v2 unsigned iPhone IPA
+    name: Build Production v3.1 unsigned iPhone IPA
     runs-on: macos-15
     timeout-minutes: 35
 
@@ -74,8 +74,8 @@ jobs:
               if line == '        PRODUCT_NAME: MurshidWizari':
                   out.extend([
                       '        TARGETED_DEVICE_FAMILY: "1"',
-                      '        MARKETING_VERSION: "2.5.0"',
-                      '        CURRENT_PROJECT_VERSION: "250"',
+                      '        MARKETING_VERSION: "3.1.0"',
+                      '        CURRENT_PROJECT_VERSION: "310"',
                       '        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon',
                   ])
                   inserted = True
@@ -112,8 +112,26 @@ jobs:
           set -euo pipefail
           cp patches/AuthViews.swift source/MurshidWizari/AuthViews.swift
           cp patches/APIClient.swift source/MurshidWizari/APIClient.swift
+          cp patches/MurshidWizariApp.swift source/MurshidWizari/MurshidWizariApp.swift
+          cp patches/V31Features.swift source/MurshidWizari/V31Features.swift
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('source/MurshidWizari/AuthViews.swift')
+          s=p.read_text()
+          s=s.replace('NavigationStack { V3HomeView() }','NavigationStack { V31HomeView() }',1)
+          s=s.replace('NavigationStack { V3AccountView() }','NavigationStack { V31AccountView() }',1)
+          s=s.replace('نسخة iPhone 3.0 • Build 300','نسخة iPhone 3.1 • Build 310')
+          p.write_text(s)
+          p=Path('source/MurshidWizari/MurshidWizariApp.swift')
+          s=p.read_text()
+          s=s.replace('struct MurshidWizariApp: App {','struct MurshidWizariApp: App {\n    @UIApplicationDelegateAdaptor(MurshidAppDelegate.self) private var appDelegate',1)
+          s=s.replace('استخدم Face ID أو رمز الجهاز للعودة إلى حسابك.','استخدم Face ID للعودة إلى حسابك.')
+          p.write_text(s)
+          PY
           swiftc -parse source/MurshidWizari/AuthViews.swift
           swiftc -parse source/MurshidWizari/APIClient.swift
+          swiftc -parse source/MurshidWizari/MurshidWizariApp.swift
+          swiftc -parse source/MurshidWizari/V31Features.swift
 
       - name: Runtime-check Arabic name normalization on macOS
         shell: bash
@@ -202,8 +220,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \
-            MARKETING_VERSION='2.5.0' \
-            CURRENT_PROJECT_VERSION='250' \
+            MARKETING_VERSION='3.1.0' \
+            CURRENT_PROJECT_VERSION='310' \
             clean build
 
       - name: Compile Apple asset catalog
@@ -231,8 +249,8 @@ jobs:
           info.update(partial)
           info['CFBundleDisplayName'] = 'المرشد الوزاري'
           info['CFBundleName'] = 'منصة المرشد الوزاري'
-          info['CFBundleShortVersionString'] = '2.5.0'
-          info['CFBundleVersion'] = '250'
+          info['CFBundleShortVersionString'] = '3.1.0'
+          info['CFBundleVersion'] = '310'
           info['NSFaceIDUsageDescription'] = 'استخدم Face ID لفتح المرشد الوزاري وحماية حسابك الدراسي.'
           info['UISupportedInterfaceOrientations'] = ['UIInterfaceOrientationPortrait']
           info['UILaunchScreen'] = {'UIColorName': 'LaunchBackground'}
@@ -257,15 +275,15 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid'
           /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string المرشد الوزاري' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleName منصة المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleName string منصة المرشد الوزاري' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 2.5.0' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 250' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 3.1.0' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 310' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Delete :UIDeviceFamily' "$APP/Info.plist" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily array' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily:0 integer 1' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" | grep -Fx 'المرشد الوزاري'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$APP/Info.plist" | grep -Fx 'منصة المرشد الوزاري'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '2.5.0'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '250'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '3.1.0'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '310'
           /usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist" | grep -Fx '1'
           test -f "$APP/Assets.car"
           echo "Assets.car present:"
@@ -279,19 +297,19 @@ jobs:
             echo 'ERROR: Web wrapper marker found unexpectedly.' >&2
             exit 1
           fi
-          rm -rf Payload Murshid_Wizari_iOS_Production_v2_5_unsigned.ipa
+          rm -rf Payload Murshid_Wizari_iOS_Production_v3_1_BUILD310_unsigned.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Murshid_Wizari_iOS_Production_v2_5_unsigned.ipa Payload
-          test -s Murshid_Wizari_iOS_Production_v2_5_unsigned.ipa
-          shasum -a 256 Murshid_Wizari_iOS_Production_v2_5_unsigned.ipa | tee Murshid_Wizari_iOS_Production_v2_5_unsigned.sha256
+          /usr/bin/zip -qry Murshid_Wizari_iOS_Production_v3_1_BUILD310_unsigned.ipa Payload
+          test -s Murshid_Wizari_iOS_Production_v3_1_BUILD310_unsigned.ipa
+          shasum -a 256 Murshid_Wizari_iOS_Production_v3_1_BUILD310_unsigned.ipa | tee Murshid_Wizari_iOS_Production_v3_1_BUILD310_unsigned.sha256
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Wizari-iOS-Production-v2.5-Unsigned
+          name: Murshid-Wizari-iOS-Production-v3.1-Build310-Unsigned
           path: |
-            source/Murshid_Wizari_iOS_Production_v2_5_unsigned.ipa
-            source/Murshid_Wizari_iOS_Production_v2_5_unsigned.sha256
+            source/Murshid_Wizari_iOS_Production_v3_1_BUILD310_unsigned.ipa
+            source/Murshid_Wizari_iOS_Production_v3_1_BUILD310_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
