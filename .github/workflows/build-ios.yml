@@ -74,8 +74,8 @@ jobs:
               if line == '        PRODUCT_NAME: MurshidWizari':
                   out.extend([
                       '        TARGETED_DEVICE_FAMILY: "1"',
-                      '        MARKETING_VERSION: "2.1.0"',
-                      '        CURRENT_PROJECT_VERSION: "210"',
+                      '        MARKETING_VERSION: "2.2.0"',
+                      '        CURRENT_PROJECT_VERSION: "220"',
                       '        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon',
                   ])
                   inserted = True
@@ -106,7 +106,7 @@ jobs:
           p.write_text(s)
           PY
 
-      - name: Apply iPhone auth and native password recovery v2.1
+      - name: Apply iPhone auth and native password recovery v2.2
         shell: bash
         run: |
           set -euo pipefail
@@ -143,8 +143,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \
-            MARKETING_VERSION='2.1.0' \
-            CURRENT_PROJECT_VERSION='210' \
+            MARKETING_VERSION='2.2.0' \
+            CURRENT_PROJECT_VERSION='220' \
             clean build
 
       - name: Compile Apple asset catalog
@@ -172,8 +172,8 @@ jobs:
           info.update(partial)
           info['CFBundleDisplayName'] = 'المرشد الوزاري'
           info['CFBundleName'] = 'منصة المرشد الوزاري'
-          info['CFBundleShortVersionString'] = '2.1.0'
-          info['CFBundleVersion'] = '210'
+          info['CFBundleShortVersionString'] = '2.2.0'
+          info['CFBundleVersion'] = '220'
           info['NSFaceIDUsageDescription'] = 'استخدم Face ID لفتح المرشد الوزاري وحماية حسابك الدراسي.'
           info['UISupportedInterfaceOrientations'] = ['UIInterfaceOrientationPortrait']
           info['UILaunchScreen'] = {'UIColorName': 'LaunchBackground'}
@@ -198,15 +198,15 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid'
           /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string المرشد الوزاري' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleName منصة المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleName string منصة المرشد الوزاري' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 2.1.0' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 210' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 2.2.0' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 220' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Delete :UIDeviceFamily' "$APP/Info.plist" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily array' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily:0 integer 1' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" | grep -Fx 'المرشد الوزاري'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$APP/Info.plist" | grep -Fx 'منصة المرشد الوزاري'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '2.1.0'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '210'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '2.2.0'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '220'
           /usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist" | grep -Fx '1'
           test -f "$APP/Assets.car"
           echo "Assets.car present:"
@@ -220,19 +220,19 @@ jobs:
             echo 'ERROR: Web wrapper marker found unexpectedly.' >&2
             exit 1
           fi
-          rm -rf Payload Murshid_Wizari_iOS_Production_v2_1_unsigned.ipa
+          rm -rf Payload Murshid_Wizari_iOS_Production_v2_2_unsigned.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Murshid_Wizari_iOS_Production_v2_1_unsigned.ipa Payload
-          test -s Murshid_Wizari_iOS_Production_v2_1_unsigned.ipa
-          shasum -a 256 Murshid_Wizari_iOS_Production_v2_1_unsigned.ipa | tee Murshid_Wizari_iOS_Production_v2_1_unsigned.sha256
+          /usr/bin/zip -qry Murshid_Wizari_iOS_Production_v2_2_unsigned.ipa Payload
+          test -s Murshid_Wizari_iOS_Production_v2_2_unsigned.ipa
+          shasum -a 256 Murshid_Wizari_iOS_Production_v2_2_unsigned.ipa | tee Murshid_Wizari_iOS_Production_v2_2_unsigned.sha256
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Wizari-iOS-Production-v2.1-Unsigned
+          name: Murshid-Wizari-iOS-Production-v2.2-Unsigned
           path: |
-            source/Murshid_Wizari_iOS_Production_v2_1_unsigned.ipa
-            source/Murshid_Wizari_iOS_Production_v2_1_unsigned.sha256
+            source/Murshid_Wizari_iOS_Production_v2_2_unsigned.ipa
+            source/Murshid_Wizari_iOS_Production_v2_2_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
