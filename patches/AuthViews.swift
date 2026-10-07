@@ -22,6 +22,7 @@ func murshidQuestionDisplayText(_ raw: String) -> String {
         #"^\s*إجابة\s+مركزة(?:\s+[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#,
         #"^\s*أكمل\s+المعنى\s+الوزاري(?:\s+[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#,
         #"^\s*سؤال\s+[\p{N}٠-٩]{1,4}\s*[:：\-–—]\s*"#,
+        #"^\s*[\p{N}٠-٩]{1,4}\s*[:：.)\-–—]\s*"#,
         #"^\s*(?:تحقق|تدقيق|مراجعة)\s*(?:بصري|لغوي|علمي|نحوي|صرفي|إملائي|املائي|نهائي|يدوي|داخلي)?(?:\s+[\p{N}٠-٩]{1,4})?\s*(?:[—–-]\s*)?(?:V\s*[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#,
         #"^\s*V\s*[\p{N}٠-٩]{1,4}\s*[:：\-–—]\s*"#
     ]
@@ -93,6 +94,52 @@ func murshidAnswerKey(_ raw: String) -> String {
     text = text.replacingOccurrences(of: #"[ًٌٍَُِّْٰ]"#, with: "", options: .regularExpression)
     text = text.replacingOccurrences(of: #"[^\p{L}\p{N}]+"#, with: "", options: .regularExpression)
     return text
+}
+
+func murshidEmbeddedProposedAnswer(_ raw: String) -> String? {
+    let patterns = [
+        #"هل\s+(?:الإجابة|الاجابة|الجواب|الحل)\s+[«"“]([^»"”]{1,120})[»"”]\s+(?:صحيحة|صحيح|صائب|صائبة)"#,
+        #"(?:الإجابة|الاجابة|الجواب|الحل)\s+عن\s+[«"“][^»"”]+[»"”]\s+هي\s+[«"“]([^»"”]{1,120})[»"”]"#
+    ]
+    let ns = raw as NSString
+    for pattern in patterns {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }
+        if let match = regex.firstMatch(in: raw, range: NSRange(location: 0, length: ns.length)), match.numberOfRanges > 1 {
+            let r = match.range(at: 1)
+            if r.location != NSNotFound {
+                let value = ns.substring(with: r).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !value.isEmpty { return value }
+            }
+        }
+    }
+    return nil
+}
+
+func murshidBooleanTruth(_ raw: String) -> Bool? {
+    let key = murshidAnswerKey(raw)
+    if ["صح","صحيح","نعم","true","1","صائبه","صائبة"].contains(key) { return true }
+    if ["خطا","خطأ","غيرصحيح","غيرصح","لا","false","0"].contains(key) { return false }
+    return nil
+}
+
+func murshidEffectiveCorrectAnswer(question: String, serverAnswer: String) -> String {
+    if let proposed = murshidEmbeddedProposedAnswer(question), murshidBooleanTruth(serverAnswer) == true { return proposed }
+    return serverAnswer.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+func murshidQuestionAnswerCompatible(question: String, serverAnswer: String) -> Bool {
+    if murshidEmbeddedProposedAnswer(question) != nil, let truth = murshidBooleanTruth(serverAnswer) { return truth }
+    return true
+}
+
+func murshidEffectiveCorrectness(question: String, submittedAnswer: String, serverAnswer: String, serverCorrect: Bool?) -> Bool? {
+    if let proposed = murshidEmbeddedProposedAnswer(question), murshidBooleanTruth(serverAnswer) == true {
+        let got = murshidAnswerKey(submittedAnswer)
+        let expected = murshidAnswerKey(proposed)
+        guard !got.isEmpty, !expected.isEmpty else { return serverCorrect }
+        return got == expected
+    }
+    return serverCorrect
 }
 
 func murshidUsefulExplanation(_ raw: String) -> String {
@@ -917,7 +964,7 @@ struct RegisterView: View {
                         .disabled(loading || gradesLoading)
                         .opacity((loading || gradesLoading) ? 0.62 : 1)
 
-                        Text("نسخة iPhone 3.6 • Build 360")
+                        Text("نسخة iPhone 3.7 • Build 370")
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.tertiary)
                             .frame(maxWidth: .infinity, alignment: .center)
@@ -2979,8 +3026,9 @@ struct V3ExamView: View {
     private func optionButton(q: Question, option: QuestionOption, index: Int) -> some View {
         let selected = answers[q.id] == option.text
         let graded = isAnswered(q)
-        let correctText = jString(grades[q.id]?["correct_answer"], default: q.correctAnswer)
+        let rawCorrectText = jString(grades[q.id]?["correct_answer"], default: q.correctAnswer)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        let correctText = murshidEffectiveCorrectAnswer(question: q.text, serverAnswer: rawCorrectText)
         let optionText = option.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let correctOption = graded && !correctText.isEmpty && murshidAnswerKey(optionText) == murshidAnswerKey(correctText)
         let wrongSelected = graded && selected && !correctOption
@@ -3031,8 +3079,9 @@ struct V3ExamView: View {
                             Text("أحسنت").font(.caption.bold()).foregroundStyle(.green)
                         }
                     }
-                    let serverCorrectAnswer = jString(grades[q.id]?["correct_answer"], default: q.correctAnswer)
+                    let rawServerCorrectAnswer = jString(grades[q.id]?["correct_answer"], default: q.correctAnswer)
                         .trimmingCharacters(in: .whitespacesAndNewlines)
+                    let serverCorrectAnswer = murshidEffectiveCorrectAnswer(question: q.text, serverAnswer: rawServerCorrectAnswer)
                     let serverExplanation = murshidExplanationText(
                         question: q.text,
                         correctAnswer: serverCorrectAnswer,
@@ -3159,8 +3208,10 @@ struct V3ExamView: View {
     }
 
     private func correctness(_ q: Question) -> Bool? {
-        if let grade = grades[q.id] { return jBool(grade["is_correct"]) }
-        return q.storedCorrect
+        let serverAnswer = jString(grades[q.id]?["correct_answer"], default: q.correctAnswer)
+        let serverCorrect: Bool? = grades[q.id].map { jBool($0["is_correct"]) } ?? q.storedCorrect
+        let submitted = !q.storedAnswer.isEmpty ? q.storedAnswer : (answers[q.id] ?? encodedAnswer(q))
+        return murshidEffectiveCorrectness(question: q.text, submittedAnswer: submitted, serverAnswer: serverAnswer, serverCorrect: serverCorrect)
     }
 
     private func visibleOptions(_ q: Question) -> [QuestionOption] {
@@ -3186,6 +3237,7 @@ struct V3ExamView: View {
                 .map(Question.init)
                 .filter { question in
                     guard murshidQuestionIsStudentReady(question.text) else { return false }
+                    guard murshidQuestionAnswerCompatible(question: question.text, serverAnswer: question.correctAnswer) else { return false }
                     let key = murshidAnswerKey(murshidQuestionDisplayText(question.text))
                     guard !key.isEmpty else { return false }
                     return seenQuestions.insert(key).inserted
@@ -4109,7 +4161,7 @@ struct RegisterV3View: View {
 
                             navigationButtons(proxy: proxy)
 
-                            Text("نسخة iPhone 3.6 • Build 360")
+                            Text("نسخة iPhone 3.7 • Build 370")
                                 .font(.caption2.monospacedDigit())
                                 .foregroundStyle(.tertiary)
                                 .frame(maxWidth: .infinity, alignment: .center)
