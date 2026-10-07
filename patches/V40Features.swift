@@ -393,7 +393,7 @@ struct V40MyQuestionSubmissionsView: View {
             let d = try await APIClient.shared.request("mobile/question-submit.php")
             await MainActor.run { rows = jArray(d["submissions"]); loading = false; error = "" }
         } catch {
-            await MainActor.run { loading = false; self.error = error.localizedDescription }
+            await MainActor.run { loading = false; self.self.error = error.localizedDescription }
         }
     }
 
@@ -543,7 +543,7 @@ struct V40CustomExamBuilderView: View {
             let loaded = jArray(d["topics"]).map(Topic.init)
             await MainActor.run { topics = loaded; selectedTopics.removeAll(); error = "" }
         } catch {
-            await MainActor.run { error = error.localizedDescription }
+            await MainActor.run { self.error = error.localizedDescription }
         }
     }
 
@@ -573,7 +573,7 @@ struct V40CustomExamBuilderView: View {
         } catch {
             await MainActor.run {
                 loading = false
-                error = error.localizedDescription
+                self.error = error.localizedDescription
                 haptic(.error)
             }
         }
@@ -791,7 +791,7 @@ struct V40CustomExamSessionView: View {
                 error = ""
             }
         } catch {
-            await MainActor.run { loading = false; self.error = error.localizedDescription }
+            await MainActor.run { loading = false; self.self.error = error.localizedDescription }
         }
     }
 
@@ -820,7 +820,7 @@ struct V40CustomExamSessionView: View {
         } catch {
             await MainActor.run {
                 submitting = false
-                self.error = error.localizedDescription
+                self.self.error = error.localizedDescription
                 haptic(.error)
             }
         }
@@ -930,7 +930,7 @@ struct V40AttemptHistoryView: View {
             )
             await MainActor.run { rows = jArray(d["history"]); loading = false; error = "" }
         } catch {
-            await MainActor.run { loading = false; self.error = error.localizedDescription }
+            await MainActor.run { loading = false; self.self.error = error.localizedDescription }
         }
     }
 }
