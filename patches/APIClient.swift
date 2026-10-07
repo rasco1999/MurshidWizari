@@ -75,7 +75,7 @@ final class AppSession: ObservableObject {
 @MainActor
 final class APIClient {
     static let shared = APIClient()
-    let baseURL = URL(string: "https://mur-iq.com")!
+    let baseURL = URL(string: "https://www.mur-iq.com")!
     private let session: URLSession
 
     private init() {
@@ -88,7 +88,7 @@ final class APIClient {
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         config.httpAdditionalHeaders = [
             "Accept": "application/json",
-            "X-Murshid-App": "ios-native-2.4",
+            "X-Murshid-App": "ios-native-2.5",
             "X-Murshid-Client": "SwiftUI"
         ]
         session = URLSession(configuration: config)
