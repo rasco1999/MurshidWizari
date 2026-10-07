@@ -1500,7 +1500,9 @@ struct MainV3TabView: View {
                 .tag(3)
         }
         .tint(.murshidBlue)
+        .toolbarBackground(.visible, for: .tabBar)
         .environment(\.layoutDirection, .rightToLeft)
+        .onChange(of: selection) { _ in selectionHaptic() }
         .task { await keepSessionAlive() }
         .onOpenURL { url in
             switch (url.host ?? url.path.replacingOccurrences(of: "/", with: "")).lowercased() {
