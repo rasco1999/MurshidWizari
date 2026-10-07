@@ -556,6 +556,7 @@ struct V31AccountView: View {
     @State private var avatarPreview: UIImage?
     @State private var uploadingAvatar = false
     @State private var faceIDMessage = ""
+    @State private var avatarPollGeneration = 0
 
     var body: some View {
         ScrollView {
@@ -574,7 +575,10 @@ struct V31AccountView: View {
         .background(Color.murshidBackground.ignoresSafeArea())
         .navigationTitle("حسابي")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await load() }
+        .task {
+            await load()
+            await pollAvatarApproval()
+        }
         .refreshable { await load() }
         .onChange(of: avatarItem) { _ in Task { await processAvatarSelection() } }
         .alert("تغيير الاسم", isPresented: $showRename) {
@@ -632,11 +636,17 @@ struct V31AccountView: View {
             Image(uiImage: preview).resizable().scaledToFill().frame(width: 78, height: 78).clipShape(Circle()).overlay(Circle().stroke(.white.opacity(0.34), lineWidth: 2))
         } else {
             let raw = jString(account["avatar_url"])
-            if let url = URL(string: raw), !raw.isEmpty {
+            let revision = jString(account["avatar_revision"], default: "\(avatarPollGeneration)")
+            let joined = raw.isEmpty ? raw : raw + (raw.contains("?") ? "&" : "?") + "ios_rev=" + revision
+            if let url = URL(string: joined), !raw.isEmpty {
                 AsyncImage(url: url) { phase in
                     if case let .success(image) = phase { image.resizable().scaledToFill() }
                     else { Image(systemName: "person.crop.circle.fill").resizable().foregroundStyle(.white.opacity(0.9)) }
-                }.frame(width: 78, height: 78).clipShape(Circle()).overlay(Circle().stroke(.white.opacity(0.34), lineWidth: 2))
+                }
+                .id(joined)
+                .frame(width: 78, height: 78)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(.white.opacity(0.34), lineWidth: 2))
             } else {
                 Image(systemName: "person.crop.circle.fill").resizable().frame(width: 78, height: 78).foregroundStyle(.white.opacity(0.92))
             }
@@ -727,7 +737,7 @@ struct V31AccountView: View {
     private var appInfo: some View {
         MurshidCard {
             VStack(alignment: .leading, spacing: 8) {
-                HStack { Label("منصة المرشد الوزاري", systemImage: "graduationcap.fill").font(.headline); Spacer(); Text("3.4 • 340").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
+                HStack { Label("منصة المرشد الوزاري", systemImage: "graduationcap.fill").font(.headline); Spacer(); Text("3.8 • 380").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
                 Text("تطبيق iPhone أصلي مرتبط مباشرة بحسابك في المنصة.").font(.footnote).foregroundStyle(.secondary)
                 HStack(spacing: 14) {
                     Link("الخصوصية", destination: URL(string: "https://www.mur-iq.com/privacy.php")!)
@@ -772,8 +782,33 @@ struct V31AccountView: View {
     private func rescheduleReminder() { guard studyReminder else { return }; Task { await device.requestStudyReminder(hour: reminderHour, minute: reminderMinute) } }
 
     private func load() async {
-        do { let d = try await APIClient.shared.request("mobile/account.php"); await MainActor.run { account = d; loading = false; error = "" } }
-        catch { await MainActor.run { loading = false; self.error = error.localizedDescription } }
+        do {
+            let d = try await APIClient.shared.request("mobile/account.php")
+            await MainActor.run {
+                account = d
+                loading = false
+                error = ""
+                avatarPollGeneration &+= 1
+                let status = jString(d["avatar_status"])
+                if status == "approved" || status == "rejected" || status == "none" {
+                    avatarPreview = nil
+                    avatarItem = nil
+                }
+            }
+        } catch {
+            await MainActor.run { loading = false; self.error = error.localizedDescription }
+        }
+    }
+
+    private func pollAvatarApproval() async {
+        for _ in 0..<60 {
+            if Task.isCancelled { return }
+            let status = await MainActor.run { jString(account["avatar_status"]) }
+            guard status == "pending" else { return }
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            if Task.isCancelled { return }
+            await load()
+        }
     }
 
     private func rename() async {
@@ -797,6 +832,7 @@ struct V31AccountView: View {
             let d = try await APIClient.shared.uploadAvatarJPEG(jpeg, csrf: app.csrf)
             await MainActor.run { uploadingAvatar = false; error = jString(d["message"], default: "تم رفع الصورة للمراجعة."); haptic() }
             await load()
+            await pollAvatarApproval()
         } catch {
             await MainActor.run { uploadingAvatar = false; self.error = error.localizedDescription; haptic(.error) }
         }
