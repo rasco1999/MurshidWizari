@@ -61,6 +61,23 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
+          # Ensure XcodeGen includes the full asset catalog and uses iPhone-only v2 metadata.
+          p = Path('source/project.yml')
+          project = p.read_text()
+          project = project.replace('          - Assets.xcassets\\n', '')
+          anchor = '        PRODUCT_NAME: MurshidWizari\\n'
+          target_settings = (
+              '        PRODUCT_NAME: MurshidWizari\\n'
+              '        TARGETED_DEVICE_FAMILY: "1"\\n'
+              '        MARKETING_VERSION: "2.0.0"\\n'
+              '        CURRENT_PROJECT_VERSION: "200"\\n'
+              '        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon\\n'
+          )
+          if anchor not in project:
+              raise SystemExit('Expected target settings anchor not found')
+          project = project.replace(anchor, target_settings, 1)
+          p.write_text(project)
+
           p = Path('source/MurshidWizari/APIClient.swift')
           s = p.read_text()
           s = s.replace('final class APIClient {', '@MainActor\nfinal class APIClient {')
@@ -130,10 +147,20 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid'
           /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string المرشد الوزاري' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleName منصة المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleName string منصة المرشد الوزاري' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 2.0.0' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 200' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Delete :UIDeviceFamily' "$APP/Info.plist" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily array' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily:0 integer 1' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" | grep -Fx 'المرشد الوزاري'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$APP/Info.plist" | grep -Fx 'منصة المرشد الوزاري'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '2.0.0'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '200'
+          /usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist" | grep -Fx '1'
+          test -f "$APP/Assets.car"
+          echo "Assets.car present:"
+          ls -lh "$APP/Assets.car"
+          find "$APP" -maxdepth 1 -type f -name 'AppIcon*.png' -print
           if otool -L "$EXE" | grep -q '/WebKit.framework/'; then
             echo 'ERROR: WebKit linked unexpectedly.' >&2
             exit 1
