@@ -107,11 +107,10 @@ struct GuestLandingView: View {
         .init(id: 1, title: "الحساب وتسجيل الدخول", text: "استخدم بيانات صحيحة عند إنشاء الحساب، واحفظ كلمة المرور الخاصة بك. تسجيل الدخول متاح برقم الهاتف أو البريد الإلكتروني المسجل في الحساب.", icon: "person.crop.circle.badge.checkmark"),
         .init(id: 2, title: "الاختبارات", text: "اختر الصف والمادة والموضوع ثم ابدأ الاختبار. يتم حفظ الإجابات والتقدم والنتائج داخل حساب الطالب، ويمكن متابعة الاختبار من الموضع المحفوظ.", icon: "checklist.checked"),
         .init(id: 3, title: "الأسئلة المجانية", text: "يتوفر للحساب الجديد رصيد مقداره 15 سؤالًا مجانيًا بالضبط. بعد استهلاك الرصيد المجاني يتطلب الوصول إلى الأسئلة الإضافية اشتراكًا فعالًا.", icon: "15.square.fill"),
-        .init(id: 4, title: "الاشتراك والدفع", text: "يتم الاشتراك من داخل المنصة. مدة شهر واحد بسعر 8,000 د.ع، وثلاثة أشهر بسعر 15,000 د.ع. يعتبر الاشتراك فعالًا بعد تأكيد عملية الدفع.", icon: "creditcard.and.123"),
-        .init(id: 5, title: "قسم النجاح", text: "يعرض قسم النجاح أداء الطالب استنادًا إلى إجاباته وتقدمه، ويتضمن المواد الأقوى والموضوعات التي تحتاج إلى مراجعة. هذه المؤشرات خاصة بمتابعة المستوى داخل المنصة.", icon: "chart.line.uptrend.xyaxis"),
-        .init(id: 6, title: "تحدي المليون", text: "يعتمد الترتيب على النقاط المسجلة وفق نظام المنصة. يستطيع الطالب متابعة مركزه والمتصدرين والفارق بينه وبين المراكز الأعلى من صفحة التحدي.", icon: "trophy.fill"),
-        .init(id: 7, title: "بيانات الحساب", text: "لا تشارك كلمة المرور أو بيانات الدخول مع أي شخص. يجب استخدام الحساب من صاحبه فقط لضمان سلامة النتائج والنقاط وسجل الاختبارات.", icon: "lock.shield.fill"),
-        .init(id: 8, title: "خدمة العملاء", text: "عند وجود مشكلة في الحساب أو الاشتراك أو استخدام الموقع، استخدم زر خدمة العملاء الموجود داخل المنصة بعد الدخول لإرسال طلب الدعم.", icon: "headset")
+        .init(id: 4, title: "قسم النجاح", text: "يعرض قسم النجاح أداء الطالب استنادًا إلى إجاباته وتقدمه، ويتضمن المواد الأقوى والموضوعات التي تحتاج إلى مراجعة. هذه المؤشرات خاصة بمتابعة المستوى داخل المنصة.", icon: "chart.line.uptrend.xyaxis"),
+        .init(id: 5, title: "تحدي المليون", text: "يعتمد الترتيب على النقاط المسجلة وفق نظام المنصة. يستطيع الطالب متابعة مركزه والمتصدرين والفارق بينه وبين المراكز الأعلى من صفحة التحدي.", icon: "trophy.fill"),
+        .init(id: 6, title: "بيانات الحساب", text: "لا تشارك كلمة المرور أو بيانات الدخول مع أي شخص. يجب استخدام الحساب من صاحبه فقط لضمان سلامة النتائج والنقاط وسجل الاختبارات.", icon: "lock.shield.fill"),
+        .init(id: 7, title: "خدمة العملاء", text: "عند وجود مشكلة في الحساب أو الاشتراك أو استخدام الموقع، استخدم زر خدمة العملاء الموجود داخل المنصة بعد الدخول لإرسال طلب الدعم.", icon: "headset")
     ]
 
     var body: some View {
@@ -122,6 +121,15 @@ struct GuestLandingView: View {
                     hero(proxy: proxy)
                     jumpMenu(proxy: proxy)
                     platformValue
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("تعليمات الاستخدام")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(Color.murshidBlue)
+                        Text("كيف تبدأ وتستفيد من المنصة")
+                            .font(.title.bold())
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .id("how")
                     instructionGrid
                     finalActions
                     footer
@@ -149,7 +157,7 @@ struct GuestLandingView: View {
                 .frame(width: 48, height: 48)
 
             VStack(alignment: .leading, spacing: 1) {
-                Text("المرشد الوزاري").font(.headline.bold())
+                Text("منصة المرشد الوزاري").font(.headline.bold())
                 Text("مساحة تعلّمك").font(.caption).foregroundStyle(.secondary)
             }
 
@@ -257,13 +265,10 @@ struct GuestLandingView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 jumpButton("لماذا المنصة؟", id: "platform-value", proxy: proxy)
-                jumpButton("الحساب", id: "instruction-1", proxy: proxy)
-                jumpButton("الاختبارات", id: "instruction-2", proxy: proxy)
+                jumpButton("كيف تبدأ", id: "how", proxy: proxy)
                 jumpButton("الأسئلة المجانية", id: "instruction-3", proxy: proxy)
-                jumpButton("الاشتراك", id: "instruction-4", proxy: proxy)
-                jumpButton("النجاح", id: "instruction-5", proxy: proxy)
-                jumpButton("تحدي المليون", id: "instruction-6", proxy: proxy)
-                jumpButton("خدمة العملاء", id: "instruction-8", proxy: proxy)
+                jumpButton("تحدي المليون", id: "instruction-5", proxy: proxy)
+                jumpButton("خدمة العملاء", id: "instruction-7", proxy: proxy)
             }
         }
     }
@@ -285,7 +290,7 @@ struct GuestLandingView: View {
                 .font(.subheadline.bold())
                 .foregroundStyle(Color.murshidBlue)
 
-            Text("لماذا تختار المرشد الوزاري؟")
+            Text("لماذا تختار منصة المرشد الوزاري؟")
                 .font(.title.bold())
 
             Text("من اختيار موضوعك إلى مراجعة إجابتك، أدوات بسيطة تساعدك على معرفة خطوتك التالية.")
@@ -359,15 +364,15 @@ struct GuestLandingView: View {
                     .font(.title2.bold())
                     .multilineTextAlignment(.center)
 
-                Button("تسجيل الدخول", action: onLogin)
+                Button("إنشاء حساب", action: onRegister)
                     .buttonStyle(PrimaryButtonStyle())
 
-                Button("إنشاء حساب", action: onRegister)
+                Button("تسجيل الدخول", action: onLogin)
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .foregroundStyle(Color.murshidNavy)
-                    .background(Color.murshidGold, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+                    .foregroundStyle(Color.murshidBlue)
+                    .background(Color.murshidBlue.opacity(0.10), in: RoundedRectangle(cornerRadius: 17, style: .continuous))
             }
         }
     }
@@ -390,6 +395,10 @@ struct GuestLandingView: View {
                 }
             }
             .foregroundStyle(Color.murshidBlue)
+
+            Text("الثالث المتوسط · السادس العلمي · السادس الأدبي")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
 
             HStack(spacing: 6) {
                 Link("الخصوصية", destination: URL(string: "https://mur-iq.com/privacy.php")!)
@@ -602,8 +611,7 @@ struct RegisterView: View {
                             contentType: .name
                         )
                         .onChange(of: fullName) { value in
-                            let clean = normalizedPersonName(value)
-                            nameError = clean.split(separator: " ").count >= 3 ? "" : nameError
+                            nameError = personNameWords(value).count >= 3 ? "" : nameError
                         }
 
                         if !nameError.isEmpty { FieldError(nameError) }
@@ -746,8 +754,8 @@ struct RegisterView: View {
     private func submit() {
         clearErrors()
 
-        let name = normalizedPersonName(fullName)
-        let words = name.split(whereSeparator: { $0.isWhitespace }).filter { !$0.isEmpty }
+        let words = personNameWords(fullName)
+        let name = words.joined(separator: " ")
         if words.count < 3 {
             nameError = "اكتب الاسم الثلاثي على الأقل، مثل: أحمد علي حسن."
         }
@@ -847,7 +855,7 @@ struct ForgotPasswordView: View {
                         Label("استعادة كلمة المرور", systemImage: "key.fill")
                             .font(.title2.bold())
 
-                        Text("أدخل رقم الهاتف أو البريد المرتبط بالحساب. للهاتف سيصل رمز عبر WhatsApp، والبريد يستلم رابط استعادة آمنًا.")
+                        Text("أدخل البريد أو رقم الهاتف المسجل فعليًا في حسابك. لن تبدأ الاستعادة إذا لم تكن البيانات مسجلة في المنصة. للهاتف سيصل رمز عبر WhatsApp، والبريد يستلم رابط استعادة آمنًا.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .lineSpacing(3)
@@ -1346,20 +1354,23 @@ private extension View {
     }
 }
 
-private func normalizedPersonName(_ value: String) -> String {
-    // Arabic keyboards and autofill can insert bidi/format/non-breaking characters.
-    // Keep only Unicode letters/marks plus apostrophe/hyphen, and turn everything else into a normal space.
+private func personNameWords(_ value: String) -> [String] {
     let canonical = value.precomposedStringWithCanonicalMapping
-    let cleaned = canonical.replacingOccurrences(
-        of: #"[^\\p{L}\\p{M}'’\\-]+"#,
-        with: " ",
-        options: .regularExpression
-    )
+    guard let regex = try? NSRegularExpression(
+        pattern: #"[\\p{L}\\p{M}]+(?:['’\\-][\\p{L}\\p{M}]+)*"#,
+        options: []
+    ) else { return [] }
 
-    return cleaned
-        .components(separatedBy: .whitespacesAndNewlines)
-        .filter { !$0.isEmpty }
-        .joined(separator: " ")
+    let range = NSRange(canonical.startIndex..., in: canonical)
+    return regex.matches(in: canonical, range: range).compactMap { match in
+        guard let r = Range(match.range, in: canonical) else { return nil }
+        let token = String(canonical[r]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return token.isEmpty ? nil : token
+    }
+}
+
+private func normalizedPersonName(_ value: String) -> String {
+    personNameWords(value).joined(separator: " ")
 }
 
 private func normalizedIdentifier(_ value: String) -> String {
