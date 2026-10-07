@@ -74,8 +74,8 @@ jobs:
               if line == '        PRODUCT_NAME: MurshidWizari':
                   out.extend([
                       '        TARGETED_DEVICE_FAMILY: "1"',
-                      '        MARKETING_VERSION: "2.3.0"',
-                      '        CURRENT_PROJECT_VERSION: "230"',
+                      '        MARKETING_VERSION: "2.4.0"',
+                      '        CURRENT_PROJECT_VERSION: "240"',
                       '        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon',
                   ])
                   inserted = True
@@ -106,7 +106,7 @@ jobs:
           p.write_text(s)
           PY
 
-      - name: Apply iPhone auth and native password recovery v2.3
+      - name: Apply iPhone auth and native password recovery v2.4
         shell: bash
         run: |
           set -euo pipefail
@@ -114,6 +114,64 @@ jobs:
           cp patches/APIClient.swift source/MurshidWizari/APIClient.swift
           swiftc -parse source/MurshidWizari/AuthViews.swift
           swiftc -parse source/MurshidWizari/APIClient.swift
+
+      - name: Runtime-check Arabic name normalization on macOS
+        shell: bash
+        run: |
+          cat >/tmp/namecheck.swift <<'SWIFT'
+          import Foundation
+
+          func normalizedPersonName(_ value: String) -> String {
+              let hidden: Set<UInt32> = [
+                  0x200E, 0x200F, 0x061C,
+                  0x202A, 0x202B, 0x202C, 0x202D, 0x202E,
+                  0x2066, 0x2067, 0x2068, 0x2069,
+                  0xFEFF
+              ]
+              var result = ""
+              var pendingSpace = false
+              for scalar in value.precomposedStringWithCanonicalMapping.unicodeScalars {
+                  if hidden.contains(scalar.value) { continue }
+                  if CharacterSet.whitespacesAndNewlines.contains(scalar) {
+                      if !result.isEmpty { pendingSpace = true }
+                      continue
+                  }
+                  if pendingSpace { result.append(" "); pendingSpace = false }
+                  result.unicodeScalars.append(scalar)
+              }
+              return result.trimmingCharacters(in: .whitespacesAndNewlines)
+          }
+
+          let tests: [(String, String)] = [
+              ("احمد علي حسين ت", "احمد علي حسين ت"),
+              ("منتظر سعد خلف", "منتظر سعد خلف"),
+              ("احمد\u{00A0}علي\u{200F} حسين\u{2067} ت", "احمد علي حسين ت")
+          ]
+          for (input, expected) in tests {
+              let actual = normalizedPersonName(input)
+              print("\(input) => [\(actual)]")
+              if actual != expected { exit(2) }
+          }
+          SWIFT
+          swift /tmp/namecheck.swift
+
+      - name: Probe live registration name validation without creating account
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESP="$(curl -sS --max-time 20 'https://mur-iq.com/api/register.php'             -H 'Content-Type: application/json; charset=utf-8'             -H 'Accept: application/json'             --data '{"full_name":"احمد علي حسين ت","grade_id":0,"gender":"male","contact_type":"email","identifier":"name-probe-do-not-create@example.invalid","password":"12345678","password_confirmation":"12345678","company_website":""}')"
+          echo "$RESP"
+          python3 - "$RESP" <<'PY'
+          import json, sys
+          data=json.loads(sys.argv[1])
+          msg=str(data.get("message",""))
+          # Correct outcome: the live server accepted the name and advanced to grade validation.
+          if "الاسم الثلاثي" in msg:
+              raise SystemExit("LIVE SERVER STILL REJECTS THE ARABIC NAME")
+          if "اختر الصف الدراسي" not in msg:
+              raise SystemExit("Unexpected live registration probe response: "+msg)
+          print("Live server accepted Arabic name; probe stopped safely at grade validation.")
+          PY
 
       - name: Install XcodeGen
         run: |
@@ -143,8 +201,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \
-            MARKETING_VERSION='2.3.0' \
-            CURRENT_PROJECT_VERSION='230' \
+            MARKETING_VERSION='2.4.0' \
+            CURRENT_PROJECT_VERSION='240' \
             clean build
 
       - name: Compile Apple asset catalog
@@ -172,8 +230,8 @@ jobs:
           info.update(partial)
           info['CFBundleDisplayName'] = 'المرشد الوزاري'
           info['CFBundleName'] = 'منصة المرشد الوزاري'
-          info['CFBundleShortVersionString'] = '2.3.0'
-          info['CFBundleVersion'] = '230'
+          info['CFBundleShortVersionString'] = '2.4.0'
+          info['CFBundleVersion'] = '240'
           info['NSFaceIDUsageDescription'] = 'استخدم Face ID لفتح المرشد الوزاري وحماية حسابك الدراسي.'
           info['UISupportedInterfaceOrientations'] = ['UIInterfaceOrientationPortrait']
           info['UILaunchScreen'] = {'UIColorName': 'LaunchBackground'}
@@ -198,15 +256,15 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid'
           /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string المرشد الوزاري' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleName منصة المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleName string منصة المرشد الوزاري' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 2.3.0' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 230' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 2.4.0' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 240' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Delete :UIDeviceFamily' "$APP/Info.plist" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily array' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily:0 integer 1' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" | grep -Fx 'المرشد الوزاري'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$APP/Info.plist" | grep -Fx 'منصة المرشد الوزاري'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '2.3.0'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '230'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '2.4.0'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '240'
           /usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist" | grep -Fx '1'
           test -f "$APP/Assets.car"
           echo "Assets.car present:"
@@ -220,19 +278,19 @@ jobs:
             echo 'ERROR: Web wrapper marker found unexpectedly.' >&2
             exit 1
           fi
-          rm -rf Payload Murshid_Wizari_iOS_Production_v2_3_unsigned.ipa
+          rm -rf Payload Murshid_Wizari_iOS_Production_v2_4_unsigned.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Murshid_Wizari_iOS_Production_v2_3_unsigned.ipa Payload
-          test -s Murshid_Wizari_iOS_Production_v2_3_unsigned.ipa
-          shasum -a 256 Murshid_Wizari_iOS_Production_v2_3_unsigned.ipa | tee Murshid_Wizari_iOS_Production_v2_3_unsigned.sha256
+          /usr/bin/zip -qry Murshid_Wizari_iOS_Production_v2_4_unsigned.ipa Payload
+          test -s Murshid_Wizari_iOS_Production_v2_4_unsigned.ipa
+          shasum -a 256 Murshid_Wizari_iOS_Production_v2_4_unsigned.ipa | tee Murshid_Wizari_iOS_Production_v2_4_unsigned.sha256
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Wizari-iOS-Production-v2.3-Unsigned
+          name: Murshid-Wizari-iOS-Production-v2.4-Unsigned
           path: |
-            source/Murshid_Wizari_iOS_Production_v2_3_unsigned.ipa
-            source/Murshid_Wizari_iOS_Production_v2_3_unsigned.sha256
+            source/Murshid_Wizari_iOS_Production_v2_4_unsigned.ipa
+            source/Murshid_Wizari_iOS_Production_v2_4_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
