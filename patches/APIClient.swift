@@ -88,7 +88,7 @@ final class APIClient {
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         config.httpAdditionalHeaders = [
             "Accept": "application/json",
-            "X-Murshid-App": "ios-native-2.1",
+            "X-Murshid-App": "ios-native-2.2",
             "X-Murshid-Client": "SwiftUI"
         ]
         session = URLSession(configuration: config)
