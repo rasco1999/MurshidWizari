@@ -990,7 +990,7 @@ struct RegisterView: View {
                         .disabled(loading || gradesLoading)
                         .opacity((loading || gradesLoading) ? 0.62 : 1)
 
-                        Text("نسخة iPhone 4.0 • Build 400")
+                        Text("نسخة iPhone 4.1 • Build 410")
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.tertiary)
                             .frame(maxWidth: .infinity, alignment: .center)
@@ -2829,6 +2829,7 @@ struct V3ExamView: View {
     @State private var availableFilterRounds: [String] = []
     @State private var availableFilterDifficulties: [String] = []
     @State private var showNote = false
+    @State private var showMoreQuestions = false
     @State private var noteText = ""
     @State private var savingNote = false
     @FocusState private var textAnswerFocused: Bool
@@ -2894,6 +2895,12 @@ struct V3ExamView: View {
                         Button { showReport = true } label: {
                             Label("الإبلاغ عن السؤال", systemImage: "exclamationmark.bubble")
                         }
+                        Button { showMoreQuestions = true } label: {
+                            Label("طلب أسئلة جديدة", systemImage: "plus.bubble")
+                        }
+                        ShareLink(item: murshidQuestionDisplayText(questions[current].text) + "\n\nمنصة المرشد الوزاري") {
+                            Label("مشاركة السؤال", systemImage: "square.and.arrow.up")
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
@@ -2935,6 +2942,17 @@ struct V3ExamView: View {
             )
         }
         .sheet(isPresented: $showNote) { noteSheet }
+        .sheet(isPresented: $showMoreQuestions) {
+            NavigationStack {
+                V40MoreQuestionsRequestView(topic: topic, subject: subject)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button("إغلاق") { showMoreQuestions = false }
+                        }
+                    }
+            }
+            .environmentObject(app)
+        }
     }
 
     private var examContent: some View {
@@ -4346,7 +4364,7 @@ struct RegisterV3View: View {
 
                             navigationButtons(proxy: proxy)
 
-                            Text("نسخة iPhone 4.0 • Build 400")
+                            Text("نسخة iPhone 4.1 • Build 410")
                                 .font(.caption2.monospacedDigit())
                                 .foregroundStyle(.tertiary)
                                 .frame(maxWidth: .infinity, alignment: .center)
