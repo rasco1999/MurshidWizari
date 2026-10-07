@@ -1,5 +1,5 @@
-run_id=37687325347
+run_id=37690003898
 run_attempt=1
-commit=1726939e2a983087e847ec332c29e5372b9f245c
-result=success
+commit=8aa2e8cc72d2b968a6a18d232b74a32750436932
+result=failure
 workflow=Build Murshid iOS Production v4.1 IPA
