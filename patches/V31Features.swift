@@ -4,7 +4,6 @@ import LocalAuthentication
 import UserNotifications
 import UIKit
 import Combine
-import Vision
 
 // MARK: - v3.1 Home: mirrors the live website slider and keeps study actions below subjects
 
@@ -796,7 +795,7 @@ struct V31AccountView: View {
     private var appInfo: some View {
         MurshidCard {
             VStack(alignment: .leading, spacing: 8) {
-                HStack { Label("منصة المرشد الوزاري", systemImage: "graduationcap.fill").font(.headline); Spacer(); Text("4.1 • 410").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
+                HStack { Label("منصة المرشد الوزاري", systemImage: "graduationcap.fill").font(.headline); Spacer(); Text("4.2 • 420").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
                 Text("تطبيق iPhone أصلي مرتبط مباشرة بحسابك في المنصة.").font(.footnote).foregroundStyle(.secondary)
                 HStack(spacing: 14) {
                     Link("الخصوصية", destination: URL(string: "https://www.mur-iq.com/privacy.php")!)
@@ -877,9 +876,6 @@ struct V31AccountView: View {
                   let jpeg = image.jpegData(compressionQuality: 0.88) else {
                 throw APIError(message: "تعذر قراءة الصورة المختارة.", status: 422, paymentRequired: false)
             }
-            guard avatarHasSingleFace(image) else {
-                throw APIError(message: "استخدم صورة شخصية واضحة لشخص واحد فقط. الصور بدون وجه واضح أو التي تحتوي عدة أشخاص غير مقبولة.", status: 422, paymentRequired: false)
-            }
             await MainActor.run {
                 avatarPreview = image
                 uploadingAvatar = true
@@ -906,34 +902,6 @@ struct V31AccountView: View {
         }
     }
 
-    private func visionOrientation(for orientation: UIImage.Orientation) -> CGImagePropertyOrientation {
-        switch orientation {
-        case .up: return .up
-        case .down: return .down
-        case .left: return .left
-        case .right: return .right
-        case .upMirrored: return .upMirrored
-        case .downMirrored: return .downMirrored
-        case .leftMirrored: return .leftMirrored
-        case .rightMirrored: return .rightMirrored
-        @unknown default: return .up
-        }
-    }
-
-    private func avatarHasSingleFace(_ image: UIImage) -> Bool {
-        guard let cgImage = image.cgImage else { return false }
-        let request = VNDetectFaceRectanglesRequest()
-        let handler = VNImageRequestHandler(cgImage: cgImage, orientation: visionOrientation(for: image.imageOrientation), options: [:])
-        do {
-            try handler.perform([request])
-            let faces = request.results ?? []
-            guard faces.count == 1, let face = faces.first else { return false }
-            // نرفض الوجوه الصغيرة جدًا داخل صورة بعيدة أو غير مخصصة للملف الشخصي.
-            return face.boundingBox.width >= 0.12 && face.boundingBox.height >= 0.12
-        } catch {
-            return false
-        }
-    }
 
     private func logout() {
         loggingOut = true
