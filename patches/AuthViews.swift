@@ -2752,12 +2752,12 @@ struct V3ExamView: View {
                         .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
 
-                if !isAnswered(q) {
-                    Button(action: submitCurrent) {
+                if !isAnswered(q) && q.options.isEmpty {
+                    Button(action: { submitCurrent() }) {
                         HStack(spacing: 9) {
                             if submitting { ProgressView().tint(.white) }
                             Image(systemName: submitting ? "hourglass" : "paperplane.fill")
-                            Text(submitting ? "جاري حفظ الإجابة…" : "إرسال الإجابة")
+                            Text(submitting ? "جاري تصحيح الإجابة…" : "إرسال الإجابة")
                         }
                     }
                     .buttonStyle(PrimaryButtonStyle())
@@ -2768,6 +2768,12 @@ struct V3ExamView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .center)
+                } else if !isAnswered(q) && !q.options.isEmpty && submitting {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("جاري تصحيح اختيارك…").font(.caption).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
             }
         }
@@ -2776,8 +2782,10 @@ struct V3ExamView: View {
     private func optionButton(q: Question, option: QuestionOption, index: Int) -> some View {
         let selected = answers[q.id] == option.text
         return Button {
+            guard !isAnswered(q), !submitting else { return }
             answers[q.id] = option.text
             selectionHaptic()
+            submitCurrent(answerOverride: option.text)
         } label: {
             HStack(spacing: 12) {
                 Text(optionLetter(index))
@@ -2798,6 +2806,7 @@ struct V3ExamView: View {
             .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).stroke(selected ? Color.murshidBlue.opacity(0.30) : Color.primary.opacity(0.05), lineWidth: 1))
         }
         .buttonStyle(.plain)
+        .disabled(isAnswered(q) || submitting)
     }
 
     @ViewBuilder
@@ -2822,17 +2831,17 @@ struct V3ExamView: View {
                             .font(.body.weight(.semibold))
                             .foregroundStyle(.green)
                     }
-                    if !q.explanation.isEmpty {
-                        Divider()
-                        Text("التوضيح").font(.caption.bold()).foregroundStyle(Color.murshidBlue)
+                    Divider()
+                    Text("شرح الإجابة").font(.caption.bold()).foregroundStyle(Color.murshidBlue)
+                    if !q.explanation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text(q.explanation)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                            .lineSpacing(4)
-                    }
-                    if let grade = grades[q.id], !jString(grade["message"]).isEmpty {
-                        Text(jString(grade["message"]))
-                            .font(.caption)
+                            .lineSpacing(5)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text("لا يوجد شرح تفصيلي مضاف لهذا السؤال حاليًا.")
+                            .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -2865,9 +2874,10 @@ struct V3ExamView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.murshidBlue)
-                .disabled(answeredCount == 0)
+                .disabled(!isAnswered(questions[current]) || submitting)
             } else {
                 Button {
+                    guard isAnswered(questions[current]), !submitting else { return }
                     current += 1
                     selectionHaptic()
                 } label: {
@@ -2876,6 +2886,7 @@ struct V3ExamView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.murshidBlue)
+                .disabled(!isAnswered(questions[current]) || submitting)
             }
         }
         .padding(.horizontal, 16)
@@ -3026,11 +3037,13 @@ struct V3ExamView: View {
         return encodedAnswer(q)
     }
 
-    private func submitCurrent() {
+    private func submitCurrent(answerOverride: String? = nil) {
         guard !questions.isEmpty else { return }
         let q = questions[current]
-        let answer = encodedAnswer(q).trimmingCharacters(in: .whitespacesAndNewlines)
+        let rawAnswer = answerOverride ?? encodedAnswer(q)
+        let answer = rawAnswer.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !answer.isEmpty else { return }
+        if let answerOverride { answers[q.id] = answerOverride }
         submitting = true
         error = ""
         let payloadAnswers: JSON = [String(q.id): ["text": answer, "selected_text": answer, "submitted": true]]
