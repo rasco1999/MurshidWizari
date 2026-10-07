@@ -49,6 +49,7 @@ struct V31HomeView: View {
                 if !device.isOnline { offlineBanner }
                 V31WebsiteHeroSlider()
                 subscriptionStrip
+                releaseUpdateStrip
                 performanceStrip
                 subjectsSection
                 nextStepsSection
@@ -149,6 +150,32 @@ struct V31HomeView: View {
         }
     }
 
+    @ViewBuilder
+    private var releaseUpdateStrip: some View {
+        let serverVersion = jString(app.releaseInfo["version"])
+        let download = jString(app.releaseInfo["download_url"])
+        if !serverVersion.isEmpty && serverVersion != "4.1.0" {
+            MurshidCard {
+                HStack(spacing: 12) {
+                    Image(systemName: "arrow.down.app.fill")
+                        .font(.title2)
+                        .foregroundStyle(Color.murshidBlue)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("يتوفر تحديث \(serverVersion)").font(.headline)
+                        Text(jString(app.releaseInfo["notes"], default: "يتوفر إصدار أحدث من تطبيق المرشد الوزاري."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(3)
+                    }
+                    Spacer()
+                    if let url = URL(string: download), !download.isEmpty {
+                        Link("تحديث", destination: url).font(.subheadline.bold())
+                    }
+                }
+            }
+        }
+    }
+
     private var performanceStrip: some View {
         LazyVGrid(columns: columns, spacing: 12) {
             if loadingInsights {
@@ -213,12 +240,22 @@ struct V31HomeView: View {
             V3SectionHeader(title: "أدواتك السريعة", subtitle: "اختبارات ومراجعة وبحث ومساهمات", icon: "bolt.fill")
             LazyVGrid(columns: columns, spacing: 12) {
                 NavigationLink(destination: ReviewView()) { V3ToolCard(title: "راجع أخطاءك", subtitle: "مراجعة ذكية", icon: "brain.head.profile") }
-                NavigationLink(destination: V40CustomExamBuilderView()) { V3ToolCard(title: "اختبار مخصص", subtitle: "عدد · نوع · مؤقت", icon: "slider.horizontal.3") }
-                NavigationLink(destination: V40DailyChallengeView()) { V3ToolCard(title: "تحدي اليوم", subtitle: "خمسة أسئلة سريعة", icon: "flame.fill") }
-                NavigationLink(destination: V40QuestionSearchView()) { V3ToolCard(title: "ابحث عن سؤال", subtitle: "في بنك الأسئلة", icon: "magnifyingglass") }
-                NavigationLink(destination: V40StudentQuestionSubmitView()) { V3ToolCard(title: "اقترح سؤالًا", subtitle: "ساهم في البنك", icon: "plus.bubble.fill") }
+                if app.featureEnabled("custom_exam") {
+                    NavigationLink(destination: V40CustomExamBuilderView()) { V3ToolCard(title: "اختبار مخصص", subtitle: "عدد · نوع · مؤقت", icon: "slider.horizontal.3") }
+                }
+                if app.featureEnabled("daily_challenge") {
+                    NavigationLink(destination: V40DailyChallengeView()) { V3ToolCard(title: "تحدي اليوم", subtitle: "خمسة أسئلة سريعة", icon: "flame.fill") }
+                }
+                if app.featureEnabled("question_search") {
+                    NavigationLink(destination: V40QuestionSearchView()) { V3ToolCard(title: "ابحث عن سؤال", subtitle: "في بنك الأسئلة", icon: "magnifyingglass") }
+                }
+                if app.featureEnabled("student_question_submit") {
+                    NavigationLink(destination: V40StudentQuestionSubmitView()) { V3ToolCard(title: "اقترح سؤالًا", subtitle: "ساهم في البنك", icon: "plus.bubble.fill") }
+                }
                 NavigationLink(destination: V40MyQuestionSubmissionsView()) { V3ToolCard(title: "طلباتك", subtitle: "تابع المراجعة", icon: "tray.full.fill") }
-                NavigationLink(destination: V40AttemptHistoryView()) { V3ToolCard(title: "سجل الاختبارات", subtitle: "نتائجك السابقة", icon: "clock.arrow.circlepath") }
+                if app.featureEnabled("attempt_history") {
+                    NavigationLink(destination: V40AttemptHistoryView()) { V3ToolCard(title: "سجل الاختبارات", subtitle: "نتائجك السابقة", icon: "clock.arrow.circlepath") }
+                }
                 NavigationLink(destination: StudyPlanView()) { V3ToolCard(title: "خطة الدراسة", subtitle: "هدف يومي", icon: "calendar") }
                 NavigationLink(destination: AchievementsView()) { V3ToolCard(title: "الإنجازات", subtitle: "XP والمستوى", icon: "medal.fill") }
                 NavigationLink(destination: V3FocusView()) { V3ToolCard(title: "جلسة تركيز", subtitle: "25 · 45 · 60 دقيقة", icon: "timer") }
@@ -267,8 +304,10 @@ struct V31HomeView: View {
             let b = try await APIClient.shared.bootstrap()
             let i = try await APIClient.shared.request("mobile/insights.php", cacheKey: "insights")
             let n = try await APIClient.shared.request("mobile/notifications.php")
+            let config = try? await APIClient.shared.request("mobile/app-config.php", cacheKey: "app-config")
             await MainActor.run {
                 app.applyBootstrap(b)
+                if let config { app.applyAppConfig(config) }
                 insights = i["insights"] as? JSON ?? [:]
                 weekly = i["weekly"] as? JSON ?? [:]
                 app.unreadNotifications = jInt(n["unread"])
