@@ -19,6 +19,7 @@ struct PasswordResetStart: Sendable {
 final class AppSession: ObservableObject {
     static let shared = AppSession()
     @Published var authenticated = false
+    @Published var v3Authenticated = false
     @Published var bootstrapping = true
     @Published var user: UserSummary?
     @Published var subjects: [Subject] = []
@@ -43,6 +44,7 @@ final class AppSession: ObservableObject {
 
     func reset(expired: Bool = false) {
         authenticated = false
+        v3Authenticated = false
         user = nil
         subjects = []
         plans = []
@@ -66,7 +68,9 @@ final class AppSession: ObservableObject {
         freeRemaining = (json["free_remaining"] is NSNull || json["free_remaining"] == nil) ? nil : jInt(json["free_remaining"])
         csrf = jString(json["csrf"])
         stats = json["stats"] as? JSON ?? [:]
-        authenticated = true
+        // Keep the legacy RootView on AuthFlowView; AuthFlowView owns the complete v3 shell.
+        authenticated = false
+        v3Authenticated = true
         sessionExpired = false
         lastSync = Date()
     }
