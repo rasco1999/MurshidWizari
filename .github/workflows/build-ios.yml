@@ -28,10 +28,19 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import base64, glob, pathlib
-          chunks = sorted(glob.glob('build-src/chunk*.b64'))
-          assert len(chunks) == 8, f'Expected 8 chunks, got {len(chunks)}'
-          payload = b''.join(base64.b64decode(pathlib.Path(p).read_text().strip()) for p in chunks)
+          import base64, pathlib
+          parts = [
+              'build-src/chunk00.b64',
+              'build-src/chunk01.b64',
+              'build-src/chunk02.b64',
+              'build-src/chunk03.b64',
+              'build-src/chunk04.b64',
+              'build-src/fix05a.b64',
+              'build-src/fix05b.b64',
+              'build-src/chunk06.b64',
+              'build-src/chunk07.b64',
+          ]
+          payload = b''.join(base64.b64decode(pathlib.Path(p).read_text().strip()) for p in parts)
           pathlib.Path('MurshidWizari_Production_v2_BUILD_SOURCE.zip').write_bytes(payload)
           PY
           EXPECTED="9786c1fe6e7a96ec0c5476925cc505eeb14c1a5d7d9126f3824e2694e7107838"
