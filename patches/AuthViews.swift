@@ -1639,7 +1639,7 @@ struct V3HomeView: View {
                 }
             }
         } else {
-            NavigationLink(destination: V3SubscriptionView()) {
+            NavigationLink(destination: V31SubscriptionView()) {
                 MurshidCard {
                     HStack(spacing: 13) {
                         ZStack {
@@ -2612,7 +2612,7 @@ struct V3ExamView: View {
         } message: { Text(alertMessage) }
         .sheet(isPresented: $showSubscription) {
             NavigationStack {
-                V3SubscriptionView()
+                V31SubscriptionView()
                     .toolbar { ToolbarItem(placement: .topBarLeading) { Button("إغلاق") { showSubscription = false } } }
             }
             .environmentObject(app)
@@ -3347,7 +3347,7 @@ struct V3AccountView: View {
     }
 
     private var subscriptionCard: some View {
-        NavigationLink(destination: V3SubscriptionView()) {
+        NavigationLink(destination: V31SubscriptionView()) {
             MurshidCard {
                 HStack(spacing: 13) {
                     Image(systemName: app.subscribed ? "checkmark.seal.fill" : "creditcard.fill")
