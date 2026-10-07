@@ -81,6 +81,32 @@ func murshidQuestionIsStudentReady(_ raw: String) -> Bool {
     }
 }
 
+func murshidQuestionRequiresChoices(_ raw: String) -> Bool {
+    let text = murshidQuestionDisplayText(raw)
+    guard !text.isEmpty else { return false }
+    let patterns = [
+        #"^(?:اختر|اختاري|حد[دّ]|عي[ّ]?ن)\b"#,
+        #"^(?:أي|اي)\s+مما\s+(?:يأتي|ياتي|سبق)\b"#,
+        #"^(?:أي|اي)\s+من\s+(?:الآتي|الاتي|التالي|التالية)\b"#,
+        #"^(?:أي|اي)\s+(?:كلمة|كلمات|لفظ|لفظة|عبارة|جملة|صيغة|فعل|اسم)\b.*\b(?:مما\s+(?:يأتي|ياتي)|من\s+(?:الآتي|الاتي|التالي|التالية))\b"#,
+        #"\b(?:الاختيار|الخيار)\s+الصحيح\b"#
+    ]
+    return patterns.contains { text.range(of: $0, options: [.regularExpression, .caseInsensitive]) != nil }
+}
+
+func murshidQuestionClientValid(_ q: Question) -> Bool {
+    let type = q.type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let options = q.options.filter { !murshidAnswerKey($0.text).isEmpty }
+    let unique = Set(options.map { murshidAnswerKey($0.text) }).count
+    if murshidQuestionRequiresChoices(q.text) && unique < 2 { return false }
+    if type == "mcq" && unique < 2 { return false }
+    if type == "true_false" && unique < 2 { return false }
+    if type == "match" && q.matchItems.isEmpty { return false }
+    if type == "calculation" && q.stages.isEmpty { return false }
+    if q.correctAnswer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
+    return true
+}
+
 func murshidAnswerKey(_ raw: String) -> String {
     var text = raw
         .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -964,7 +990,7 @@ struct RegisterView: View {
                         .disabled(loading || gradesLoading)
                         .opacity((loading || gradesLoading) ? 0.62 : 1)
 
-                        Text("نسخة iPhone 3.7 • Build 370")
+                        Text("نسخة iPhone 3.8 • Build 380")
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.tertiary)
                             .frame(maxWidth: .infinity, alignment: .center)
@@ -3237,6 +3263,7 @@ struct V3ExamView: View {
                 .map(Question.init)
                 .filter { question in
                     guard murshidQuestionIsStudentReady(question.text) else { return false }
+                    guard murshidQuestionClientValid(question) else { return false }
                     guard murshidQuestionAnswerCompatible(question: question.text, serverAnswer: question.correctAnswer) else { return false }
                     let key = murshidAnswerKey(murshidQuestionDisplayText(question.text))
                     guard !key.isEmpty else { return false }
@@ -4161,7 +4188,7 @@ struct RegisterV3View: View {
 
                             navigationButtons(proxy: proxy)
 
-                            Text("نسخة iPhone 3.7 • Build 370")
+                            Text("نسخة iPhone 3.8 • Build 380")
                                 .font(.caption2.monospacedDigit())
                                 .foregroundStyle(.tertiary)
                                 .frame(maxWidth: .infinity, alignment: .center)
