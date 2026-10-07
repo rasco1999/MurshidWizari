@@ -33,6 +33,7 @@ struct V31HomeView: View {
     @EnvironmentObject var app: AppSession
     @EnvironmentObject var device: DeviceServices
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("appearance") private var appearance = "system"
     @State private var insights: JSON = [:]
     @State private var weekly: JSON = [:]
     @State private var loadingInsights = true
@@ -539,7 +540,6 @@ private struct V31AccountRow: View {
 struct V31AccountView: View {
     @EnvironmentObject var app: AppSession
     @EnvironmentObject var device: DeviceServices
-    @AppStorage("appearance") private var appearance = "system"
     @AppStorage("biometric_lock") private var biometricLock = false
     @AppStorage("study_reminder") private var studyReminder = false
     @AppStorage("study_reminder_hour") private var reminderHour = 19
