@@ -997,7 +997,8 @@ struct PhonePasswordResetView: View {
                         }
                         .frame(maxWidth: .infinity)
                     } else {
-                        VStack(alignment: .leading, spacing: 16) {                            Text("تأكيد الاستعادة")
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("تأكيد الاستعادة")
                                 .font(.title2.bold())
 
                             AuthMessage(text: message, kind: .info)
@@ -1996,7 +1997,8 @@ struct V3SuccessView: View {
                     .padding(.bottom, 26)
                 }
                 .background(Color.murshidBackground)
-            }        }
+            }
+        }
         .navigationTitle("النجاح")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
@@ -2996,6 +2998,7 @@ struct V3ExamView: View {
         }
         return !(answers[q.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
+
     private func encodedAnswer(_ q: Question) -> String {
         if let em = q.englishMatch {
             let left = (em["left"] as? JSON ?? [:]).keys.sorted { (Int($0) ?? 0) < (Int($1) ?? 0) }
@@ -3994,7 +3997,8 @@ struct RegisterV3View: View {
 
     private var passwordStep: some View {
         VStack(alignment: .leading, spacing: 15) {
-            V3AuthPasswordField(title: "كلمة المرور", placeholder: "8 أحرف على الأقل", text: $password, reveal: $revealPassword)            passwordStrength
+            V3AuthPasswordField(title: "كلمة المرور", placeholder: "8 أحرف على الأقل", text: $password, reveal: $revealPassword)
+            passwordStrength
             V3AuthPasswordField(title: "تأكيد كلمة المرور", placeholder: "أعد كتابة كلمة المرور", text: $confirm, reveal: $revealConfirm)
 
             if !confirm.isEmpty {
