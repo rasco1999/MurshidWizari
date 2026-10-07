@@ -467,3 +467,41 @@ jobs:
             source/Murshid_Wizari_iOS_Production_v3_6_BUILD360_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
+
+
+  diagnostics:
+    name: Publish v3.6 build diagnostics
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Save build result and failed logs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: |
+          set -u
+          mkdir -p .build-status
+          STATUS_FILE=".build-status/v3.6-build360-status.txt"
+          LOG_FILE=".build-status/v3.6-build360-failed.log"
+          {
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "run_attempt=$GITHUB_RUN_ATTEMPT"
+            echo "commit=$GITHUB_SHA"
+            echo "result=$BUILD_RESULT"
+            echo "workflow=$GITHUB_WORKFLOW"
+          } > "$STATUS_FILE"
+          gh run view "$GITHUB_RUN_ID" --log-failed > "$LOG_FILE" 2>&1 || true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$STATUS_FILE" "$LOG_FILE"
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Record v3.6 build result [skip ci]"
+          git pull --rebase origin main || true
+          git push origin HEAD:main
