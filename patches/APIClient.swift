@@ -77,6 +77,8 @@ final class AppSession: ObservableObject {
         v3Authenticated = true
         sessionExpired = false
         lastSync = Date()
+    }
+
     func applyAppConfig(_ json: JSON) {
         featureFlags = json["features"] as? JSON ?? [:]
         releaseInfo = json["release"] as? JSON ?? [:]
@@ -85,8 +87,6 @@ final class AppSession: ObservableObject {
     func featureEnabled(_ key: String, default defaultValue: Bool = true) -> Bool {
         guard let row = featureFlags[key] as? JSON else { return defaultValue }
         return jBool(row["enabled"], default: defaultValue)
-    }
-
     }
 }
 
