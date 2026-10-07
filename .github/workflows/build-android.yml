@@ -41,6 +41,8 @@ jobs:
           APK="app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
           unzip -l "$APK" | grep -F 'classes.dex'
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "package: name='com.muriq.murshid.debug'"
           sha256sum "$APK" | tee "app/build/outputs/apk/debug/Murshid_Android_v1_0_BUILD100_debug.sha256"
           cp "$APK" "app/build/outputs/apk/debug/Murshid_Android_v1_0_BUILD100_debug.apk"
       - name: Publish build artifact
