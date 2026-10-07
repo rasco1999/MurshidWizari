@@ -93,7 +93,7 @@ final class APIClient {
         config.urlCache = URLCache(memoryCapacity: 24 * 1024 * 1024, diskCapacity: 96 * 1024 * 1024, diskPath: "MurshidHTTP")
         config.httpAdditionalHeaders = [
             "Accept": "application/json",
-            "X-Murshid-App": "ios-native-4.0",
+            "X-Murshid-App": "ios-native-4.1",
             "X-Murshid-Client": "SwiftUI"
         ]
         session = URLSession(configuration: config)
