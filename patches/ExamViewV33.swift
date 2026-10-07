@@ -125,14 +125,21 @@ struct ExamView: View {
     @ViewBuilder
     private func feedbackArea(_ q: Question) -> some View {
         let grade = grades[q.id]
-        let serverCorrect = grade.map { jBool($0["is_correct"]) } ?? q.storedCorrect
+        let rawServerCorrectAnswer = jString(grade?["correct_answer"], default: q.correctAnswer)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let serverCorrectAnswer = murshidEffectiveCorrectAnswer(question: q.text, serverAnswer: rawServerCorrectAnswer)
+        let rawServerCorrect: Bool? = grade.map { jBool($0["is_correct"]) } ?? q.storedCorrect
+        let serverCorrect = murshidEffectiveCorrectness(
+            question: q.text,
+            submittedAnswer: answerDisplay(q),
+            serverAnswer: rawServerCorrectAnswer,
+            serverCorrect: rawServerCorrect
+        )
         if q.submitted || grade != nil {
             MurshidCard {
                 VStack(alignment: .leading, spacing: 9) {
                     Label(serverCorrect == true ? "إجابة صحيحة" : "راجع الإجابة", systemImage: serverCorrect == true ? "checkmark.seal.fill" : "xmark.octagon.fill")
                         .font(.headline).foregroundColor(serverCorrect == true ? .green : .orange)
-                    let serverCorrectAnswer = jString(grade?["correct_answer"], default: q.correctAnswer)
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
                     let serverExplanation = murshidExplanationText(
                         question: q.text,
                         correctAnswer: serverCorrectAnswer,
@@ -174,6 +181,7 @@ struct ExamView: View {
                 .map(Question.init)
                 .filter { question in
                     guard murshidQuestionIsStudentReady(question.text) else { return false }
+                    guard murshidQuestionAnswerCompatible(question: question.text, serverAnswer: question.correctAnswer) else { return false }
                     let key = murshidAnswerKey(murshidQuestionDisplayText(question.text))
                     guard !key.isEmpty else { return false }
                     return seenQuestions.insert(key).inserted
