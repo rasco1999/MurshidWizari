@@ -424,7 +424,9 @@ struct V31SubscriptionView: View {
                     "csrf": app.csrf,
                     "action": "checkout",
                     "plan": plan,
-                    "payment_method": method
+                    "payment_method": method,
+                    "customer_name": app.user?.name ?? "طالب مشترك",
+                    "customer_phone": "07700000000"
                 ])
                 if jBool(d["subscribed"]) {
                     let b = try await APIClient.shared.bootstrap()
