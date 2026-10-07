@@ -32,6 +32,7 @@ private enum V31SlideKind: Int, CaseIterable, Identifiable {
 struct V31HomeView: View {
     @EnvironmentObject var app: AppSession
     @EnvironmentObject var device: DeviceServices
+    @Environment(\.colorScheme) private var colorScheme
     @State private var insights: JSON = [:]
     @State private var weekly: JSON = [:]
     @State private var loadingInsights = true
@@ -74,6 +75,14 @@ struct V31HomeView: View {
                     }
                 }
                 .accessibilityLabel("الإشعارات")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(action: toggleAppearance) {
+                    Image(systemName: isDarkAppearance ? "sun.max.fill" : "moon.fill")
+                        .font(.headline)
+                        .frame(width: 32, height: 32)
+                }
+                .accessibilityLabel(isDarkAppearance ? "تفعيل الوضع الفاتح" : "تفعيل الوضع الداكن")
             }
         }
         .task { await refreshAll() }
@@ -140,10 +149,14 @@ struct V31HomeView: View {
 
     private var performanceStrip: some View {
         LazyVGrid(columns: columns, spacing: 12) {
-            V3MetricCard(title: "الإجابات", value: "\(jInt(app.stats["total_answers"]))", icon: "checkmark.circle.fill")
-            V3MetricCard(title: "اختبارات مكتملة", value: "\(jInt(app.stats["exams_completed"]))", icon: "flag.checkered")
-            V3MetricCard(title: "هذا الأسبوع", value: "\(jInt(weekly["answers"]))", icon: "calendar")
-            V3MetricCard(title: "مؤشر النجاح", value: "\(jInt(insights["success_index"]))%", icon: "sparkles")
+            if loadingInsights {
+                ForEach(0..<4, id: \.self) { _ in V3SkeletonCard(height: 116) }
+            } else {
+                V3MetricCard(title: "الإجابات", value: "\(jInt(app.stats["total_answers"]))", icon: "checkmark.circle.fill")
+                V3MetricCard(title: "اختبارات مكتملة", value: "\(jInt(app.stats["exams_completed"]))", icon: "flag.checkered")
+                V3MetricCard(title: "هذا الأسبوع", value: "\(jInt(weekly["answers"]))", icon: "calendar")
+                V3MetricCard(title: "مؤشر النجاح", value: "\(jInt(insights["success_index"]))%", icon: "sparkles")
+            }
         }
     }
 
@@ -203,6 +216,17 @@ struct V31HomeView: View {
                 NavigationLink(destination: StoriesView()) { V3ToolCard(title: "غيّر جو", subtitle: "استراحة قصيرة", icon: "sparkles") }
             }.buttonStyle(.plain)
         }
+    }
+
+    private var isDarkAppearance: Bool {
+        appearance == "dark" || (appearance == "system" && colorScheme == .dark)
+    }
+
+    private func toggleAppearance() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            appearance = isDarkAppearance ? "light" : "dark"
+        }
+        selectionHaptic()
     }
 
     private var firstName: String {
@@ -509,6 +533,7 @@ struct V31AccountView: View {
     @State private var showRename = false
     @State private var newName = ""
     @State private var loggingOut = false
+    @State private var showLogoutConfirm = false
     @State private var avatarItem: PhotosPickerItem?
     @State private var avatarPreview: UIImage?
     @State private var uploadingAvatar = false
@@ -522,7 +547,6 @@ struct V31AccountView: View {
                 subscriptionCard
                 servicesSection
                 securitySection
-                appearanceSection
                 logoutSection
                 appInfo
                 if !faceIDMessage.isEmpty { V3InlineMessage(text: faceIDMessage, icon: "faceid", tone: .info) }
@@ -540,6 +564,12 @@ struct V31AccountView: View {
             Button("حفظ") { Task { await rename() } }
             Button("إلغاء", role: .cancel) {}
         } message: { Text("يمكن تغيير الاسم مرة واحدة فقط حسب إعدادات المنصة.") }
+        .confirmationDialog("تسجيل الخروج؟", isPresented: $showLogoutConfirm, titleVisibility: .visible) {
+            Button("تسجيل الخروج", role: .destructive) { logout() }
+            Button("إلغاء", role: .cancel) {}
+        } message: {
+            Text("سيتم إنهاء جلسة حسابك على هذا الجهاز.")
+        }
     }
 
     private var profileCard: some View {
@@ -667,22 +697,9 @@ struct V31AccountView: View {
         }
     }
 
-    private var appearanceSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            V3SectionHeader(title: "المظهر", subtitle: "اختر الشكل المريح لك", icon: "circle.lefthalf.filled")
-            MurshidCard {
-                Picker("المظهر", selection: $appearance) {
-                    Label("النظام", systemImage: "iphone").tag("system")
-                    Label("فاتح", systemImage: "sun.max.fill").tag("light")
-                    Label("داكن", systemImage: "moon.fill").tag("dark")
-                }.pickerStyle(.segmented)
-            }
-        }
-    }
-
     private var logoutSection: some View {
         MurshidCard {
-            Button(role: .destructive) { logout() } label: {
+            Button(role: .destructive) { showLogoutConfirm = true } label: {
                 HStack { Label("تسجيل الخروج", systemImage: "rectangle.portrait.and.arrow.right"); Spacer(); if loggingOut { ProgressView() } }
                     .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
             }.disabled(loggingOut)
@@ -692,7 +709,7 @@ struct V31AccountView: View {
     private var appInfo: some View {
         MurshidCard {
             VStack(alignment: .leading, spacing: 8) {
-                HStack { Label("منصة المرشد الوزاري", systemImage: "graduationcap.fill").font(.headline); Spacer(); Text("3.2 • 320").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
+                HStack { Label("منصة المرشد الوزاري", systemImage: "graduationcap.fill").font(.headline); Spacer(); Text("3.4 • 340").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
                 Text("تطبيق iPhone أصلي مرتبط مباشرة بحسابك في المنصة.").font(.footnote).foregroundStyle(.secondary)
                 HStack(spacing: 14) {
                     Link("الخصوصية", destination: URL(string: "https://www.mur-iq.com/privacy.php")!)
