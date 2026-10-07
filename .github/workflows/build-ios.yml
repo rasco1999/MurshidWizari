@@ -223,6 +223,7 @@ jobs:
           swiftc -parse source/MurshidWizari/APIClient.swift
           swiftc -parse source/MurshidWizari/MurshidWizariApp.swift
           swiftc -parse source/MurshidWizari/V31Features.swift
+          swiftc -parse source/MurshidWizari/V40Features.swift
           swiftc -parse source/MurshidWizari/Theme.swift
           swiftc -parse source/MurshidWizari/MainViews.swift
           swiftc -parse source/MurshidWizari/ExamView.swift
