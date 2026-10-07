@@ -33,6 +33,8 @@ final class AppSession: ObservableObject {
     @Published var unreadNotifications = 0
     @Published var lastSync = Date.distantPast
     @Published var sessionExpired = false
+    @Published var featureFlags: JSON = [:]
+    @Published var releaseInfo: JSON = [:]
 
     private init() {}
 
@@ -54,6 +56,8 @@ final class AppSession: ObservableObject {
         csrf = ""
         stats = [:]
         unreadNotifications = 0
+        featureFlags = [:]
+        releaseInfo = [:]
         sessionExpired = expired
     }
 
@@ -73,6 +77,16 @@ final class AppSession: ObservableObject {
         v3Authenticated = true
         sessionExpired = false
         lastSync = Date()
+    func applyAppConfig(_ json: JSON) {
+        featureFlags = json["features"] as? JSON ?? [:]
+        releaseInfo = json["release"] as? JSON ?? [:]
+    }
+
+    func featureEnabled(_ key: String, default defaultValue: Bool = true) -> Bool {
+        guard let row = featureFlags[key] as? JSON else { return defaultValue }
+        return jBool(row["enabled"], default: defaultValue)
+    }
+
     }
 }
 
