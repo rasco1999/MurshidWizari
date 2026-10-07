@@ -86,13 +86,14 @@ final class APIClient {
         let config = URLSessionConfiguration.default
         config.httpCookieStorage = .shared
         config.httpShouldSetCookies = true
-        config.waitsForConnectivity = true
-        config.timeoutIntervalForRequest = 25
-        config.timeoutIntervalForResource = 45
-        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.waitsForConnectivity = false
+        config.timeoutIntervalForRequest = 12
+        config.timeoutIntervalForResource = 25
+        config.requestCachePolicy = .useProtocolCachePolicy
+        config.urlCache = URLCache(memoryCapacity: 24 * 1024 * 1024, diskCapacity: 96 * 1024 * 1024, diskPath: "MurshidHTTP")
         config.httpAdditionalHeaders = [
             "Accept": "application/json",
-            "X-Murshid-App": "ios-native-3.0",
+            "X-Murshid-App": "ios-native-3.4",
             "X-Murshid-Client": "SwiftUI"
         ]
         session = URLSession(configuration: config)
@@ -104,6 +105,13 @@ final class APIClient {
         }
         if !query.isEmpty { components.queryItems = query }
         guard let url = components.url else { throw APIError(message: "عنوان الطلب غير صالح.", status: 0, paymentRequired: false) }
+
+        if method == "GET",
+           let cacheKey,
+           !DeviceServices.shared.isOnline,
+           let cached = ResponseCache.shared.load(key: cacheKey) {
+            return cached
+        }
 
         var req = URLRequest(url: url)
         req.httpMethod = method
@@ -145,8 +153,15 @@ final class APIClient {
         } catch let error as APIError {
             throw error
         } catch {
-            if method == "GET", let cacheKey, let cached = await ResponseCache.shared.load(key: cacheKey) { return cached }
-            throw APIError(message: "تعذر الاتصال بالإنترنت. تحقق من الشبكة وحاول مجددًا.", status: 0, paymentRequired: false)
+            if method == "GET", let cacheKey, let cached = ResponseCache.shared.load(key: cacheKey) { return cached }
+            let ns = error as NSError
+            let message: String
+            if ns.domain == NSURLErrorDomain && ns.code == NSURLErrorTimedOut {
+                message = "الاتصال بطيء الآن. حاول مرة أخرى."
+            } else {
+                message = "تعذر الاتصال بالإنترنت. تحقق من الشبكة وحاول مجددًا."
+            }
+            throw APIError(message: message, status: 0, paymentRequired: false)
         }
     }
 
