@@ -424,7 +424,9 @@ struct V31SubscriptionView: View {
                     "csrf": app.csrf,
                     "action": "checkout",
                     "plan": plan,
-                    "payment_method": method
+                    "payment_method": method,
+                    "customer_name": app.user?.name ?? "طالب مشترك",
+                    "customer_phone": "07700000000"
                 ])
                 if jBool(d["subscribed"]) {
                     let b = try await APIClient.shared.bootstrap()
@@ -454,6 +456,42 @@ struct V31SubscriptionView: View {
             }
             await MainActor.run { statusMessage = jString(d["message"], default: subscribed ? "تم تفعيل الاشتراك." : "الدفع قيد التحقق."); error = "" }
         } catch { await MainActor.run { self.error = error.localizedDescription; haptic(.error) } }
+    }
+}
+
+private struct V31AccountRowLabel: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(Color.murshidBlue)
+                .frame(width: 34, height: 34)
+                .background(Color.murshidBlue.opacity(0.09), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.body.weight(.medium)).foregroundStyle(.primary)
+                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.left").font(.caption.bold()).foregroundStyle(.tertiary)
+        }
+        .frame(minHeight: 54)
+    }
+}
+
+private struct V31AccountRow: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            V31AccountRowLabel(title: title, subtitle: subtitle, icon: icon)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -517,12 +555,17 @@ struct V31AccountView: View {
                         PhotosPicker(selection: $avatarItem, matching: .images) {
                             ZStack {
                                 Circle().fill(.white).frame(width: 29, height: 29)
-                                if uploadingAvatar { ProgressView().controlSize(.mini) }
-                                else { Image(systemName: "camera.fill").font(.caption.bold()).foregroundStyle(Color.murshidBlue) }
+                                Image(systemName: "camera.fill").font(.caption.bold()).foregroundStyle(Color.murshidBlue)
                             }
                         }
                         .buttonStyle(.plain)
                         .disabled(uploadingAvatar)
+                        if uploadingAvatar {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(.white)
+                                .offset(x: -8, y: -8)
+                        }
                     }
                     Text(avatarStatusText).font(.caption2.weight(.semibold)).foregroundStyle(.white.opacity(0.76))
                 }
@@ -585,16 +628,16 @@ struct V31AccountView: View {
             MurshidCard {
                 VStack(spacing: 0) {
                     if jBool(account["can_change_name"]) {
-                        V3AccountRow(title: "تغيير الاسم", subtitle: "متاح مرة واحدة", icon: "pencil") { newName = app.user?.name ?? ""; showRename = true }
+                        V31AccountRow(title: "تغيير الاسم", subtitle: "متاح مرة واحدة", icon: "pencil") { newName = app.user?.name ?? ""; showRename = true }
                         Divider().padding(.leading, 48)
                     }
-                    NavigationLink(destination: V31SchoolAdRequestView()) { V3AccountRowLabel(title: "طلب إعلان مدرسة", subtitle: "أرسل الطلب مباشرة إلى الإدارة", icon: "megaphone.fill") }
+                    NavigationLink(destination: V31SchoolAdRequestView()) { V31AccountRowLabel(title: "طلب إعلان مدرسة", subtitle: "أرسل الطلب مباشرة إلى الإدارة", icon: "megaphone.fill") }
                     Divider().padding(.leading, 48)
-                    NavigationLink(destination: NotificationsView()) { V3AccountRowLabel(title: "الإشعارات", subtitle: app.unreadNotifications > 0 ? "لديك \(app.unreadNotifications) غير مقروء" : "لا توجد إشعارات جديدة", icon: "bell.fill") }
+                    NavigationLink(destination: NotificationsView()) { V31AccountRowLabel(title: "الإشعارات", subtitle: app.unreadNotifications > 0 ? "لديك \(app.unreadNotifications) غير مقروء" : "لا توجد إشعارات جديدة", icon: "bell.fill") }
                     Divider().padding(.leading, 48)
-                    NavigationLink(destination: SupportView()) { V3AccountRowLabel(title: "خدمة العملاء", subtitle: "محادثة مباشرة مع الدعم", icon: "message.fill") }
+                    NavigationLink(destination: SupportView()) { V31AccountRowLabel(title: "خدمة العملاء", subtitle: "محادثة مباشرة مع الدعم", icon: "message.fill") }
                     Divider().padding(.leading, 48)
-                    NavigationLink(destination: StoriesView()) { V3AccountRowLabel(title: "غيّر جو", subtitle: "رسائل وقصص قصيرة", icon: "sparkles") }
+                    NavigationLink(destination: StoriesView()) { V31AccountRowLabel(title: "غيّر جو", subtitle: "رسائل وقصص قصيرة", icon: "sparkles") }
                 }
             }
         }
@@ -855,8 +898,12 @@ final class MurshidAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificat
         UserDefaults.standard.set(error.localizedDescription, forKey: "apns_last_error")
     }
 
-    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .sound, .badge]
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound, .badge])
     }
 }
 
