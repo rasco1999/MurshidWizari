@@ -692,7 +692,7 @@ struct V31AccountView: View {
     private var appInfo: some View {
         MurshidCard {
             VStack(alignment: .leading, spacing: 8) {
-                HStack { Label("منصة المرشد الوزاري", systemImage: "graduationcap.fill").font(.headline); Spacer(); Text("3.1 • 310").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
+                HStack { Label("منصة المرشد الوزاري", systemImage: "graduationcap.fill").font(.headline); Spacer(); Text("3.2 • 320").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
                 Text("تطبيق iPhone أصلي مرتبط مباشرة بحسابك في المنصة.").font(.footnote).foregroundStyle(.secondary)
                 HStack(spacing: 14) {
                     Link("الخصوصية", destination: URL(string: "https://www.mur-iq.com/privacy.php")!)
