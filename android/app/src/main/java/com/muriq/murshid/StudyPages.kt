@@ -366,9 +366,14 @@ fun validQuestion(q: Json): Boolean {
             }
         }
         if(items.isEmpty() && !loading) Text("ستظهر نتائج البحث هنا.")
-        items.forEach {row-> Panel{
-            Text(row.str("title"),fontWeight=FontWeight.SemiBold)
-            Text(row.str("meta"),style=MaterialTheme.typography.bodySmall)
-        }}
+        items.forEach { row ->
+            val topicId = Regex("chapter_id=([0-9]+)").find(row.str("url"))?.groupValues?.getOrNull(1)?.toIntOrNull()
+            Tile(row.str("title"), row.str("meta"), {
+                Icon(Icons.Default.FindInPage, null, tint = MaterialTheme.colorScheme.primary)
+            }) {
+                if(topicId != null) app.push(Route("exam", topicId, row.str("meta")))
+                else app.show("تعذر فتح هذا السؤال.")
+            }
+        }
     }
 }
