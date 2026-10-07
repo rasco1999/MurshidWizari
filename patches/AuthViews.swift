@@ -1,54 +1,102 @@
 import SwiftUI
 
-func murshidQuestionIsStudentReady(_ raw: String) -> Bool {
-    let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !text.isEmpty else { return false }
-    let blockedPatterns = [
-        #"^\s*تحقق\s+بصري\b.*(?:v\s*25|v25)"#,
-        #"(?:v\s*25|v25).*تحقق\s+بصري"#,
-        #"هل\s+الإجابة\s+[«"“][^»"”]+[»"”]\s+صحيحة\s*[؟?]?\s*$"#,
-        #"^\s*(?:صح\s+أم\s+خطأ\s*:\s*)?الإجابة\s+عن\s+[«"“].+?[»"”]\s+هي\s+[«"“].+?[»"”]"#,
-        #"تدريب\s+تحقق\s+وزاري\s*:"#
-    ]
-    return !blockedPatterns.contains { pattern in
-        text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
-    }
-}
-
 func murshidQuestionDisplayText(_ raw: String) -> String {
-    var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    var text = raw
+        .replacingOccurrences(of: "\r\n", with: "\n")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
     guard !text.isEmpty else { return "" }
 
-    // لا نحذف فعل «عرّف»؛ نحذف فقط الوصف التحريري والترقيم.
+    // Preserve real educational verbs such as «عرّف» while removing editorial wrappers.
     text = text.replacingOccurrences(
         of: #"^\s*عرّف\s+المصطلح\s+الوزاري(?:\s+[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#,
         with: "عرّف ",
         options: [.regularExpression, .caseInsensitive]
     )
 
-    let patterns = [
-        #"^\s*استرجاع\s+وزاري(?:\s+[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#,
-        #"^\s*وزاري(?:\s+[\p{N}٠-٩]{2,4})?(?:\s*[/\-–—]\s*[^:：\n]{1,48})?\s*[:：]\s*"#,
+    let prefixes = [
+        #"^\s*\[[^\]\n]{1,80}\]\s*[:：\-–—]?\s*"#,
+        #"^\s*(?:استرجاع\s+)?وزاري(?:\s+[\p{N}٠-٩]{1,4})?(?:\s*[/\-–—]\s*[^:：\n]{1,48})?\s*[:：\-–—]\s*"#,
         #"^\s*(?:سؤال\s+)?(?:تدريب|تدريبي|تدريبية)(?:\s+[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#,
         #"^\s*(?:سؤال\s+)?مراجعة(?:\s+[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#,
         #"^\s*اختيار\s+تحليلي(?:\s+[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#,
         #"^\s*إجابة\s+مركزة(?:\s+[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#,
         #"^\s*أكمل\s+المعنى\s+الوزاري(?:\s+[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#,
-        #"^\s*تحقق\s+بصري(?:\s+[\p{N}٠-٩]{1,4})?\s*[\-–—]?\s*(?:v\s*25|v25)?\s*[:：]\s*"#
+        #"^\s*سؤال\s+[\p{N}٠-٩]{1,4}\s*[:：\-–—]\s*"#,
+        #"^\s*(?:تحقق|تدقيق|مراجعة)\s*(?:بصري|لغوي|علمي|نحوي|صرفي|إملائي|املائي|نهائي|يدوي|داخلي)?(?:\s+[\p{N}٠-٩]{1,4})?\s*(?:[—–-]\s*)?(?:V\s*[\p{N}٠-٩]{1,4})?\s*[:：\-–—]\s*"#,
+        #"^\s*V\s*[\p{N}٠-٩]{1,4}\s*[:：\-–—]\s*"#
     ]
-    for pattern in patterns {
-        if let range = text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) {
-            text.removeSubrange(range)
-            text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            break
+
+    for _ in 0..<5 {
+        var changed = false
+        for pattern in prefixes {
+            if let range = text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) {
+                text.removeSubrange(range)
+                text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                changed = true
+                break
+            }
         }
+        if !changed { break }
     }
-    while text.contains("  ") { text = text.replacingOccurrences(of: "  ", with: " ") }
+
+    // Remove QA/verification text that leaks the proposed answer.
+    let answerLeakPatterns = [
+        #"\s*[—–-]\s*هل\s+(?:الإجابة|الاجابة|الجواب|الحل)\s+.+?\s+(?:صحيحة|صحيح|صائب|صائبة)\s*[؟?]?\s*$"#,
+        #"\s*[—–-]\s*(?:الإجابة|الاجابة|الجواب|الحل)\s*(?:الصحيحة|الصحيح)?\s*[:：].*$"#,
+        #"\s*\((?:الإجابة|الاجابة|الجواب|الحل)\s*[:：][^)]*\)\s*$"#
+    ]
+    for pattern in answerLeakPatterns {
+        text = text.replacingOccurrences(of: pattern, with: "", options: [.regularExpression, .caseInsensitive])
+    }
+
+    text = text
+        .replacingOccurrences(of: #"[ \t]{2,}"#, with: " ", options: .regularExpression)
+        .replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
+        .replacingOccurrences(of: #"\s+[،,]\s*$"#, with: "", options: .regularExpression)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+
+    if text.isEmpty { return "" }
+
+    let interrogativePattern = #"(?:^|[،,:؛]\s*)(?:ما|ماذا|هل|لماذا|كيف|كم|أي|أين|اين|متى|من)\s"#
+    if text.range(of: interrogativePattern, options: .regularExpression) != nil,
+       !text.hasSuffix("؟"), !text.hasSuffix("?"), !text.hasSuffix(":"), !text.hasSuffix("؛") {
+        text += "؟"
+    }
+    return text
+}
+
+func murshidQuestionIsStudentReady(_ raw: String) -> Bool {
+    let text = murshidQuestionDisplayText(raw)
+    guard text.count >= 4 else { return false }
+
+    let blockedPatterns = [
+        #"^\s*هل\s+(?:الإجابة|الاجابة|الجواب|الحل)\b"#,
+        #"^\s*(?:صح\s+أم\s+خطأ\s*:\s*)?(?:الإجابة|الاجابة)\s+عن\s+[«"“].+?[»"”]\s+هي\s+[«"“].+?[»"”]"#,
+        #"تدريب\s+تحقق\s+وزاري\s*:"#,
+        #"^(?:تحقق|تدقيق)\s+(?:بصري|لغوي|علمي)\b"#
+    ]
+    return !blockedPatterns.contains { pattern in
+        text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+}
+
+func murshidAnswerKey(_ raw: String) -> String {
+    var text = raw
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .lowercased()
+        .replacingOccurrences(of: "أ", with: "ا")
+        .replacingOccurrences(of: "إ", with: "ا")
+        .replacingOccurrences(of: "آ", with: "ا")
+        .replacingOccurrences(of: "ٱ", with: "ا")
+        .replacingOccurrences(of: "ى", with: "ي")
+        .replacingOccurrences(of: "ـ", with: "")
+    text = text.replacingOccurrences(of: #"[\u{064B}-\u{065F}\u{0670}]"#, with: "", options: .regularExpression)
+    text = text.replacingOccurrences(of: #"[^\p{L}\p{N}]+"#, with: "", options: .regularExpression)
     return text
 }
 
 func murshidUsefulExplanation(_ raw: String) -> String {
-    let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !text.isEmpty else { return "" }
     let genericPrefixes = [
         "تدريب مشتق من مفهوم موثق في هذا المحور",
@@ -56,10 +104,74 @@ func murshidUsefulExplanation(_ raw: String) -> String {
         "هذا تدريب تحقق مشتق",
         "هذا تدريب مشتق",
         "صيغة تدريب جديدة مشتقة",
-        "راجع الإجابة النموذجية"
+        "راجع الإجابة النموذجية",
+        "تلميح:"
     ]
     if genericPrefixes.contains(where: { text.hasPrefix($0) }) { return "" }
-    return text
+    text = text.replacingOccurrences(
+        of: #"^\s*(?:شرح\s*الإجابة|شرح\s*الاجابة|التوضيح|الشرح)\s*[:：\-–—]\s*"#,
+        with: "",
+        options: [.regularExpression, .caseInsensitive]
+    )
+    return text.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private func murshidQuotedTerm(_ text: String) -> String? {
+    guard let range = text.range(of: #"«[^»]{1,80}»"#, options: .regularExpression) else { return nil }
+    return String(text[range].dropFirst().dropLast())
+}
+
+func murshidExplanationText(question rawQuestion: String, correctAnswer rawAnswer: String, raw rawExplanation: String) -> String {
+    let question = murshidQuestionDisplayText(rawQuestion)
+    let answer = rawAnswer.trimmingCharacters(in: .whitespacesAndNewlines)
+    let explanation = murshidUsefulExplanation(rawExplanation)
+    let eKey = murshidAnswerKey(explanation)
+    let aKey = murshidAnswerKey(answer)
+
+    let trivial = explanation.isEmpty
+        || (!aKey.isEmpty && eKey == aKey)
+        || (!aKey.isEmpty && eKey == murshidAnswerKey("الإجابة الصحيحة هي " + answer))
+        || (!aKey.isEmpty && eKey == murshidAnswerKey("الجواب الصحيح هو " + answer))
+
+    if !trivial { return explanation }
+
+    let qKey = murshidAnswerKey(question)
+    let term = murshidQuotedTerm(question)
+
+    if qKey.contains("الميزانالصرفي") || qKey.contains("وزنكلمه") || qKey.contains("وزنكلمة") {
+        if let term, !answer.isEmpty {
+            return "في الميزان الصرفي نقابل الحروف الأصلية بفاء وعين ولام، ونُبقي الحروف الزائدة في مواضعها؛ لذلك وزن «\(term)» هو «\(answer)»."
+        }
+        if !answer.isEmpty {
+            return "في الميزان الصرفي نقابل الحروف الأصلية بفاء وعين ولام مع إبقاء الحروف الزائدة في مواضعها؛ لذلك تكون النتيجة «\(answer)»."
+        }
+    }
+    if qKey.contains("اسمفاعل") && !answer.isEmpty {
+        return "نطبّق قاعدة اسم الفاعل على الفعل المذكور في السؤال؛ ومن ثم تكون الصيغة الصحيحة «\(answer)»."
+    }
+    if qKey.contains("اسممفعول") && !answer.isEmpty {
+        return "نطبّق قاعدة اسم المفعول على الفعل المذكور في السؤال؛ ومن ثم تكون الصيغة الصحيحة «\(answer)»."
+    }
+    if (qKey.contains("معني") || qKey.contains("معنى") || qKey.contains("مرادف")) && !answer.isEmpty {
+        if let term { return "المعنى المقصود لكلمة «\(term)» في هذا السياق هو «\(answer)»." }
+        return "المعنى المعتمد في سياق السؤال هو «\(answer)»."
+    }
+    if qKey.contains("ضد") && !answer.isEmpty {
+        return "المطلوب هو الكلمة المقابلة في المعنى؛ لذلك يكون الضد الصحيح «\(answer)»."
+    }
+    if qKey.contains("جمع") && !answer.isEmpty {
+        return "نحدّد صيغة الجمع المناسبة للكلمة وفق القاعدة الواردة في الدرس؛ لذلك تكون الإجابة «\(answer)»."
+    }
+    if qKey.contains("مفرد") && !answer.isEmpty {
+        return "نردّ صيغة الجمع إلى مفردها الصحيح وفق الاستعمال اللغوي؛ لذلك تكون الإجابة «\(answer)»."
+    }
+    if (qKey.contains("ناتج") || question.contains("=") || question.contains("+") || question.contains("×") || question.contains("÷")) && !answer.isEmpty {
+        return "نطبّق العملية المطلوبة على المعطيات بالترتيب، فنحصل على الناتج «\(answer)»."
+    }
+    if !answer.isEmpty {
+        return "نطبّق القاعدة المطلوبة في نص السؤال على المعطى مباشرة؛ لذلك تكون الإجابة الصحيحة «\(answer)»."
+    }
+    return "تم تصحيح الإجابة وفق النموذج المعتمد لهذا السؤال."
 }
 
 import Combine
@@ -2789,11 +2901,6 @@ struct V3ExamView: View {
                         .background(Color.murshidBlue.opacity(0.10), in: Capsule())
                     Spacer()
                 }
-                if !q.meaningWord.isEmpty {
-                    Text(q.meaningWord)
-                        .font(.headline)
-                        .foregroundStyle(Color.murshidGold)
-                }
                 Text(murshidQuestionDisplayText(q.text))
                     .font(.title3.weight(.semibold))
                     .lineSpacing(5)
@@ -2806,6 +2913,7 @@ struct V3ExamView: View {
     @ViewBuilder
     private func answerArea(_ q: Question) -> some View {
         MurshidCard {
+            let options = visibleOptions(q)
             VStack(alignment: .leading, spacing: 13) {
                 HStack {
                     Label("إجابتك", systemImage: "pencil.and.list.clipboard")
@@ -2816,9 +2924,9 @@ struct V3ExamView: View {
                     }
                 }
 
-                if !q.options.isEmpty {
+                if !options.isEmpty {
                     VStack(spacing: 10) {
-                        ForEach(Array(q.options.enumerated()), id: \.element.id) { index, option in
+                        ForEach(Array(options.enumerated()), id: \.element.id) { index, option in
                             optionButton(q: q, option: option, index: index)
                         }
                     }
@@ -2845,7 +2953,7 @@ struct V3ExamView: View {
                         .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
 
-                if !isAnswered(q) && q.options.isEmpty {
+                if !isAnswered(q) && options.isEmpty {
                     Button(action: { submitCurrent() }) {
                         HStack(spacing: 9) {
                             if submitting { ProgressView().tint(.white) }
@@ -2857,7 +2965,7 @@ struct V3ExamView: View {
                     .disabled(submitting || !hasAnswer(q))
                     .opacity(hasAnswer(q) ? 1 : 0.55)
 
-                } else if !isAnswered(q) && !q.options.isEmpty && submitting {
+                } else if !isAnswered(q) && !options.isEmpty && submitting {
                     HStack(spacing: 8) {
                         ProgressView()
                         Text("جاري تصحيح اختيارك…").font(.caption).foregroundStyle(.secondary)
@@ -2874,7 +2982,7 @@ struct V3ExamView: View {
         let correctText = jString(grades[q.id]?["correct_answer"], default: q.correctAnswer)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let optionText = option.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let correctOption = graded && !correctText.isEmpty && optionText == correctText
+        let correctOption = graded && !correctText.isEmpty && murshidAnswerKey(optionText) == murshidAnswerKey(correctText)
         let wrongSelected = graded && selected && !correctOption
         let accent: Color = correctOption ? .green : (wrongSelected ? .red : Color.murshidBlue)
         let icon = correctOption ? "checkmark.circle.fill" : (wrongSelected ? "xmark.circle.fill" : (selected ? "checkmark.circle.fill" : "circle"))
@@ -2924,23 +3032,29 @@ struct V3ExamView: View {
                         }
                     }
                     let serverCorrectAnswer = jString(grades[q.id]?["correct_answer"], default: q.correctAnswer)
-                    let serverExplanation = murshidUsefulExplanation(jString(grades[q.id]?["explanation"], default: q.explanation))
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    let serverExplanation = murshidExplanationText(
+                        question: q.text,
+                        correctAnswer: serverCorrectAnswer,
+                        raw: jString(grades[q.id]?["explanation"], default: q.explanation)
+                    )
                     if !serverCorrectAnswer.isEmpty {
-                        Text("الإجابة الصحيحة")
-                            .font(.caption.bold()).foregroundStyle(.secondary)
+                        Text("الإجابة النموذجية")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
                         Text(serverCorrectAnswer)
                             .font(.body.weight(.semibold))
                             .foregroundStyle(.green)
                     }
-                    if !serverExplanation.isEmpty {
-                        Divider()
-                        Text("شرح الإجابة").font(.caption.bold()).foregroundStyle(Color.murshidBlue)
-                        Text(serverExplanation)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineSpacing(5)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                    Divider()
+                    Text("لماذا؟")
+                        .font(.caption.bold())
+                        .foregroundStyle(Color.murshidBlue)
+                    Text(serverExplanation)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(5)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -3049,6 +3163,15 @@ struct V3ExamView: View {
         return q.storedCorrect
     }
 
+    private func visibleOptions(_ q: Question) -> [QuestionOption] {
+        var seen = Set<String>()
+        return q.options.filter { option in
+            let key = murshidAnswerKey(option.text)
+            guard !key.isEmpty else { return false }
+            return seen.insert(key).inserted
+        }
+    }
+
     private func optionLetter(_ index: Int) -> String {
         let letters = ["أ", "ب", "ج", "د", "هـ", "و"]
         return index < letters.count ? letters[index] : "\(index + 1)"
@@ -3058,7 +3181,15 @@ struct V3ExamView: View {
         await MainActor.run { loading = true; error = ""; startedAt = Date() }
         do {
             let d = try await APIClient.shared.request("mobile/exam.php", query: [URLQueryItem(name: "chapter_id", value: "\(topic.id)")])
-            let qs = jArray(d["questions"]).map(Question.init).filter { murshidQuestionIsStudentReady($0.text) }
+            var seenQuestions = Set<String>()
+            let qs = jArray(d["questions"])
+                .map(Question.init)
+                .filter { question in
+                    guard murshidQuestionIsStudentReady(question.text) else { return false }
+                    let key = murshidAnswerKey(murshidQuestionDisplayText(question.text))
+                    guard !key.isEmpty else { return false }
+                    return seenQuestions.insert(key).inserted
+                }
             await MainActor.run {
                 questions = qs
                 for q in qs where !q.storedAnswer.isEmpty { answers[q.id] = q.storedAnswer }
@@ -3091,7 +3222,7 @@ struct V3ExamView: View {
 
     private func hasAnswer(_ q: Question) -> Bool {
         if q.englishMatch != nil { return !(english[q.id] ?? [:]).isEmpty }
-        if !q.options.isEmpty { return !(answers[q.id] ?? "").isEmpty }
+        if !visibleOptions(q).isEmpty { return !(answers[q.id] ?? "").isEmpty }
         if q.type == "match" {
             return q.matchItems.allSatisfy {
                 let d = matches[q.id]?[$0.id]
