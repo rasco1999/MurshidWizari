@@ -232,13 +232,6 @@ struct V44PredictionsView: View {
                                         .foregroundStyle(Color.murshidBlue)
                                     Text(jString(prediction["reason"])).font(.footnote)
                                         .frame(maxWidth: .infinity, alignment: .leading)
-                                    let link = jString(prediction["source_url"])
-                                    if let url = URL(string: link), url.scheme?.lowercased() == "https" {
-                                        Link(destination: url) {
-                                            Label("المصدر المؤرشف", systemImage: "link")
-                                                .font(.footnote.bold())
-                                        }
-                                    }
                                 }
                                 .padding(.top, 8)
                             } label: {
