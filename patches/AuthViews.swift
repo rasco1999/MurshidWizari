@@ -1721,13 +1721,17 @@ struct MainV3TabView: View {
                 .tabItem { Label("الاختبارات", systemImage: "checklist.checked") }
                 .tag(1)
 
-            NavigationStack { V3SuccessView() }
-                .tabItem { Label("النجاح", systemImage: "chart.line.uptrend.xyaxis") }
+            NavigationStack { V31StudyPlaceholderView() }
+                .tabItem { Label("ادرس", systemImage: "book.fill") }
                 .tag(2)
+
+            NavigationStack { V31SchoolAdsView() }
+                .tabItem { Label("الإعلانات", systemImage: "megaphone.fill") }
+                .tag(3)
 
             NavigationStack { V3AccountView() }
                 .tabItem { Label("حسابي", systemImage: "person.crop.circle.fill") }
-                .tag(3)
+                .tag(4)
         }
         .tint(.murshidBlue)
         .toolbarBackground(.visible, for: .tabBar)
@@ -1737,8 +1741,9 @@ struct MainV3TabView: View {
         .onOpenURL { url in
             switch (url.host ?? url.path.replacingOccurrences(of: "/", with: "")).lowercased() {
             case "tests", "exam", "subjects": selection = 1
-            case "success", "progress": selection = 2
-            case "account", "subscription": selection = 3
+            case "study", "learn": selection = 2
+            case "ads", "advertisements": selection = 3
+            case "account", "subscription": selection = 4
             default: selection = 0
             }
             selectionHaptic()
