@@ -385,7 +385,9 @@ jobs:
           test -f "$APP/Assets.car"
           test -f "$APP/PrivacyInfo.xcprivacy"
           grep -Fq 'قفل حقيقي بـ Face ID' MurshidWizari/V31Features.swift
-          grep -Fq 'طلب إعلان مدرسة' MurshidWizari/V31Features.swift
+          grep -Fq 'showingAdvertisePrice' MurshidWizari/V31Features.swift
+          grep -Fq 'V31SchoolAdsView' MurshidWizari/V31Features.swift
+          grep -Fq 'تسليم الإجابة' MurshidWizari/V40Features.swift
           grep -Fq 'الانتقال إلى الدفع الخارجي' MurshidWizari/V31Features.swift
           grep -Fq 'preloadAllImages' MurshidWizari/V31Features.swift
           grep -Fq 'toggleAppearance' MurshidWizari/V31Features.swift

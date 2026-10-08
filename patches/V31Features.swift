@@ -255,7 +255,7 @@ struct V31HomeView: View {
                     NavigationLink(destination: V40CustomExamBuilderView()) { V3ToolCard(title: "اختبار مخصص", subtitle: "عدد · نوع · مؤقت", icon: "slider.horizontal.3") }
                 }
                 if app.featureEnabled("daily_challenge") {
-                    NavigationLink(destination: V40DailyChallengeView()) { V3ToolCard(title: "تحدي اليوم", subtitle: "خمسة أسئلة سريعة", icon: "flame.fill") }
+                    NavigationLink(destination: V40DailyChallengeView()) { V3ToolCard(title: "تحدي اليوم", subtitle: "سؤال واحد كل 24 ساعة", icon: "flame.fill") }
                 }
                 if app.featureEnabled("question_search") {
                     NavigationLink(destination: V40QuestionSearchView()) { V3ToolCard(title: "ابحث عن سؤال", subtitle: "في بنك الأسئلة", icon: "magnifyingglass") }
@@ -267,9 +267,6 @@ struct V31HomeView: View {
                 if app.featureEnabled("attempt_history") {
                     NavigationLink(destination: V40AttemptHistoryView()) { V3ToolCard(title: "سجل الاختبارات", subtitle: "نتائجك السابقة", icon: "clock.arrow.circlepath") }
                 }
-                NavigationLink(destination: StudyPlanView()) { V3ToolCard(title: "خطة الدراسة", subtitle: "هدف يومي", icon: "calendar") }
-                NavigationLink(destination: AchievementsView()) { V3ToolCard(title: "الإنجازات", subtitle: "XP والمستوى", icon: "medal.fill") }
-                NavigationLink(destination: V3FocusView()) { V3ToolCard(title: "جلسة تركيز", subtitle: "25 · 45 · 60 دقيقة", icon: "timer") }
                 NavigationLink(destination: V3ContestView()) { V3ToolCard(title: "تحدي المليون", subtitle: "ترتيب ونقاط", icon: "trophy.fill") }
                 NavigationLink(destination: StoriesView()) { V3ToolCard(title: "غيّر جو", subtitle: "استراحة قصيرة", icon: "sparkles") }
                 NavigationLink(destination: V40WhatsNewView()) { V3ToolCard(title: "ما الجديد", subtitle: "الإصدار 4.2", icon: "sparkles.rectangle.stack.fill") }
@@ -332,9 +329,11 @@ struct V31HomeView: View {
 }
 
 private struct V31WebsiteHeroSlider: View {
+    @Environment(\.openURL) private var openURL
     @State private var selection = 0
     @State private var images: [Int: UIImage] = [:]
     @State private var ready = false
+    @State private var showingAdvertisePrice = false
     private let timer = Timer.publish(every: 5.5, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -367,41 +366,59 @@ private struct V31WebsiteHeroSlider: View {
             }
         }
         .task { await preloadAllImages() }
+        .alert("أعلن هنا", isPresented: $showingAdvertisePrice) {
+            Button("إلغاء", role: .cancel) { }
+            Button("إكمال") {
+                var components = URLComponents(string: "https://t.me/r_cs4")
+                components?.queryItems = [URLQueryItem(name: "text", value: "السلام عليكم، أرغب بحجز إعلان في منصة المرشد الوزاري لمدة 24 ساعة بسعر 5000 دينار عراقي. يرجى التواصل معي لإكمال طلب الإعلان.")]
+                if let url = components?.url { openURL(url) }
+            }
+        } message: {
+            Text("الإعلان لكل ٢٤ ساعة بسعر ٥ آلاف دينار عراقي فقط. عند الإكمال ستفتح محادثة @r_cs4 على تيليجرام مع رسالة جاهزة، وتضغط إرسال بنفسك.")
+        }
         .accessibilityLabel("سلايدر منصة المرشد الوزاري")
     }
 
     @ViewBuilder
     private func destination(for kind: V31SlideKind) -> some View {
-        NavigationLink {
-            switch kind {
-            case .million: V3ContestView()
-            case .advertise: V31SchoolAdRequestView()
-            case .tests: V3TestsView()
-            case .success: V3SuccessView()
-            }
-        } label: {
-            ZStack {
-                LinearGradient(colors: [.murshidNavy, .murshidBlue], startPoint: .topLeading, endPoint: .bottomTrailing)
-                if let image = images[kind.rawValue] {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .transition(.opacity)
-                } else {
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .fill(Color.murshidBlue.opacity(0.16))
-                        .overlay {
-                            Image(systemName: "photo")
-                                .font(.title2)
-                                .foregroundStyle(.white.opacity(0.28))
-                        }
+        if kind == .advertise {
+            Button { showingAdvertisePrice = true } label: { slideArtwork(for: kind) }
+                .buttonStyle(.plain)
+                .accessibilityLabel(kind.title)
+        } else {
+            NavigationLink {
+                switch kind {
+                case .million: V3ContestView()
+                case .advertise: EmptyView()
+                case .tests: V3TestsView()
+                case .success: V3SuccessView()
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
+            } label: { slideArtwork(for: kind) }
+                .buttonStyle(.plain)
+                .accessibilityLabel(kind.title)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(kind.title)
+    }
+
+    private func slideArtwork(for kind: V31SlideKind) -> some View {
+        ZStack {
+            LinearGradient(colors: [.murshidNavy, .murshidBlue], startPoint: .topLeading, endPoint: .bottomTrailing)
+            if let image = images[kind.rawValue] {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .transition(.opacity)
+            } else {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Color.murshidBlue.opacity(0.16))
+                    .overlay {
+                        Image(systemName: "photo")
+                            .font(.title2)
+                            .foregroundStyle(.white.opacity(0.28))
+                    }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
     }
 
     @MainActor
@@ -442,6 +459,151 @@ private struct V31WebsiteHeroSlider: View {
             if let image = UIImage(data: data) { images[id] = image }
         }
         ready = images.count == V31SlideKind.allCases.count
+    }
+}
+
+// MARK: - School advertisements: only currently published school ads
+
+struct V31SchoolAdsView: View {
+    @State private var ads: [JSON] = []
+    @State private var loading = true
+    @State private var error = ""
+
+    private var tickerText: String {
+        ads.map { "\(jString($0["school"])) — \(jString($0["text"]))" }
+            .joined(separator: "     •     ")
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 14) {
+                V3IntroCard(
+                    eyebrow: "الإعلانات",
+                    title: "إعلانات المدارس",
+                    text: "تظهر هنا إعلانات المدارس المنشورة والنشطة فقط.",
+                    icon: "megaphone.fill"
+                )
+
+                if loading {
+                    V3SkeletonCard(height: 130)
+                } else if ads.isEmpty {
+                    EmptyStateView(systemImage: "megaphone", title: "لا توجد إعلانات مدرسية الآن", message: "ستظهر الإعلانات هنا تلقائيًا عند نشرها من الإدارة.")
+                } else {
+                    V31SchoolAdTicker(text: tickerText)
+                    ForEach(ads.indices, id: \.self) { index in
+                        let ad = ads[index]
+                        MurshidCard {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Label(jString(ad["school"]), systemImage: "building.2.fill")
+                                    .font(.headline).foregroundStyle(Color.murshidBlue)
+                                Text(jString(ad["text"])).font(.body)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+
+                if !error.isEmpty {
+                    V3InlineMessage(text: error, icon: "exclamationmark.triangle.fill", tone: .warning)
+                }
+            }
+            .padding(16)
+            .padding(.bottom, 30)
+        }
+        .background(Color.murshidBackground.ignoresSafeArea())
+        .navigationTitle("الإعلانات")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await loadAds() }
+        .refreshable { await loadAds() }
+    }
+
+    private func loadAds() async {
+        do {
+            let response = try await APIClient.shared.request("mobile/bootstrap.php")
+            await MainActor.run {
+                ads = jArray(response["ads"])
+                loading = false
+                error = ""
+            }
+        } catch {
+            await MainActor.run {
+                loading = false
+                error = "تعذر تحديث الإعلانات الآن: \(error.localizedDescription)"
+            }
+        }
+    }
+}
+
+private struct V31SchoolAdTickerWidth: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct V31SchoolAdTicker: View {
+    let text: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var measuredWidth: CGFloat = 0
+
+    private var repeatedText: some View {
+        Text(text)
+            .font(.subheadline.bold())
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    var body: some View {
+        Group {
+            if reduceMotion {
+                repeatedText.frame(maxWidth: .infinity, alignment: .trailing)
+            } else {
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+                    let distance = max(measuredWidth + 24, 1)
+                    let travel = CGFloat(context.date.timeIntervalSinceReferenceDate * 28)
+                        .truncatingRemainder(dividingBy: distance)
+                    HStack(spacing: 24) {
+                        repeatedText
+                            .background {
+                                GeometryReader { geometry in
+                                    Color.clear.preference(key: V31SchoolAdTickerWidth.self, value: geometry.size.width)
+                                }
+                            }
+                        repeatedText.accessibilityHidden(true)
+                    }
+                    .offset(x: -distance + travel)
+                }
+                .onPreferenceChange(V31SchoolAdTickerWidth.self) { measuredWidth = $0 }
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 48, maxHeight: 48)
+        .background(Color.murshidBlue.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+        .clipped()
+        .accessibilityLabel("شريط إعلانات المدارس المتحرك")
+    }
+}
+
+// The study tab intentionally remains a simple placeholder until its next update.
+struct V31StudyPlaceholderView: View {
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 18) {
+                V3IntroCard(eyebrow: "ادرس", title: "مساحتك للدراسة", text: "سنعمل على تطوير هذا القسم قريبًا.", icon: "book.fill")
+                MurshidCard {
+                    VStack(spacing: 12) {
+                        Image(systemName: "books.vertical.fill")
+                            .font(.system(size: 44)).foregroundStyle(Color.murshidBlue)
+                        Text("قسم ادرس قيد الإعداد").font(.title3.bold())
+                        Text("سيكون هنا محتوى الدراسة في تحديث لاحق.")
+                            .foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(16)
+        }
+        .background(Color.murshidBackground.ignoresSafeArea())
+        .navigationTitle("ادرس")
     }
 }
 
@@ -744,8 +906,6 @@ struct V31AccountView: View {
                         V31AccountRow(title: "تغيير الاسم", subtitle: "متاح مرة واحدة", icon: "pencil") { newName = app.user?.name ?? ""; showRename = true }
                         Divider().padding(.leading, 48)
                     }
-                    NavigationLink(destination: V31SchoolAdRequestView()) { V31AccountRowLabel(title: "طلب إعلان مدرسة", subtitle: "أرسل الطلب مباشرة إلى الإدارة", icon: "megaphone.fill") }
-                    Divider().padding(.leading, 48)
                     NavigationLink(destination: NotificationsView()) { V31AccountRowLabel(title: "الإشعارات", subtitle: app.unreadNotifications > 0 ? "لديك \(app.unreadNotifications) غير مقروء" : "لا توجد إشعارات جديدة", icon: "bell.fill") }
                     Divider().padding(.leading, 48)
                     NavigationLink(destination: SupportView()) { V31AccountRowLabel(title: "خدمة العملاء", subtitle: "محادثة مباشرة مع الدعم", icon: "message.fill") }
@@ -908,72 +1068,6 @@ struct V31AccountView: View {
         Task {
             do { try await APIClient.shared.logout(); await MainActor.run { loggingOut = false; haptic() } }
             catch { await MainActor.run { loggingOut = false; self.error = error.localizedDescription; haptic(.error) } }
-        }
-    }
-}
-
-// MARK: - Internal school advertisement request -> existing admin support inbox
-
-struct V31SchoolAdRequestView: View {
-    @EnvironmentObject var app: AppSession
-    @State private var schoolName = ""
-    @State private var adText = ""
-    @State private var days = 1
-    @State private var loading = false
-    @State private var message = ""
-    @State private var isError = false
-
-    var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 16) {
-                V3IntroCard(eyebrow: "إعلانات المدارس", title: "أرسل طلب الإعلان إلى الإدارة", text: "الطلب يصل كرسالة داخلية إلى لوحة الإدارة، ويتضمن اسم المدرسة ونص الإعلان وعدد الأيام.", icon: "megaphone.fill")
-                MurshidCard {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Label("اسم المدرسة", systemImage: "building.2.fill").font(.subheadline.bold())
-                        TextField("مثال: مدارس الأوائل", text: $schoolName)
-                            .padding(12).background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 13))
-                        Label("الإعلان الكامل", systemImage: "text.alignright").font(.subheadline.bold())
-                        TextEditor(text: $adText)
-                            .frame(minHeight: 150)
-                            .padding(10)
-                            .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 13))
-                        Stepper(value: $days, in: 1...90) {
-                            HStack { Label("مدة الإعلان", systemImage: "calendar"); Spacer(); Text("\(days) يوم").bold() }
-                        }
-                    }
-                }
-                if !message.isEmpty { V3InlineMessage(text: message, icon: isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill", tone: isError ? .warning : .success) }
-                Button(action: submit) {
-                    HStack { if loading { ProgressView().tint(.white) }; Image(systemName: "paperplane.fill"); Text(loading ? "جاري الإرسال…" : "إرسال الطلب إلى الإدارة") }
-                }
-                .buttonStyle(PrimaryButtonStyle())
-                .disabled(loading)
-            }.padding(16).padding(.bottom, 30)
-        }
-        .background(Color.murshidBackground.ignoresSafeArea())
-        .navigationTitle("طلب إعلان مدرسة")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func submit() {
-        let school = schoolName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let text = adText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard school.count >= 3 else { message = "اكتب اسم المدرسة."; isError = true; haptic(.error); return }
-        guard text.count >= 10 else { message = "اكتب نص الإعلان الكامل."; isError = true; haptic(.error); return }
-        loading = true; message = ""; isError = false
-        let internalMessage = """
-        طلب إعلان مدرسة — تطبيق iOS
-        اسم المدرسة: \(school)
-        الإعلان الكامل:
-        \(text)
-        عدد الأيام: \(days)
-        الطالب المرسل: \(app.user?.name ?? "طالب")
-        """
-        Task {
-            do {
-                _ = try await APIClient.shared.request("mobile/support.php", method: "POST", body: ["csrf": app.csrf, "message": internalMessage])
-                await MainActor.run { loading = false; message = "تم إرسال طلب الإعلان إلى الإدارة بنجاح."; isError = false; haptic(); adText = "" }
-            } catch { await MainActor.run { loading = false; message = error.localizedDescription; isError = true; haptic(.error) } }
         }
     }
 }
