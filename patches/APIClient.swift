@@ -94,7 +94,7 @@ final class AppSession: ObservableObject {
 final class APIClient {
     static let shared = APIClient()
     let baseURL = URL(string: "https://www.mur-iq.com")!
-    private let session: URLSession
+    let session: URLSession
 
     private init() {
         let config = URLSessionConfiguration.default
