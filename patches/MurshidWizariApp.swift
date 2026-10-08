@@ -23,8 +23,9 @@ struct MurshidWizariApp: App {
                     .opacity(showAcademicWelcome ? 0 : 1)
 
                 if showAcademicWelcome {
-                    AcademicWelcomeView()
-                        .transition(.opacity)
+                    V45WelcomeView()
+                        .environmentObject(app)
+                        .transition(.opacity.combined(with: .scale(scale: 1.03)))
                         .zIndex(20)
                 }
 
@@ -36,7 +37,7 @@ struct MurshidWizariApp: App {
             }
             .task {
                 async let restore: Void = restoreSession()
-                try? await Task.sleep(nanoseconds: 1_250_000_000)
+                try? await Task.sleep(nanoseconds: 2_200_000_000)
                 await restore
                 withAnimation(.easeOut(duration: 0.28)) { showAcademicWelcome = false }
             }
