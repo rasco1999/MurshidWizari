@@ -2350,7 +2350,7 @@ struct V3SuccessView: View {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 NavigationLink(destination: ReviewView()) { V3ToolCard(title: "المراجعة الذكية", subtitle: "آخر الأخطاء", icon: "brain.head.profile") }
                 NavigationLink(destination: StudyPlanView()) { V3ToolCard(title: "خطة الدراسة", subtitle: "هدف يومي", icon: "calendar") }
-                NavigationLink(destination: AchievementsView()) { V3ToolCard(title: "الإنجازات", subtitle: "XP والمستوى", icon: "medal.fill") }
+                NavigationLink(destination: AchievementsView()) { V3ToolCard(title: "الإنجازات", subtitle: "النقاط والمستوى", icon: "medal.fill") }
                 NavigationLink(destination: V3ContestView()) { V3ToolCard(title: "تحدي المليون", subtitle: "المتصدرون", icon: "trophy.fill") }
             }
             .buttonStyle(.plain)
