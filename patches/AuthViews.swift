@@ -1980,7 +1980,7 @@ struct V3HomeView: View {
                 NavigationLink(destination: V3ContestView()) {
                     V3ToolCard(title: "تحدي المليون", subtitle: "ترتيب ونقاط", icon: "trophy.fill")
                 }
-                NavigationLink(destination: StoriesView()) {
+                NavigationLink(destination: V43StoriesView()) {
                     V3ToolCard(title: "غيّر جو", subtitle: "استراحة قصيرة", icon: "sparkles")
                 }
             }
@@ -2847,11 +2847,25 @@ struct V3ExamView: View {
             } else if !error.isEmpty && questions.isEmpty {
                 ErrorStateView(message: error, retry: { Task { await load() } })
             } else if questions.isEmpty {
-                EmptyStateView(
-                    systemImage: "doc.questionmark",
-                    title: "لا توجد أسئلة متاحة",
-                    message: app.subscribed ? "لا توجد أسئلة منشورة في هذا الموضوع حاليًا." : "قد تكون استهلكت رصيدك المجاني. يمكنك الاشتراك لفتح بقية الأسئلة."
-                )
+                VStack(spacing: 14) {
+                    EmptyStateView(
+                        systemImage: "doc.questionmark",
+                        title: app.freeRemaining == 0 && !app.subscribed ? "انتهت الأسئلة المجانية" : "لا توجد أسئلة متاحة",
+                        message: app.freeRemaining == 0 && !app.subscribed
+                            ? "لقد استخدمت \(app.freeLimit) سؤالاً مجانياً. اختر اشتراكاً لتكمل اختباراتك."
+                            : "لا توجد أسئلة منشورة في هذا الموضوع حاليًا."
+                    )
+                    if !app.subscribed {
+                        Button { showSubscription = true } label: {
+                            Label("اشتراك", systemImage: "crown.fill")
+                                .font(.title3.bold())
+                                .frame(maxWidth: .infinity).frame(height: 54)
+                                .foregroundStyle(Color.murshidNavy)
+                                .background(Color.murshidGold, in: RoundedRectangle(cornerRadius: 14))
+                        }
+                        .padding(.horizontal, 22)
+                    }
+                }
             } else if showResult {
                 V3ExamResultView(
                     topic: topic,
@@ -3009,7 +3023,8 @@ struct V3ExamView: View {
                     Spacer()
                     if !app.subscribed {
                         Button { showSubscription = true } label: {
-                            Label("متبقي \(app.freeRemaining ?? 0)", systemImage: "gift.fill")
+                            Label(app.freeRemaining == 0 ? "اشتراك" : "اشتراك · متبقي \(app.freeRemaining ?? 0)", systemImage: "crown.fill")
+                                .fontWeight(.bold)
                         }
                         .foregroundStyle(Color.murshidGold)
                     } else {
@@ -3872,7 +3887,7 @@ struct V3AccountView: View {
                         V3AccountRowLabel(title: "خدمة العملاء", subtitle: "محادثة مباشرة مع الدعم", icon: "message.fill")
                     }
                     Divider().padding(.leading, 48)
-                    NavigationLink(destination: StoriesView()) {
+                    NavigationLink(destination: V43StoriesView()) {
                         V3AccountRowLabel(title: "غيّر جو", subtitle: "رسائل وقصص قصيرة", icon: "sparkles")
                     }
                 }
