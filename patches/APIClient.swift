@@ -129,9 +129,14 @@ final class APIClient {
 
         var req = URLRequest(url: url)
         req.httpMethod = method
-        req.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let body { req.httpBody = try JSONSerialization.data(withJSONObject: body, options: []) }
+        if let body {
+            req.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+            // Mirror the working website AJAX login request. Some WAF rules treat
+            // native JSON POSTs without XMLHttpRequest differently from the web form.
+            req.setValue("XMLHttpRequest", forHTTPHeaderField: "X-Requested-With")
+            req.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+        }
         // Never let a stale login/bootstrap response replace an active session.
         if path == "api/login.php" || path == "mobile/bootstrap.php" {
             req.cachePolicy = .reloadIgnoringLocalCacheData
@@ -152,6 +157,8 @@ final class APIClient {
                     let redirectedPath = http.url?.path ?? ""
                     if redirectedPath != url.path && !redirectedPath.isEmpty {
                         message = "لم يُكمل الخادم \(endpoint): أعاد التوجيه إلى \(redirectedPath) بدل استجابة التطبيق (HTTP \(http.statusCode)). تحقّق من توجيه الموقع وحمايته."
+                    } else if http.statusCode == 409 && path == "api/login.php" {
+                        message = "هذا الحساب مفتوح حالياً في جلسة أخرى (HTTP 409). سجّل الخروج من Safari أو الجهاز الآخر ثم جرّب مجدداً."
                     } else if http.statusCode == 403 || http.statusCode == 429 {
                         message = "حماية الاستضافة منعت \(endpoint) (HTTP \(http.statusCode)). هذا ليس خطأ كلمة المرور. راجع سجل WAF/ModSecurity."
                     } else if http.statusCode >= 500 {
