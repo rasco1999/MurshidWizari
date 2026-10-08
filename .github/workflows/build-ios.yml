@@ -404,7 +404,7 @@ jobs:
           grep -Fq 'V43AvatarCache.url' MurshidWizari/V31Features.swift
           grep -Fq 'V43AvatarCache.save' MurshidWizari/V31Features.swift
           grep -Fq 'V44SchoolAdPopupModifier' MurshidWizari/V31Features.swift
-          grep -Fq 'V44PredictionsView' MurshidWizari/AuthViews.swift
+          grep -Fq 'V44PredictionsView' MurshidWizari/V31Features.swift
           grep -Fq 'V45ContestInstructionsLink()' MurshidWizari/AuthViews.swift
           grep -Fq 'V45WelcomeView()' MurshidWizari/MurshidWizariApp.swift
           grep -Fq 'replayWelcome() async' MurshidWizari/MurshidWizariApp.swift
