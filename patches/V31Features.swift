@@ -725,26 +725,36 @@ struct V31AccountView: View {
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 
+    // Show the user's latest uploaded picture immediately and preserve a local fallback.
     @ViewBuilder private var avatarView: some View {
-        if let preview = avatarPreview {
-            Image(uiImage: preview).resizable().scaledToFill().frame(width: 78, height: 78).clipShape(Circle()).overlay(Circle().stroke(.white.opacity(0.34), lineWidth: 2))
-        } else {
-            let raw = jString(account["avatar_url"])
-            let revision = jString(account["avatar_revision"], default: "0")
-            let joined = raw.isEmpty ? raw : raw + (raw.contains("?") ? "&" : "?") + "ios_rev=" + revision
-            if let url = URL(string: joined), !raw.isEmpty {
+        let raw = jString(account["avatar_url"])
+        let revision = jString(account["avatar_revision"], default: "0")
+        let url = V43AvatarCache.url(raw, revision: revision)
+        let fallback = jString(account["avatar_status"]) == "approved"
+            ? V43AvatarCache.image(userID: app.user?.id ?? 0) : nil
+        ZStack {
+            if let preview = avatarPreview {
+                Image(uiImage: preview).resizable().scaledToFill()
+            } else if let url {
                 AsyncImage(url: url) { phase in
-                    if case let .success(image) = phase { image.resizable().scaledToFill() }
-                    else { Image(systemName: "person.crop.circle.fill").resizable().foregroundStyle(.white.opacity(0.9)) }
+                    if case let .success(image) = phase {
+                        image.resizable().scaledToFill()
+                    } else if let fallback {
+                        Image(uiImage: fallback).resizable().scaledToFill()
+                    } else {
+                        Image(systemName: "person.crop.circle.fill").resizable().foregroundStyle(.white.opacity(0.9))
+                    }
                 }
-                .id(joined)
-                .frame(width: 78, height: 78)
-                .clipShape(Circle())
-                .overlay(Circle().stroke(.white.opacity(0.34), lineWidth: 2))
+                .id(url.absoluteString)
+            } else if let fallback {
+                Image(uiImage: fallback).resizable().scaledToFill()
             } else {
-                Image(systemName: "person.crop.circle.fill").resizable().frame(width: 78, height: 78).foregroundStyle(.white.opacity(0.92))
+                Image(systemName: "person.crop.circle.fill").resizable().foregroundStyle(.white.opacity(0.9))
             }
         }
+        .frame(width: 78, height: 78)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(.white.opacity(0.34), lineWidth: 2))
     }
 
     private var avatarStatusText: String {
