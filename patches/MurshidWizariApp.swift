@@ -31,7 +31,7 @@ struct MurshidWizariApp: App {
                 if showAcademicWelcome {
                     V45WelcomeView()
                         .environmentObject(app)
-                        .transition(.opacity.combined(with: .scale(scale: 1.03)))
+                        .transition(.opacity.combined(with: .scale(scale: 1.015)))
                         .zIndex(20)
                 }
 
@@ -45,10 +45,11 @@ struct MurshidWizariApp: App {
                 // Cold start: show the branded transition long enough to be noticed,
                 // while restoring authentication in parallel.
                 guard !completedInitialWelcome else { return }
-                async let restore: Void = restoreSession()
-                try? await Task.sleep(nanoseconds: 2_350_000_000)
-                await restore
-                withAnimation(.easeInOut(duration: 0.48)) {
+                // Restore the account independently: never make the splash longer
+                // than three seconds because of a slow network call.
+                Task { await restoreSession() }
+                try? await Task.sleep(nanoseconds: 2_700_000_000)
+                withAnimation(.easeInOut(duration: 0.30)) {
                     showAcademicWelcome = false
                 }
                 completedInitialWelcome = true
@@ -98,8 +99,8 @@ struct MurshidWizariApp: App {
             showAcademicWelcome = true
         }
         // Resume greeting is lightweight; it never waits for network access.
-        try? await Task.sleep(nanoseconds: 2_150_000_000)
-        withAnimation(.easeInOut(duration: 0.45)) {
+        try? await Task.sleep(nanoseconds: 2_700_000_000)
+        withAnimation(.easeInOut(duration: 0.30)) {
             showAcademicWelcome = false
         }
         welcomePlaybackInProgress = false
