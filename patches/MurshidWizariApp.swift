@@ -61,7 +61,7 @@ struct MurshidWizariApp: App {
                 case .active:
                     Task { @MainActor in
                         await device.didBecomeActive()
-                        if app.v3Authenticated { try? await APIClient.shared.heartbeat() }
+                        if app.v3Authenticated { Task { try? await APIClient.shared.heartbeat() } }
                         // A brief system interruption should not replay the greeting.
                         guard completedInitialWelcome,
                               let left = backgroundedAt else { return }
