@@ -38,6 +38,9 @@ struct V31HomeView: View {
     @State private var weekly: JSON = [:]
     @State private var loadingInsights = true
     @State private var error = ""
+    @State private var currentClock = Date()
+    @State private var homeAvatarURL: URL?
+    private let clockTicker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
@@ -88,8 +91,10 @@ struct V31HomeView: View {
                 .accessibilityLabel(isDarkAppearance ? "تفعيل الوضع الفاتح" : "تفعيل الوضع الداكن")
             }
         }
-        .task { await refreshAll() }
-        .refreshable { await refreshAll() }
+        .task { await refreshAll(); await loadHomeAvatar() }
+        .refreshable { await refreshAll(); await loadHomeAvatar() }
+        .onReceive(clockTicker) { currentClock = $0 }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("MurshidAvatarChanged"))) { _ in Task { await loadHomeAvatar() } }
         .modifier(V44SchoolAdPopupModifier())
     }
 
@@ -110,12 +115,23 @@ struct V31HomeView: View {
 
             VStack(alignment: .leading, spacing: 17) {
                 HStack(alignment: .center, spacing: 14) {
-                    Image(systemName: "graduationcap.fill")
-                        .font(.title2)
-                        .foregroundStyle(Color.murshidGold)
-                        .frame(width: 56, height: 56)
-                        .background(.white.opacity(0.13), in: RoundedRectangle(cornerRadius: 17))
-                        .overlay(RoundedRectangle(cornerRadius: 17).stroke(.white.opacity(0.2)))
+                    Group {
+                        if let homeAvatarURL {
+                            AsyncImage(url: homeAvatarURL) { phase in
+                                if case let .success(image) = phase { image.resizable().scaledToFill() }
+                                else { Image(systemName: "person.crop.circle.fill").resizable().scaledToFit().padding(9) }
+                            }
+                        } else if let cached = V43AvatarCache.image(userID: app.user?.id ?? 0) {
+                            Image(uiImage: cached).resizable().scaledToFill()
+                        } else {
+                            Image(systemName: "person.crop.circle.fill").resizable().scaledToFit().padding(9)
+                        }
+                    }
+                    .frame(width: 58, height: 58)
+                    .background(.white.opacity(0.13), in: Circle())
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(.white.opacity(0.3), lineWidth: 2))
+                    .foregroundStyle(.white)
                     VStack(alignment: .leading, spacing: 5) {
                         Text("أهلًا بعودتك ✨")
                             .font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.79))
@@ -135,6 +151,10 @@ struct V31HomeView: View {
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.89))
                     .fixedSize(horizontal: false, vertical: true)
+                Label(clockText, systemImage: "clock")
+                    .font(.system(.caption, design: .monospaced).weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.94))
+                    .environment(\.layoutDirection, .leftToRight)
 
                 HStack(spacing: 10) {
                     welcomeStat(
@@ -352,10 +372,7 @@ struct V31HomeView: View {
                     NavigationLink(destination: V40CustomExamBuilderView()) { V3ToolCard(title: "اختبار مخصص", subtitle: "عدد · نوع · مؤقت", icon: "slider.horizontal.3") }
                 }
                 if app.featureEnabled("daily_challenge") {
-                    NavigationLink(destination: V40DailyChallengeView()) { V3ToolCard(title: "تحدي اليوم", subtitle: "خمسة أسئلة سريعة", icon: "flame.fill") }
-                }
-                if app.featureEnabled("question_search") {
-                    NavigationLink(destination: V40QuestionSearchView()) { V3ToolCard(title: "ابحث عن سؤال", subtitle: "في بنك الأسئلة", icon: "magnifyingglass") }
+                    NavigationLink(destination: V40DailyChallengeView()) { V3ToolCard(title: "تحدي اليوم", subtitle: "سؤال صعب كل 24 ساعة · بلا نقاط", icon: "flame.fill") }
                 }
                 if app.featureEnabled("student_question_submit") {
                     NavigationLink(destination: V40StudentQuestionSubmitView()) { V3ToolCard(title: "اقترح سؤالًا", subtitle: "ساهم في البنك", icon: "plus.bubble.fill") }
@@ -365,7 +382,7 @@ struct V31HomeView: View {
                     NavigationLink(destination: V40AttemptHistoryView()) { V3ToolCard(title: "سجل الاختبارات", subtitle: "نتائجك السابقة", icon: "clock.arrow.circlepath") }
                 }
                 NavigationLink(destination: StudyPlanView()) { V3ToolCard(title: "خطة الدراسة", subtitle: "هدف يومي", icon: "calendar") }
-                NavigationLink(destination: AchievementsView()) { V3ToolCard(title: "الإنجازات", subtitle: "XP والمستوى", icon: "medal.fill") }
+                NavigationLink(destination: AchievementsView()) { V3ToolCard(title: "الإنجازات", subtitle: "النقاط والمستوى", icon: "medal.fill") }
                 NavigationLink(destination: V3FocusView()) { V3ToolCard(title: "جلسة تركيز", subtitle: "25 · 45 · 60 دقيقة", icon: "timer") }
                 NavigationLink(destination: V3ContestView()) { V3ToolCard(title: "تحدي المليون", subtitle: "ترتيب ونقاط", icon: "trophy.fill") }
                 NavigationLink(destination: V43StoriesView()) { V3ToolCard(title: "غيّر جو", subtitle: "استراحة قصيرة", icon: "sparkles") }
@@ -472,10 +489,24 @@ struct V31HomeView: View {
     }
 
     private var motivation: String {
-        let total = jInt(app.stats["total_answers"])
-        if app.accuracy >= 85 && total >= 10 { return "مستواك ممتاز. حافظ على إيقاعك وراجع الأخطاء القليلة." }
-        if total > 0 { return "كل إجابة اليوم تقرّبك أكثر من الدرجة التي تريدها." }
-        return "ابدأ بخطوة صغيرة اليوم، وسنبني تقدمك معك سؤالًا بعد سؤال."
+        let messages = ["الاستمرار اليوم يصنع تفوق الغد.", "كل خطوة صغيرة تقرّبك من حلمك.", "اجعل هذا اليوم فرصة جديدة للنجاح.", "ثق بقدرتك، وابدأ من السؤال الأول.", "لا تقارن تقدمك إلا بنفسك بالأمس.", "الاجتهاد المتكرر يصنع إنجازاً كبيراً.", "أنت أقرب إلى هدفك مما تتصور.", "بعض الصبر وكثير من العمل يصنع الفرق.", "مراجعتك اليوم ترفع ثقتك غداً.", "العلم طريقك إلى مستقبل تستحقه."]
+        let day = Calendar.current.ordinality(of: .day, in: .era, for: currentClock) ?? 0
+        return messages[abs(day) % messages.count]
+    }
+
+    private var clockText: String {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.calendar = Calendar(identifier: .gregorian)
+        fmt.timeZone = .current
+        fmt.dateFormat = "yyyy/MM/dd  HH:mm:ss"
+        return fmt.string(from: currentClock)
+    }
+
+    private func loadHomeAvatar() async {
+        guard let data = try? await APIClient.shared.request("mobile/account.php") else { return }
+        let url = V43AvatarCache.url(jString(data["avatar_url"]), revision: jString(data["avatar_revision"]))
+        await MainActor.run { homeAvatarURL = url }
     }
 
     private var suggestedTopic: (topic: Topic, subject: Subject, coverage: Int)? {
@@ -806,7 +837,6 @@ struct V31AccountView: View {
                 servicesSection
                 securitySection
                 logoutSection
-                appInfo
                 if !avatarMessage.isEmpty { V3InlineMessage(text: avatarMessage, icon: "person.crop.circle.badge.checkmark", tone: .success) }
                 if !faceIDMessage.isEmpty { V3InlineMessage(text: faceIDMessage, icon: "faceid", tone: .info) }
                 if !error.isEmpty { V3InlineMessage(text: error, icon: "exclamationmark.triangle.fill", tone: .warning) }
@@ -915,7 +945,7 @@ struct V31AccountView: View {
                     Image(systemName: app.subscribed ? "checkmark.seal.fill" : "arrow.up.forward.app.fill").font(.title2).foregroundStyle(app.subscribed ? .green : Color.murshidBlue)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(app.subscribed ? "الاشتراك" : "اشتراك").font(.headline.bold()).foregroundStyle(app.subscribed ? Color.primary : Color.murshidBlue)
-                        Text(app.subscribed ? "اشتراكك مفعّل حاليًا." : "الدفع خارجي ولا نطلب رقمًا إضافيًا من هنا.").font(.caption).foregroundStyle(.secondary)
+                        Text(app.subscribed ? "الأيام المتبقية: \(app.subscriptionDaysRemaining.map(String.init) ?? "—") يوم" : "الدفع خارجي ولا نطلب رقمًا إضافيًا من هنا.").font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer(); Image(systemName: "chevron.left").foregroundStyle(.secondary)
                 }
@@ -938,7 +968,7 @@ struct V31AccountView: View {
                     Divider().padding(.leading, 48)
                     NavigationLink(destination: SupportView()) { V31AccountRowLabel(title: "خدمة العملاء", subtitle: "محادثة مباشرة مع الدعم", icon: "message.fill") }
                     Divider().padding(.leading, 48)
-                    NavigationLink(destination: V43StoriesView()) { V31AccountRowLabel(title: "غيّر جو", subtitle: "رسائل وقصص قصيرة", icon: "sparkles") }
+
                 }
             }
         }
@@ -1083,6 +1113,7 @@ struct V31AccountView: View {
                 uploadingAvatar = false
                 avatarItem = nil
                 avatarMessage = "تم تغيير صورة الحساب. الصورة ظاهرة وجاري تحديث رابطها."
+                NotificationCenter.default.post(name: Notification.Name("MurshidAvatarChanged"), object: nil)
                 haptic(.success)
             }
             await load()
