@@ -731,17 +731,17 @@ struct V31SchoolAdsView: View {
                 loading = false
                 error = ""
             }
-        } catch {
+        } catch let fetchError {
             await MainActor.run {
                 loading = false
-                error = "تعذر تحديث الإعلانات: \(error.localizedDescription)"
+                error = "تعذر تحديث الإعلانات: \(fetchError.localizedDescription)"
             }
         }
     }
 }
 
 private struct V31SchoolAdTickerWidth: PreferenceKey {
-    static var defaultValue: CGFloat = 0
+    static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())
     }
