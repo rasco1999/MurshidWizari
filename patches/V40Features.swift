@@ -1359,8 +1359,8 @@ struct V40DailyChallengeView: View {
             LazyVStack(spacing: 14) {
                 V3IntroCard(
                     eyebrow: "تحدي اليوم",
-                    title: done ? "أكملت تحدي اليوم" : "خمس دقائق تصنع فرقًا",
-                    text: done ? "عد غدًا لتحدٍ جديد." : "مجموعة قصيرة من أسئلة صفك. النتيجة تظهر بعد الإرسال مرة واحدة.",
+                    title: done ? "أكملت تحدي اليوم" : "سؤال اليوم الصعب",
+                    text: done ? "عد بعد 24 ساعة لتحدٍ جديد." : "سؤال صعب واحد من منهج صفك، دون استهلاك الرصيد ودون احتساب نقاط.",
                     icon: "flame.fill"
                 )
 
@@ -1374,14 +1374,14 @@ struct V40DailyChallengeView: View {
                         VStack(spacing: 12) {
                             Image(systemName: "trophy.fill").font(.system(size: 42)).foregroundStyle(Color.murshidGold)
                             Text("\(score) / \(total)").font(.largeTitle.bold().monospacedDigit())
-                            if reward > 0 { Text("+\(reward) XP").font(.headline).foregroundStyle(.green) }
+                            Text("النتيجة لا تضيف نقاطاً إلى حسابك").font(.caption).foregroundStyle(.secondary)
                         }.frame(maxWidth: .infinity)
                     }
                 } else {
                     ForEach(Array(questions.enumerated()), id: \.element.id) { index, q in
                         MurshidCard {
                             VStack(alignment: .leading, spacing: 12) {
-                                Text("سؤال \(index + 1)").font(.caption.bold()).foregroundStyle(Color.murshidBlue)
+                                Text("سؤال اليوم").font(.caption.bold()).foregroundStyle(Color.murshidBlue)
                                 Text(murshidQuestionDisplayText(q.text)).font(.headline).fixedSize(horizontal: false, vertical: true)
                                 if q.type == "true_false" && q.options.isEmpty {
                                     choices(q, ["صح", "خطأ"])
@@ -1487,7 +1487,7 @@ struct V40DailyChallengeView: View {
                 done = jBool(d["done"])
                 score = jInt(d["score"])
                 total = jInt(d["total"])
-                if jBool(d["quota_blocked"]) { message = "انتهى الرصيد المجاني أثناء التحدي." }
+                if jBool(d["quota_blocked"]) { message = "تعذّر تسجيل الإجابة؛ جرّب مجدداً." }
                 haptic(.success)
             }
         } catch {
