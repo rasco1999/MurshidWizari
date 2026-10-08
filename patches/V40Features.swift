@@ -1359,8 +1359,8 @@ struct V40DailyChallengeView: View {
             LazyVStack(spacing: 14) {
                 V3IntroCard(
                     eyebrow: "تحدي اليوم",
-                    title: done ? "أكملت تحدي اليوم" : "خمس دقائق تصنع فرقًا",
-                    text: done ? "عد غدًا لتحدٍ جديد." : "مجموعة قصيرة من أسئلة صفك. النتيجة تظهر بعد الإرسال مرة واحدة.",
+                    title: done ? "أكملت تحدي اليوم" : "سؤال صعب كل يوم",
+                    text: done ? "انتظر حتى منتصف الليل بتوقيت بغداد لتحدٍ جديد." : "سؤال صعب واحد كل يوم، بلا خصم من المجاني وبلا زيادة في النقاط.",
                     icon: "flame.fill"
                 )
 
@@ -1374,7 +1374,7 @@ struct V40DailyChallengeView: View {
                         VStack(spacing: 12) {
                             Image(systemName: "trophy.fill").font(.system(size: 42)).foregroundStyle(Color.murshidGold)
                             Text("\(score) / \(total)").font(.largeTitle.bold().monospacedDigit())
-                            if reward > 0 { Text("+\(reward) XP").font(.headline).foregroundStyle(.green) }
+                            Text("تحدٍ دون نقاط").font(.caption).foregroundStyle(.secondary)
                         }.frame(maxWidth: .infinity)
                     }
                 } else {

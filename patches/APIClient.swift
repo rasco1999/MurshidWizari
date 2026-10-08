@@ -64,7 +64,7 @@ final class AppSession: ObservableObject {
     func applyBootstrap(_ json: JSON) {
         let u = json["user"] as? JSON ?? [:]
         user = UserSummary(id: jInt(u["id"]), name: jString(u["name"]), grade: jString(u["grade"]), gradeID: jInt(u["grade_id"]))
-        subjects = jArray(json["subjects"]).map(Subject.init)
+        subjects = jArray(json["subjects"]).filter { !jString($0["name"]).localizedStandardContains("فرن") && !jString($0["name"]).localizedCaseInsensitiveContains("french") }.map(Subject.init)
         plans = jArray(json["plans"]).map(SubscriptionPlan.init)
         subscribed = jBool(json["subscribed"])
         freeLimit = jInt(json["free_limit"], default: 15)
@@ -101,7 +101,7 @@ final class APIClient {
         config.httpCookieStorage = .shared
         config.httpShouldSetCookies = true
         config.waitsForConnectivity = false
-        config.timeoutIntervalForRequest = 12
+        config.timeoutIntervalForRequest = 25
         config.timeoutIntervalForResource = 25
         config.requestCachePolicy = .useProtocolCachePolicy
         config.urlCache = URLCache(memoryCapacity: 24 * 1024 * 1024, diskCapacity: 96 * 1024 * 1024, diskPath: "MurshidHTTP")
@@ -150,7 +150,7 @@ final class APIClient {
                 }
                 throw APIError(message: message, status: http.statusCode, paymentRequired: false)
             }
-            if http.statusCode == 401 {
+            if http.statusCode == 401 && path != "api/login.php" {
                 AppSession.shared.reset(expired: true)
                 throw APIError(message: "انتهت الجلسة. سجّل الدخول مجددًا.", status: 401, paymentRequired: false)
             }

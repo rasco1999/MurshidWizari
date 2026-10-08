@@ -37,6 +37,7 @@ struct V31HomeView: View {
     @State private var insights: JSON = [:]
     @State private var weekly: JSON = [:]
     @State private var loadingInsights = true
+    @State private var homeAccount: JSON = [:]
     @State private var error = ""
 
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
@@ -88,8 +89,8 @@ struct V31HomeView: View {
                 .accessibilityLabel(isDarkAppearance ? "تفعيل الوضع الفاتح" : "تفعيل الوضع الداكن")
             }
         }
-        .task { await refreshAll() }
-        .refreshable { await refreshAll() }
+        .task { await refreshAll(); await refreshHomeAvatar() }
+        .refreshable { await refreshAll(); await refreshHomeAvatar() }
         .modifier(V44SchoolAdPopupModifier())
     }
 
@@ -110,12 +111,10 @@ struct V31HomeView: View {
 
             VStack(alignment: .leading, spacing: 17) {
                 HStack(alignment: .center, spacing: 14) {
-                    Image(systemName: "graduationcap.fill")
-                        .font(.title2)
-                        .foregroundStyle(Color.murshidGold)
+                    homeAvatar
                         .frame(width: 56, height: 56)
-                        .background(.white.opacity(0.13), in: RoundedRectangle(cornerRadius: 17))
-                        .overlay(RoundedRectangle(cornerRadius: 17).stroke(.white.opacity(0.2)))
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(.white.opacity(0.45), lineWidth: 1.5))
                     VStack(alignment: .leading, spacing: 5) {
                         Text("أهلًا بعودتك ✨")
                             .font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.79))
@@ -131,10 +130,19 @@ struct V31HomeView: View {
                     Spacer(minLength: 0)
                 }
 
-                Text(motivation)
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.89))
-                    .fixedSize(horizontal: false, vertical: true)
+                TimelineView(.periodic(from: .now, by: 60)) { timeline in
+                    Text(dailyMotivation(at: timeline.date))
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.89))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                    Text(murshidBaghdadClock(timeline.date))
+                        .font(.caption.bold().monospacedDigit())
+                        .foregroundStyle(Color.murshidGold)
+                        .environment(\.layoutDirection, .leftToRight)
+                        .accessibilityLabel("تاريخ ووقت بغداد")
+                }
 
                 HStack(spacing: 10) {
                     welcomeStat(
@@ -352,10 +360,7 @@ struct V31HomeView: View {
                     NavigationLink(destination: V40CustomExamBuilderView()) { V3ToolCard(title: "اختبار مخصص", subtitle: "عدد · نوع · مؤقت", icon: "slider.horizontal.3") }
                 }
                 if app.featureEnabled("daily_challenge") {
-                    NavigationLink(destination: V40DailyChallengeView()) { V3ToolCard(title: "تحدي اليوم", subtitle: "خمسة أسئلة سريعة", icon: "flame.fill") }
-                }
-                if app.featureEnabled("question_search") {
-                    NavigationLink(destination: V40QuestionSearchView()) { V3ToolCard(title: "ابحث عن سؤال", subtitle: "في بنك الأسئلة", icon: "magnifyingglass") }
+                    NavigationLink(destination: V40DailyChallengeView()) { V3ToolCard(title: "تحدي اليوم", subtitle: "سؤال صعب بلا نقاط، يومياً", icon: "flame.fill") }
                 }
                 if app.featureEnabled("student_question_submit") {
                     NavigationLink(destination: V40StudentQuestionSubmitView()) { V3ToolCard(title: "اقترح سؤالًا", subtitle: "ساهم في البنك", icon: "plus.bubble.fill") }
@@ -365,7 +370,7 @@ struct V31HomeView: View {
                     NavigationLink(destination: V40AttemptHistoryView()) { V3ToolCard(title: "سجل الاختبارات", subtitle: "نتائجك السابقة", icon: "clock.arrow.circlepath") }
                 }
                 NavigationLink(destination: StudyPlanView()) { V3ToolCard(title: "خطة الدراسة", subtitle: "هدف يومي", icon: "calendar") }
-                NavigationLink(destination: AchievementsView()) { V3ToolCard(title: "الإنجازات", subtitle: "XP والمستوى", icon: "medal.fill") }
+                NavigationLink(destination: AchievementsView()) { V3ToolCard(title: "الإنجازات", subtitle: "النقاط والمستوى", icon: "medal.fill") }
                 NavigationLink(destination: V3FocusView()) { V3ToolCard(title: "جلسة تركيز", subtitle: "25 · 45 · 60 دقيقة", icon: "timer") }
                 NavigationLink(destination: V3ContestView()) { V3ToolCard(title: "تحدي المليون", subtitle: "ترتيب ونقاط", icon: "trophy.fill") }
                 NavigationLink(destination: V43StoriesView()) { V3ToolCard(title: "غيّر جو", subtitle: "استراحة قصيرة", icon: "sparkles") }
@@ -471,11 +476,55 @@ struct V31HomeView: View {
         app.user?.name.split(separator: " ").first.map(String.init) ?? "طالبنا"
     }
 
-    private var motivation: String {
-        let total = jInt(app.stats["total_answers"])
-        if app.accuracy >= 85 && total >= 10 { return "مستواك ممتاز. حافظ على إيقاعك وراجع الأخطاء القليلة." }
-        if total > 0 { return "كل إجابة اليوم تقرّبك أكثر من الدرجة التي تريدها." }
-        return "ابدأ بخطوة صغيرة اليوم، وسنبني تقدمك معك سؤالًا بعد سؤال."
+    private func dailyMotivation(at date: Date) -> String {
+        let messages = [
+            "النجاح يبدأ بخطوة، حافظ على استمراريتك.",
+            "سؤال صعب اليوم يجعل الامتحان أسهل غداً.",
+            "كل مراجعة تمنحك ثقة أكبر.",
+            "اجعل هدفك الفهم قبل الحفظ.",
+            "ثباتك في الدراسة أقوى من الحماس المؤقت.",
+            "تركيزك اليوم استثمار في نتيجتك.",
+            "راجع أخطاءك؛ ففيها فرصة لتتقدم.",
+            "جهدك الصغير المتكرر يصنع فرقاً كبيراً.",
+            "لا تقارن سرعتك بالآخرين، تقدّم بطريقتك.",
+            "ابدأ الآن ولو بسؤال واحد.",
+            "كل موضوع تتقنه يقربك من طموحك.",
+            "استراحاتك المنظمة تزيد قوة تركيزك.",
+            "استمر في التعلم، فالنتائج تأتي بالتراكم.",
+            "أنت قادر على التحسن كل يوم."
+        ]
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Baghdad") ?? .current
+        return messages[((calendar.ordinality(of: .day, in: .era, for: date) ?? 1) - 1) % messages.count]
+    }
+
+    private func murshidBaghdadClock(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "Asia/Baghdad")
+        f.dateFormat = "yyyy/MM/dd  HH:mm:ss"
+        return f.string(from: date)
+    }
+
+    @ViewBuilder private var homeAvatar: some View {
+        let avatarURL = V43AvatarCache.url(jString(homeAccount["avatar_url"]), revision: jString(homeAccount["avatar_revision"]))
+        let cached = V43AvatarCache.image(userID: app.user?.id ?? 0)
+        if let avatarURL {
+            AsyncImage(url: avatarURL) { phase in
+                if case let .success(img) = phase { img.resizable().scaledToFill() }
+                else if let cached { Image(uiImage: cached).resizable().scaledToFill() }
+                else { Image(systemName: "person.crop.circle.fill").resizable().foregroundStyle(.white) }
+            }
+        } else if let cached {
+            Image(uiImage: cached).resizable().scaledToFill()
+        } else {
+            Image(systemName: "person.crop.circle.fill").resizable().foregroundStyle(.white)
+        }
+    }
+
+    private func refreshHomeAvatar() async {
+        guard let response = try? await APIClient.shared.request("mobile/account.php") else { return }
+        homeAccount = response
     }
 
     private var suggestedTopic: (topic: Topic, subject: Subject, coverage: Int)? {
@@ -806,7 +855,6 @@ struct V31AccountView: View {
                 servicesSection
                 securitySection
                 logoutSection
-                appInfo
                 if !avatarMessage.isEmpty { V3InlineMessage(text: avatarMessage, icon: "person.crop.circle.badge.checkmark", tone: .success) }
                 if !faceIDMessage.isEmpty { V3InlineMessage(text: faceIDMessage, icon: "faceid", tone: .info) }
                 if !error.isEmpty { V3InlineMessage(text: error, icon: "exclamationmark.triangle.fill", tone: .warning) }
@@ -908,6 +956,12 @@ struct V31AccountView: View {
         }
     }
 
+    private var subscriptionRemainingText: String {
+        guard app.subscribed else { return "" }
+        guard let days = account["subscription_days_remaining"], !(days is NSNull) else { return "اشتراكك فعّال حاليًا." }
+        return "المتبقي على انتهاء الاشتراك: \(max(0,jInt(days))) يوم"
+    }
+
     private var subscriptionCard: some View {
         NavigationLink(destination: V31SubscriptionView()) {
             MurshidCard {
@@ -915,7 +969,7 @@ struct V31AccountView: View {
                     Image(systemName: app.subscribed ? "checkmark.seal.fill" : "arrow.up.forward.app.fill").font(.title2).foregroundStyle(app.subscribed ? .green : Color.murshidBlue)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(app.subscribed ? "الاشتراك" : "اشتراك").font(.headline.bold()).foregroundStyle(app.subscribed ? Color.primary : Color.murshidBlue)
-                        Text(app.subscribed ? "اشتراكك مفعّل حاليًا." : "الدفع خارجي ولا نطلب رقمًا إضافيًا من هنا.").font(.caption).foregroundStyle(.secondary)
+                        Text(app.subscribed ? subscriptionRemainingText : "الدفع خارجي ولا نطلب رقمًا إضافيًا من هنا.").font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer(); Image(systemName: "chevron.left").foregroundStyle(.secondary)
                 }
@@ -937,8 +991,7 @@ struct V31AccountView: View {
                     NavigationLink(destination: NotificationsView()) { V31AccountRowLabel(title: "الإشعارات", subtitle: app.unreadNotifications > 0 ? "لديك \(app.unreadNotifications) غير مقروء" : "لا توجد إشعارات جديدة", icon: "bell.fill") }
                     Divider().padding(.leading, 48)
                     NavigationLink(destination: SupportView()) { V31AccountRowLabel(title: "خدمة العملاء", subtitle: "محادثة مباشرة مع الدعم", icon: "message.fill") }
-                    Divider().padding(.leading, 48)
-                    NavigationLink(destination: V43StoriesView()) { V31AccountRowLabel(title: "غيّر جو", subtitle: "رسائل وقصص قصيرة", icon: "sparkles") }
+
                 }
             }
         }

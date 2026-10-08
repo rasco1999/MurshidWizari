@@ -1725,9 +1725,11 @@ struct MainV3TabView: View {
                 .tabItem { Label("النجاح", systemImage: "chart.line.uptrend.xyaxis") }
                 .tag(2)
 
-            NavigationStack { V44PredictionsView() }
-                .tabItem { Label("المرشحات", systemImage: "scope") }
-                .tag(3)
+            if app.subscribed {
+                NavigationStack { V44PredictionsView() }
+                    .tabItem { Label("المرشحات", systemImage: "scope") }
+                    .tag(3)
+            }
 
             NavigationStack { V3AccountView() }
                 .tabItem { Label("حسابي", systemImage: "person.crop.circle.fill") }
@@ -1742,7 +1744,7 @@ struct MainV3TabView: View {
             switch (url.host ?? url.path.replacingOccurrences(of: "/", with: "")).lowercased() {
             case "tests", "exam", "subjects": selection = 1
             case "success", "progress": selection = 2
-            case "predictions", "filters": selection = 3
+            case "predictions", "filters": selection = app.subscribed ? 3 : 4
             case "account", "subscription": selection = 4
             default: selection = 0
             }
