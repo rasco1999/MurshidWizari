@@ -375,7 +375,7 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string المرشد الوزاري' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleName منصة المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleName string منصة المرشد الوزاري' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 4.3.0' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 420' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 430' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Delete :UIDeviceFamily' "$APP/Info.plist" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily array' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily:0 integer 1' "$APP/Info.plist"
