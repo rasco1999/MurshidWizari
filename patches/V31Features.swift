@@ -46,8 +46,8 @@ struct V31HomeView: View {
             LazyVStack(spacing: 16) {
                 welcomeHeader
                 if !device.isOnline { offlineBanner }
-                V31WebsiteHeroSlider()
                 subscriptionStrip
+                V31WebsiteHeroSlider()
                 releaseUpdateStrip
                 performanceStrip
                 subjectsSection
@@ -117,35 +117,58 @@ struct V31HomeView: View {
         V3InlineMessage(text: "أنت غير متصل الآن. سنعرض البيانات المحفوظة متى كانت متاحة.", icon: "wifi.slash", tone: .warning)
     }
 
+    // Visible first-screen call to action; entitlement remains enforced by the server.
     @ViewBuilder
     private var subscriptionStrip: some View {
         if app.subscribed {
             MurshidCard {
-                HStack(spacing: 12) {
-                    Image(systemName: "checkmark.seal.fill").foregroundStyle(.green).font(.title2)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("كل الأسئلة مفتوحة").font(.headline)
-                        Text("اشتراكك فعّال — واصل التقدم بدون حدود الرصيد المجاني.").font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                }
+                Label("اشتراكك فعّال · جميع الأسئلة متاحة", systemImage: "checkmark.seal.fill")
+                    .font(.headline).foregroundStyle(.green)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         } else {
             NavigationLink(destination: V31SubscriptionView()) {
-                MurshidCard {
-                    HStack(spacing: 13) {
-                        Image(systemName: "gift.fill")
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: app.freeRemaining == 0 ? "exclamationmark.circle.fill" : "crown.fill")
+                            .font(.title2)
                             .foregroundStyle(Color.murshidGold)
-                            .frame(width: 46, height: 46)
-                            .background(Color.murshidGold.opacity(0.13), in: RoundedRectangle(cornerRadius: 13))
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("رصيد التجربة المجانية").font(.headline).foregroundStyle(.primary)
-                            Text("متبقي \(app.freeRemaining ?? 0) من \(app.freeLimit) سؤال").font(.caption).foregroundStyle(.secondary)
+                            .frame(width: 42, height: 42)
+                            .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(app.freeRemaining == 0 ? "انتهت الأسئلة المجانية" : "افتح جميع الأسئلة الوزارية")
+                                .font(.headline).foregroundStyle(.white)
+                            Text(app.freeRemaining == 0
+                                 ? "للمتابعة اختر الباقة المناسبة من صفحة الاشتراك."
+                                 : "المتبقي مجاناً: \(max(0, app.freeRemaining ?? max(0, app.freeLimit - app.freeUsed))) من \(app.freeLimit) سؤال")
+                                .font(.subheadline).foregroundStyle(.white.opacity(0.82))
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        Spacer(); Image(systemName: "chevron.left").foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
                     }
+                    HStack(spacing: 9) {
+                        Image(systemName: "creditcard.fill")
+                        Text("اشتراك").font(.title3.bold())
+                        Spacer()
+                        Image(systemName: "arrow.left").font(.headline.bold())
+                    }
+                    .foregroundStyle(Color.murshidNavy)
+                    .padding(.horizontal, 18)
+                    .frame(height: 54)
+                    .background(Color.murshidGold, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
                 }
-            }.buttonStyle(.plain)
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    LinearGradient(colors: [.murshidNavy, .murshidBlue],
+                                   startPoint: .topTrailing, endPoint: .bottomLeading),
+                    in: RoundedRectangle(cornerRadius: 21, style: .continuous)
+                )
+                .overlay(RoundedRectangle(cornerRadius: 21).stroke(Color.murshidGold.opacity(0.55), lineWidth: 1))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("اشتراك، افتح جميع الأسئلة الوزارية")
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -153,22 +176,34 @@ struct V31HomeView: View {
     private var releaseUpdateStrip: some View {
         let serverVersion = jString(app.releaseInfo["version"])
         let download = jString(app.releaseInfo["download_url"])
-        if isVersion(serverVersion, newerThan: "4.1.0") {
+        let installedVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "4.2.0"
+        let newer = isVersion(serverVersion, newerThan: installedVersion)
+        if newer {
             MurshidCard {
-                HStack(spacing: 12) {
-                    Image(systemName: "arrow.down.app.fill")
-                        .font(.title2)
-                        .foregroundStyle(Color.murshidBlue)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("يتوفر تحديث \(serverVersion)").font(.headline)
-                        Text(jString(app.releaseInfo["notes"], default: "يتوفر إصدار أحدث من تطبيق المرشد الوزاري."))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(3)
-                    }
-                    Spacer()
-                    if let url = URL(string: download), !download.isEmpty {
-                        Link("تحديث", destination: url).font(.subheadline.bold())
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("يتوفر تحديث \(serverVersion)", systemImage: "arrow.down.app.fill")
+                        .font(.headline).foregroundStyle(Color.murshidBlue)
+                    Text(jString(app.releaseInfo["notes"], default: "يتوفر إصدار جديد من التطبيق."))
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    HStack(spacing: 12) {
+                        NavigationLink(destination: V40WhatsNewView()) {
+                            Label("ما الجديد", systemImage: "sparkles")
+                        }
+                        .font(.subheadline.bold())
+                        Spacer()
+                        if let url = URL(string: download), url.scheme?.lowercased() == "https", !download.isEmpty {
+                            Link(destination: url) {
+                                Label("تحديث", systemImage: "square.and.arrow.down.fill")
+                                    .font(.headline)
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 11)
+                                    .background(Color.murshidGold, in: Capsule())
+                                    .foregroundStyle(Color.murshidNavy)
+                            }
+                        } else {
+                            Text("رابط التحديث غير متاح حالياً")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
@@ -271,8 +306,8 @@ struct V31HomeView: View {
                 NavigationLink(destination: AchievementsView()) { V3ToolCard(title: "الإنجازات", subtitle: "XP والمستوى", icon: "medal.fill") }
                 NavigationLink(destination: V3FocusView()) { V3ToolCard(title: "جلسة تركيز", subtitle: "25 · 45 · 60 دقيقة", icon: "timer") }
                 NavigationLink(destination: V3ContestView()) { V3ToolCard(title: "تحدي المليون", subtitle: "ترتيب ونقاط", icon: "trophy.fill") }
-                NavigationLink(destination: StoriesView()) { V3ToolCard(title: "غيّر جو", subtitle: "استراحة قصيرة", icon: "sparkles") }
-                NavigationLink(destination: V40WhatsNewView()) { V3ToolCard(title: "ما الجديد", subtitle: "الإصدار 4.2", icon: "sparkles.rectangle.stack.fill") }
+                NavigationLink(destination: V43StoriesView()) { V3ToolCard(title: "غيّر جو", subtitle: "استراحة قصيرة", icon: "sparkles") }
+                NavigationLink(destination: V40WhatsNewView()) { V3ToolCard(title: "ما الجديد", subtitle: "تحديثات التطبيق", icon: "sparkles.rectangle.stack.fill") }
             }
             .buttonStyle(.plain)
         }
@@ -750,7 +785,7 @@ struct V31AccountView: View {
                     Divider().padding(.leading, 48)
                     NavigationLink(destination: SupportView()) { V31AccountRowLabel(title: "خدمة العملاء", subtitle: "محادثة مباشرة مع الدعم", icon: "message.fill") }
                     Divider().padding(.leading, 48)
-                    NavigationLink(destination: StoriesView()) { V31AccountRowLabel(title: "غيّر جو", subtitle: "رسائل وقصص قصيرة", icon: "sparkles") }
+                    NavigationLink(destination: V43StoriesView()) { V31AccountRowLabel(title: "غيّر جو", subtitle: "رسائل وقصص قصيرة", icon: "sparkles") }
                 }
             }
         }
