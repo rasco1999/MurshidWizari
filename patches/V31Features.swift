@@ -89,28 +89,93 @@ struct V31HomeView: View {
         }
         .task { await refreshAll() }
         .refreshable { await refreshAll() }
+        .modifier(V44SchoolAdPopupModifier())
     }
 
     private var welcomeHeader: some View {
-        MurshidCard {
-            HStack(spacing: 13) {
-                Image(systemName: "graduationcap.fill")
-                    .font(.title2)
-                    .foregroundStyle(Color.murshidBlue)
-                    .frame(width: 48, height: 48)
-                    .background(Color.murshidBlue.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("أهلًا، \(firstName)").font(.title3.bold())
-                    Text(app.user?.grade ?? "").font(.subheadline).foregroundStyle(.secondary)
-                    Text(motivation).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+        ZStack(alignment: .topTrailing) {
+            LinearGradient(
+                colors: [.murshidNavy, Color(red: 0.06, green: 0.26, blue: 0.51), .murshidBlue],
+                startPoint: .topTrailing, endPoint: .bottomLeading
+            )
+            Circle()
+                .fill(Color.white.opacity(0.07))
+                .frame(width: 190, height: 190)
+                .offset(x: 75, y: -84)
+            Circle()
+                .stroke(Color.murshidGold.opacity(0.20), lineWidth: 1.5)
+                .frame(width: 185, height: 185)
+                .offset(x: 66, y: -76)
+
+            VStack(alignment: .leading, spacing: 17) {
+                HStack(alignment: .center, spacing: 14) {
+                    Image(systemName: "graduationcap.fill")
+                        .font(.title2)
+                        .foregroundStyle(Color.murshidGold)
+                        .frame(width: 56, height: 56)
+                        .background(.white.opacity(0.13), in: RoundedRectangle(cornerRadius: 17))
+                        .overlay(RoundedRectangle(cornerRadius: 17).stroke(.white.opacity(0.2)))
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("أهلًا بعودتك ✨")
+                            .font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.79))
+                        Text(firstName)
+                            .font(.system(.title, design: .rounded, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                        Label(app.user?.grade ?? "طالب المرشد", systemImage: "books.vertical.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Color.murshidGold)
+                    }
+                    Spacer(minLength: 0)
                 }
-                Spacer()
-                if app.subscribed {
-                    Image(systemName: "checkmark.seal.fill").foregroundStyle(.green).font(.title3)
+
+                Text(motivation)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.89))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 10) {
+                    welcomeStat(
+                        value: "\(jInt(app.stats["total_answers"]))",
+                        caption: "إجابة",
+                        icon: "checkmark.circle.fill"
+                    )
+                    welcomeStat(
+                        value: "\(app.accuracy)%",
+                        caption: "دقة الحل",
+                        icon: "chart.line.uptrend.xyaxis"
+                    )
+                    welcomeStat(
+                        value: app.subscribed ? "مفعّل" : "\(max(0,app.freeRemaining ?? app.freeLimit))",
+                        caption: app.subscribed ? "الاشتراك" : "سؤال مجاني",
+                        icon: app.subscribed ? "checkmark.seal.fill" : "gift.fill"
+                    )
                 }
             }
+            .padding(19)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipShape(RoundedRectangle(cornerRadius: 25, style: .continuous))
+        .shadow(color: Color.murshidNavy.opacity(0.20), radius: 20, y: 9)
         .padding(.top, 6)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func welcomeStat(value: String, caption: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Label(value, systemImage: icon)
+                .font(.headline.bold())
+                .foregroundStyle(Color.murshidGold)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(caption).font(.caption2.weight(.medium))
+                .foregroundStyle(.white.opacity(0.82))
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(11)
+        .background(.white.opacity(0.11), in: RoundedRectangle(cornerRadius: 13))
     }
 
     private var offlineBanner: some View {
@@ -186,10 +251,6 @@ struct V31HomeView: View {
                     Text(jString(app.releaseInfo["notes"], default: "يتوفر إصدار جديد من التطبيق."))
                         .font(.subheadline).foregroundStyle(.secondary)
                     HStack(spacing: 12) {
-                        NavigationLink(destination: V40WhatsNewView()) {
-                            Label("ما الجديد", systemImage: "sparkles")
-                        }
-                        .font(.subheadline.bold())
                         Spacer()
                         if let url = URL(string: download), url.scheme?.lowercased() == "https", !download.isEmpty {
                             Link(destination: url) {
@@ -307,7 +368,6 @@ struct V31HomeView: View {
                 NavigationLink(destination: V3FocusView()) { V3ToolCard(title: "جلسة تركيز", subtitle: "25 · 45 · 60 دقيقة", icon: "timer") }
                 NavigationLink(destination: V3ContestView()) { V3ToolCard(title: "تحدي المليون", subtitle: "ترتيب ونقاط", icon: "trophy.fill") }
                 NavigationLink(destination: V43StoriesView()) { V3ToolCard(title: "غيّر جو", subtitle: "استراحة قصيرة", icon: "sparkles") }
-                NavigationLink(destination: V40WhatsNewView()) { V3ToolCard(title: "ما الجديد", subtitle: "تحديثات التطبيق", icon: "sparkles.rectangle.stack.fill") }
             }
             .buttonStyle(.plain)
         }
@@ -796,8 +856,6 @@ struct V31AccountView: View {
                     NavigationLink(destination: SupportView()) { V31AccountRowLabel(title: "خدمة العملاء", subtitle: "محادثة مباشرة مع الدعم", icon: "message.fill") }
                     Divider().padding(.leading, 48)
                     NavigationLink(destination: V43StoriesView()) { V31AccountRowLabel(title: "غيّر جو", subtitle: "رسائل وقصص قصيرة", icon: "sparkles") }
-                    Divider().padding(.leading, 48)
-                    NavigationLink(destination: V40WhatsNewView()) { V31AccountRowLabel(title: "ما الجديد", subtitle: "آخر الميزات والتحديثات", icon: "arrow.down.app.fill") }
                 }
             }
         }
