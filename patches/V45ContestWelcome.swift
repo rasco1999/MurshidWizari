@@ -188,11 +188,19 @@ struct V45ContestInstructionsView: View {
 }
 
 // Premium, lightweight startup greeting. Never interrupts sign-in/Face ID with an extra dialog.
+// Understated, civic-inspired design. Iraqi identity without implying government affiliation.
+// Scope intentionally limited to the launch welcome; existing app theme is untouched.
 struct V45WelcomeView: View {
     @EnvironmentObject private var app: AppSession
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appeared = false
-    @State private var gleam = false
+    @State private var progressComplete = false
+
+    private var ink: Color { Color(red: 0.039, green: 0.098, blue: 0.161) }
+    private var slate: Color { Color(red: 0.063, green: 0.161, blue: 0.231) }
+    private var emerald: Color { Color(red: 0.153, green: 0.51, blue: 0.392) }
+    private var softEmerald: Color { Color(red: 0.60, green: 0.85, blue: 0.74) }
+    private var ivory: Color { Color(red: 0.96, green: 0.97, blue: 0.96) }
 
     private var studentFirstName: String {
         let first = app.user?.name.split(separator: " ").first.map(String.init) ?? ""
@@ -202,112 +210,150 @@ struct V45WelcomeView: View {
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [.murshidNavy, Color(red: 0.035, green: 0.12, blue: 0.27), .murshidBlue],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            ).ignoresSafeArea()
+                colors: [ink, slate, ink],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
 
+            // Geometric watermark; intentionally subtle and static.
             Circle()
-                .stroke(Color.murshidGold.opacity(0.10), lineWidth: 32)
-                .frame(width: 440, height: 440)
-                .blur(radius: 4)
-                .offset(x: 125, y: -240)
+                .stroke(ivory.opacity(0.045), lineWidth: 1)
+                .frame(width: 370, height: 370)
+                .offset(x: 175, y: -250)
             Circle()
-                .fill(Color.murshidBlue.opacity(0.25))
-                .frame(width: 320, height: 320)
-                .blur(radius: 75)
-                .offset(x: -160, y: 320)
+                .stroke(ivory.opacity(0.035), lineWidth: 1)
+                .frame(width: 500, height: 500)
+                .offset(x: -210, y: 350)
 
-            VStack(spacing: 24) {
-                Spacer(minLength: 35)
-
-                VStack(spacing: 19) {
-                    ZStack {
-                        Circle().stroke(Color.murshidGold.opacity(0.33), lineWidth: 1.3)
-                            .frame(width: 182, height: 182)
-                            .scaleEffect(gleam ? 1.08 : 0.90)
-                        Circle().fill(Color.murshidGold.opacity(0.08))
-                            .frame(width: 160, height: 160)
-                            .blur(radius: 24)
-                        AcademicWelcomeMark()
-                            .scaleEffect(appeared ? 1 : 0.74)
-                            .opacity(appeared ? 1 : 0)
+            VStack(spacing: 0) {
+                HStack(spacing: 9) {
+                    Circle()
+                        .fill(emerald)
+                        .frame(width: 8, height: 8)
+                    Text("منصة تعليمية عراقية")
+                        .font(.caption.weight(.semibold))
+                        .tracking(0.3)
+                        .foregroundStyle(ivory.opacity(0.84))
+                    Spacer()
+                    HStack(spacing: 3) {
+                        Capsule().fill(Color(red: 0.64, green: 0.20, blue: 0.23))
+                        Capsule().fill(ivory)
+                        Capsule().fill(emerald)
                     }
-                    .frame(height: 188)
-                    VStack(spacing: 10) {
+                    .frame(width: 35, height: 3)
+                    .accessibilityLabel("ألوان مستوحاة من العراق")
+                }
+                .padding(.top, 37)
+
+                Spacer(minLength: 28)
+
+                VStack(spacing: 22) {
+                    ZStack {
+                        Circle()
+                            .fill(ivory.opacity(0.055))
+                            .frame(width: 188, height: 188)
+                        Circle()
+                            .stroke(ivory.opacity(0.17), lineWidth: 1)
+                            .frame(width: 188, height: 188)
+                        Circle()
+                            .stroke(emerald.opacity(0.50), lineWidth: 2)
+                            .frame(width: 154, height: 154)
+                        Image("WelcomeEmblem")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 151, height: 151)
+                            .accessibilityHidden(true)
+                    }
+                    .frame(height: 196)
+                    .opacity(appeared ? 1 : 0)
+                    .scaleEffect(appeared ? 1 : 0.93)
+
+                    VStack(spacing: 12) {
                         Text(studentFirstName)
-                            .font(.system(.title2, design: .rounded, weight: .semibold))
-                            .foregroundStyle(Color.murshidGold)
+                            .font(.system(.title3, design: .rounded, weight: .medium))
+                            .foregroundStyle(softEmerald)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+
                         Text("منصة المرشد الوزاري")
                             .font(.system(.largeTitle, design: .rounded, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(ivory)
                             .multilineTextAlignment(.center)
-                            .minimumScaleFactor(0.75)
-                        Text("طريقك للتميّز يبدأ من هنا")
+                            .minimumScaleFactor(0.78)
+                            .lineLimit(2)
+
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(emerald)
+                            .frame(width: 62, height: 3)
+                            .padding(.vertical, 4)
+
+                        Text("تعلّم بثقة، واصنع مستقبلك")
                             .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.86))
-                        HStack(spacing: 9) {
-                            Image(systemName: "checkmark.seal.fill")
-                            Text("تعلّم")
-                            Circle().fill(.white.opacity(0.6)).frame(width: 4, height: 4)
-                            Text("اختبر")
-                            Circle().fill(.white.opacity(0.6)).frame(width: 4, height: 4)
-                            Text("تقدّم")
-                        }
-                        .font(.caption.bold())
-                        .foregroundStyle(Color.murshidGold)
-                        .padding(.top, 7)
+                            .foregroundStyle(ivory.opacity(0.81))
+                            .multilineTextAlignment(.center)
                     }
                     .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 18)
+                    .offset(y: appeared ? 0 : 12)
                 }
-                .padding(.vertical, 30)
-                .padding(.horizontal, 19)
                 .frame(maxWidth: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .fill(.white.opacity(0.09))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                                .stroke(Color.murshidGold.opacity(0.24), lineWidth: 1)
-                        )
-                )
-                .shadow(color: .black.opacity(0.17), radius: 27, y: 14)
-                .scaleEffect(appeared ? 1 : 0.86)
-                .opacity(appeared ? 1 : 0)
+                .padding(.horizontal, 5)
 
-                Spacer(minLength: 30)
-                VStack(spacing: 12) {
-                    Text("نجهّز لك تجربة دراسة مميزة")
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.8))
-                    GeometryReader { geometry in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(.white.opacity(0.17))
-                            Capsule().fill(
-                                LinearGradient(colors: [Color.murshidGold, .white.opacity(0.93)],
-                                               startPoint: .leading, endPoint: .trailing)
+                Spacer(minLength: 34)
+
+                VStack(spacing: 19) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "books.vertical.fill")
+                            .foregroundStyle(softEmerald)
+                        Text("المنهج العراقي • اختبارات وزارية • مراجعة ذكية")
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(ivory.opacity(0.88))
+                            .multilineTextAlignment(.center)
+                            .minimumScaleFactor(0.79)
+                            .lineLimit(2)
+                    }
+                    .padding(.vertical, 15)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 15)
+                            .fill(ivory.opacity(0.055))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 15)
+                                    .stroke(ivory.opacity(0.10), lineWidth: 1)
                             )
-                            .frame(width: appeared ? geometry.size.width : 0)
+                    )
+
+                    GeometryReader { proxy in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(ivory.opacity(0.16))
+                            Capsule()
+                                .fill(emerald)
+                                .frame(width: progressComplete ? proxy.size.width : 0)
                         }
                     }
-                    .frame(height: 4)
+                    .frame(height: 3)
                     .clipShape(Capsule())
+                    .accessibilityHidden(true)
+
+                    Text("المرشد الوزاري • العراق")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(ivory.opacity(0.61))
                 }
-                .padding(.horizontal, 45)
-                .padding(.bottom, 30)
+                .padding(.bottom, 29)
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 25)
+            .frame(maxWidth: 580)
         }
+        .environment(\.layoutDirection, .rightToLeft)
         .onAppear {
-            withAnimation(reduceMotion ? .none : .spring(response: 0.75, dampingFraction: 0.76)) {
+            withAnimation(reduceMotion ? .none : .easeOut(duration: 0.72)) {
                 appeared = true
             }
-            withAnimation(reduceMotion ? .none : .easeInOut(duration: 2.1)) {
-                gleam = true
+            withAnimation(reduceMotion ? .none : .easeInOut(duration: 2.08)) {
+                progressComplete = true
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("مرحبًا بك في منصة المرشد الوزاري")
+        .accessibilityLabel("مرحبًا بك في منصة المرشد الوزاري، منصة تعليمية عراقية")
     }
 }
