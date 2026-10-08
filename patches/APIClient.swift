@@ -132,6 +132,11 @@ final class APIClient {
         req.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         if let body { req.httpBody = try JSONSerialization.data(withJSONObject: body, options: []) }
+        // Never let a stale login/bootstrap response replace an active session.
+        if path == "api/login.php" || path == "mobile/bootstrap.php" {
+            req.cachePolicy = .reloadIgnoringLocalCacheData
+            req.setValue("no-cache, no-store", forHTTPHeaderField: "Cache-Control")
+        }
 
         do {
             let (data, response) = try await session.data(for: req)
@@ -141,12 +146,24 @@ final class APIClient {
                 let contentType = http.value(forHTTPHeaderField: "Content-Type")?.lowercased() ?? ""
                 let looksLikeHTML = contentType.contains("text/html") || raw.lowercased().contains("<html") || raw.hasPrefix("<")
                 let message: String
+                let endpoint = path == "api/login.php" ? "تسجيل الدخول" :
+                    (path == "mobile/bootstrap.php" ? "تحميل بيانات الحساب" : "الطلب")
                 if looksLikeHTML {
-                    message = "تعذر إكمال الطلب الآن. تحقق من الاتصال وحاول مجددًا."
+                    let redirectedPath = http.url?.path ?? ""
+                    if redirectedPath != url.path && !redirectedPath.isEmpty {
+                        message = "لم يُكمل الخادم \(endpoint): أعاد التوجيه إلى \(redirectedPath) بدل استجابة التطبيق (HTTP \(http.statusCode)). تحقّق من توجيه الموقع وحمايته."
+                    } else if http.statusCode == 403 || http.statusCode == 429 {
+                        message = "حماية الاستضافة منعت \(endpoint) (HTTP \(http.statusCode)). هذا ليس خطأ كلمة المرور. راجع سجل WAF/ModSecurity."
+                    } else if http.statusCode >= 500 {
+                        message = "حدث خطأ داخلي بخادم الموقع أثناء \(endpoint) (HTTP \(http.statusCode)). راجع سجل أخطاء PHP."
+                    } else {
+                        message = "خادم الموقع أعاد صفحة بدلاً من بيانات \(endpoint) (HTTP \(http.statusCode)). راجع توجيه API أو حماية الاستضافة."
+                    }
                 } else if raw.isEmpty {
-                    message = "تعذر قراءة استجابة الخادم. حاول مجددًا."
+                    message = "لم يُرجع الخادم بيانات \(endpoint) (HTTP \(http.statusCode))."
                 } else {
-                    message = String(raw.prefix(240))
+                    // Do not show arbitrary untrusted non-JSON body to the student.
+                    message = "استجابة \(endpoint) غير صحيحة (HTTP \(http.statusCode)). تحقّق من سجل الموقع."
                 }
                 throw APIError(message: message, status: http.statusCode, paymentRequired: false)
             }
