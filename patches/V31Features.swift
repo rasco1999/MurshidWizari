@@ -771,7 +771,7 @@ struct V31AccountView: View {
                 HStack(spacing: 13) {
                     Image(systemName: app.subscribed ? "checkmark.seal.fill" : "arrow.up.forward.app.fill").font(.title2).foregroundStyle(app.subscribed ? .green : Color.murshidBlue)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(app.subscribed ? "الاشتراك" : "افتح كامل المنصة").font(.headline).foregroundStyle(.primary)
+                        Text(app.subscribed ? "الاشتراك" : "اشتراك").font(.headline.bold()).foregroundStyle(app.subscribed ? Color.primary : Color.murshidBlue)
                         Text(app.subscribed ? "اشتراكك مفعّل حاليًا." : "الدفع خارجي ولا نطلب رقمًا إضافيًا من هنا.").font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer(); Image(systemName: "chevron.left").foregroundStyle(.secondary)
@@ -796,6 +796,8 @@ struct V31AccountView: View {
                     NavigationLink(destination: SupportView()) { V31AccountRowLabel(title: "خدمة العملاء", subtitle: "محادثة مباشرة مع الدعم", icon: "message.fill") }
                     Divider().padding(.leading, 48)
                     NavigationLink(destination: V43StoriesView()) { V31AccountRowLabel(title: "غيّر جو", subtitle: "رسائل وقصص قصيرة", icon: "sparkles") }
+                    Divider().padding(.leading, 48)
+                    NavigationLink(destination: V40WhatsNewView()) { V31AccountRowLabel(title: "ما الجديد", subtitle: "آخر الميزات والتحديثات", icon: "arrow.down.app.fill") }
                 }
             }
         }
