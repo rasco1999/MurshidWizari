@@ -1721,15 +1721,13 @@ struct MainV3TabView: View {
                 .tabItem { Label("الاختبارات", systemImage: "checklist.checked") }
                 .tag(1)
 
-            NavigationStack { V3SuccessView() }
-                .tabItem { Label("النجاح", systemImage: "chart.line.uptrend.xyaxis") }
+            NavigationStack { V31StudyPlaceholderView() }
+                .tabItem { Label("ادرس", systemImage: "book.fill") }
                 .tag(2)
 
-            if app.subscribed {
-                NavigationStack { V44PredictionsView() }
-                    .tabItem { Label("المرشحات", systemImage: "scope") }
-                    .tag(3)
-            }
+            NavigationStack { V31SchoolAdsView() }
+                .tabItem { Label("الإعلانات", systemImage: "megaphone.fill") }
+                .tag(3)
 
             NavigationStack { V3AccountView() }
                 .tabItem { Label("حسابي", systemImage: "person.crop.circle.fill") }
@@ -1739,13 +1737,12 @@ struct MainV3TabView: View {
         .toolbarBackground(.visible, for: .tabBar)
         .environment(\.layoutDirection, .rightToLeft)
         .onChange(of: selection) { _ in selectionHaptic() }
-        .onChange(of: app.subscribed) { active in if !active && selection == 3 { selection = 0 } }
         .task { await keepSessionAlive() }
         .onOpenURL { url in
             switch (url.host ?? url.path.replacingOccurrences(of: "/", with: "")).lowercased() {
             case "tests", "exam", "subjects": selection = 1
-            case "success", "progress": selection = 2
-            case "predictions", "filters": selection = 3
+            case "study", "learn", "success", "progress", "predictions", "filters": selection = 2
+            case "ads", "advertisements": selection = 3
             case "account", "subscription": selection = 4
             default: selection = 0
             }
