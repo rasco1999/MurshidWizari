@@ -54,6 +54,7 @@ struct V31HomeView: View {
                 nextStepsSection
                 quickTools
                 if !error.isEmpty { V3InlineMessage(text: error, icon: "wifi.exclamationmark", tone: .warning) }
+                socialLinksFooter
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 30)
@@ -371,6 +372,88 @@ struct V31HomeView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    // Official website accounts. HTTPS universal links open the installed social
+    // app when supported by iOS; otherwise they remain reachable in Safari.
+    // Dynamic system surface/text colors follow both manually selected themes.
+    private var socialLinksFooter: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            V3SectionHeader(
+                title: "تابعنا على منصات التواصل",
+                subtitle: "كل جديد من منصة المرشد الوزاري",
+                icon: "bubble.left.and.bubble.right.fill"
+            )
+            MurshidCard {
+                HStack(spacing: 9) {
+                    socialLinkButton(
+                        title: "إنستغرام",
+                        icon: "camera.fill",
+                        url: URL(string: "https://www.instagram.com/murshid.iq/")!,
+                        color: Color(red: 0.76, green: 0.19, blue: 0.50)
+                    )
+                    socialLinkButton(
+                        title: "فيسبوك",
+                        icon: "f",
+                        url: URL(string: "https://www.facebook.com/Murshidiq/")!,
+                        color: Color(red: 0.12, green: 0.33, blue: 0.77)
+                    )
+                    socialLinkButton(
+                        title: "تيليجرام",
+                        icon: "paperplane.fill",
+                        url: URL(string: "https://t.me/El_Murshed_iq")!,
+                        color: Color(red: 0.10, green: 0.57, blue: 0.79)
+                    )
+                }
+                .frame(maxWidth: .infinity)
+                Text("اضغط على الأيقونة لزيارة حسابنا الرسمي")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 5)
+            }
+        }
+        .padding(.top, 5)
+        .accessibilityElement(children: .contain)
+    }
+
+    private func socialLinkButton(
+        title: String,
+        icon: String,
+        url: URL,
+        color: Color
+    ) -> some View {
+        Link(destination: url) {
+            VStack(spacing: 9) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(color)
+                        .frame(width: 55, height: 55)
+                        .shadow(color: color.opacity(0.20), radius: 7, y: 3)
+
+                    if icon == "f" {
+                        Text("f")
+                            .font(.system(size: 36, weight: .heavy, design: .rounded))
+                            .foregroundStyle(.white)
+                            .offset(y: 3)
+                    } else {
+                        Image(systemName: icon)
+                            .font(.system(size: 25, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                }
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .frame(maxWidth: .infinity, minHeight: 94)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("فتح حساب منصة المرشد الوزاري على \(title)")
+        .accessibilityHint("يفتح الرابط خارج التطبيق")
     }
 
     private var isDarkAppearance: Bool {
