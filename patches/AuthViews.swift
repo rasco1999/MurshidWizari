@@ -4267,9 +4267,23 @@ struct V3SubscriptionView: View {
 }
 
 struct V3PasswordRecoveryView: View {
-    @EnvironmentObject var app: AppSession
+    @EnvironmentObject private var app: AppSession
+
     @State private var phoneToken: String?
     @State private var finished = false
+    @State private var contacts: JSON = [:]
+    @State private var channel = ""
+    @State private var fetching = true
+    @State private var sending = false
+    @State private var error = ""
+    @State private var resultMessage = ""
+
+    private var emailContact: JSON { contacts["email"] as? JSON ?? [:] }
+    private var phoneContact: JSON { contacts["phone"] as? JSON ?? [:] }
+    private var canSend: Bool {
+        let record = channel == "email" ? emailContact : phoneContact
+        return jBool(record["enabled"])
+    }
 
     var body: some View {
         Group {
@@ -4282,15 +4296,198 @@ struct V3PasswordRecoveryView: View {
                 VStack(spacing: 16) {
                     Image(systemName: "checkmark.circle.fill").font(.system(size: 54)).foregroundStyle(.green)
                     Text("تم تحديث كلمة المرور").font(.title2.bold())
-                    Text("لأمان حسابك ستحتاج إلى تسجيل الدخول من جديد.").foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    Text("لأمان حسابك ستحتاج إلى تسجيل الدخول من جديد.")
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                 }
                 .padding(28)
             } else {
-                ForgotPasswordView { token in phoneToken = token }
+                accountBoundForm
             }
         }
         .navigationTitle("كلمة المرور")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            guard contacts.isEmpty && phoneToken == nil && !finished else { return }
+            await loadContacts()
+        }
+    }
+
+    private var accountBoundForm: some View {
+        ScrollView {
+            VStack(spacing: 17) {
+                AuthHeader(subtitle: "استعادة آمنة لبيانات حسابك الحالي")
+                    .padding(.top, 12)
+
+                MurshidCard {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Label("استعادة كلمة المرور", systemImage: "key.fill")
+                            .font(.title2.bold())
+
+                        Text("يمكن إرسال رمز الاستعادة أو رابط تغيير كلمة المرور إلى البريد الإلكتروني أو رقم الهاتف المسجل في حسابك فقط. لا يمكن تعديل وجهة الاستعادة من هنا.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        if fetching {
+                            ProgressView("جاري جلب بيانات حسابك المسجلة…")
+                                .frame(maxWidth: .infinity, minHeight: 92)
+                        } else {
+                            let email = jString(emailContact["value"])
+                            let phone = jString(phoneContact["value"])
+                            if !email.isEmpty {
+                                contactRow(
+                                    label: "البريد الإلكتروني المسجل",
+                                    destination: email,
+                                    method: "email",
+                                    icon: "envelope.fill",
+                                    available: jBool(emailContact["enabled"])
+                                )
+                            }
+                            if !phone.isEmpty {
+                                contactRow(
+                                    label: "رقم WhatsApp المسجل",
+                                    destination: phone,
+                                    method: "phone",
+                                    icon: "phone.fill",
+                                    available: jBool(phoneContact["enabled"])
+                                )
+                            }
+                            if email.isEmpty && phone.isEmpty {
+                                Label("لا يوجد بريد أو رقم مرتبط بحسابك. تواصل مع دعم المنصة لتحديث بيانات التواصل بعد التحقق من هويتك.", systemImage: "exclamationmark.shield.fill")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if !email.isEmpty || !phone.isEmpty {
+                                Label("البيانات المعروضة مأخوذة من الحساب مباشرة ولا يمكن تغييرها أثناء الاستعادة.", systemImage: "lock.shield.fill")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            if !error.isEmpty { AuthMessage(text: error, kind: .error) }
+                            if !resultMessage.isEmpty {
+                                AuthMessage(text: resultMessage, kind: .success)
+                            }
+
+                            Button {
+                                Task { await beginRecovery() }
+                            } label: {
+                                HStack(spacing: 10) {
+                                    if sending { ProgressView().tint(.white) }
+                                    Label(sending ? "جاري إرسال طلب الاستعادة…" : "إرسال إلى وسيلة الحساب المسجلة", systemImage: "lock.shield.fill")
+                                }
+                            }
+                            .buttonStyle(PrimaryButtonStyle())
+                            .disabled(fetching || sending || !canSend || !resultMessage.isEmpty)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 32)
+        }
+        .background(Color.murshidBackground.ignoresSafeArea())
+        .refreshable { await loadContacts() }
+    }
+
+    private func contactRow(label: String, destination: String, method: String,
+                            icon: String, available: Bool) -> some View {
+        Button {
+            if available {
+                channel = method
+                error = ""
+                resultMessage = ""
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: channel == method ? "largecircle.fill.circle" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(available ? Color.murshidBlue : .gray)
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(label, systemImage: icon)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(destination)
+                        .font(.footnote.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !available {
+                        Text("هذه الوسيلة غير مؤكدة أو غير مفعلة حالياً")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                }
+                Spacer(minLength: 2)
+                Image(systemName: "lock.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(13)
+            .background(
+                Color.murshidBlue.opacity(channel == method && available ? 0.10 : 0.045),
+                in: RoundedRectangle(cornerRadius: 14)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color.murshidBlue.opacity(channel == method && available ? 0.55 : 0.12),
+                            lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!available)
+        .accessibilityHint(available ? "وجهة ثابتة مرتبطة بحسابك، اضغط لاختيار طريقة الاستعادة" : "غير متاحة للاستعادة")
+    }
+
+    @MainActor
+    private func loadContacts() async {
+        fetching = true
+        error = ""
+        do {
+            // Never cache contact destinations; password-recovery always uses
+            // the currently authenticated user and the server's own DB values.
+            let data = try await APIClient.shared.request("mobile/bound-password-recovery.php")
+            contacts = data["contacts"] as? JSON ?? [:]
+            let email = contacts["email"] as? JSON ?? [:]
+            let phone = contacts["phone"] as? JSON ?? [:]
+            channel = jBool(email["enabled"]) ? "email" :
+                      (jBool(phone["enabled"]) ? "phone" : "")
+        } catch {
+            self.error = error.localizedDescription
+        }
+        fetching = false
+    }
+
+    @MainActor
+    private func beginRecovery() async {
+        guard !channel.isEmpty, canSend, !sending else { return }
+        sending = true
+        error = ""
+        resultMessage = ""
+        do {
+            // The client sends ONLY a channel; it never sends an address,
+            // phone number, identifier or user ID as the reset recipient.
+            let response = try await APIClient.shared.request(
+                "mobile/bound-password-recovery.php",
+                method: "POST",
+                body: ["csrf": app.csrf, "channel": channel]
+            )
+            if jString(response["channel"]) == "phone" {
+                let token = jString(response["phone_token"])
+                guard !token.isEmpty else {
+                    throw APIError(message: "تعذر إنشاء طلب استعادة الهاتف.", status: 422, paymentRequired: false)
+                }
+                phoneToken = token
+            } else {
+                resultMessage = jString(response["message"],
+                                        default: "تم إرسال رابط الاستعادة إلى البريد المرتبط بحسابك.")
+            }
+            haptic()
+        } catch {
+            self.error = error.localizedDescription
+            haptic(.error)
+        }
+        sending = false
     }
 }
 
