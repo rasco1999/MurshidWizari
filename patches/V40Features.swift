@@ -1353,14 +1353,17 @@ struct V40DailyChallengeView: View {
     @State private var total = 0
     @State private var reward = 0
     @State private var message = ""
+    @State private var correctAnswer = ""
+    @State private var givenAnswer = ""
+    @State private var answerExplanation = ""
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 14) {
                 V3IntroCard(
                     eyebrow: "تحدي اليوم",
-                    title: done ? "أكملت تحدي اليوم" : "سؤال اليوم الصعب",
-                    text: done ? "عد بعد 24 ساعة لتحدٍ جديد." : "سؤال صعب واحد من منهج صفك، دون استهلاك الرصيد ودون احتساب نقاط.",
+                    title: done ? "تم تسليم إجابتك" : "سؤال اليوم",
+                    text: done ? "تم تصحيح إجابتك. يعود التحدي بعد 24 ساعة." : "اكتب إجابتك ثم اضغط تسليم الإجابة لرؤية التصحيح فوراً.",
                     icon: "flame.fill"
                 )
 
@@ -1374,7 +1377,20 @@ struct V40DailyChallengeView: View {
                         VStack(spacing: 12) {
                             Image(systemName: "trophy.fill").font(.system(size: 42)).foregroundStyle(Color.murshidGold)
                             Text("\(score) / \(total)").font(.largeTitle.bold().monospacedDigit())
-                            Text("النتيجة لا تضيف نقاطاً إلى حسابك").font(.caption).foregroundStyle(.secondary)
+                            Text(score > 0 ? "إجابة صحيحة!" : "اكتمل تحدي اليوم").font(.headline)
+                            if !correctAnswer.isEmpty {
+                                Divider()
+                                Text("الجواب الصحيح").font(.subheadline.bold()).foregroundStyle(.secondary)
+                                Text(correctAnswer).font(.title3.bold()).foregroundStyle(.green)
+                                    .multilineTextAlignment(.center)
+                            }
+                            if !givenAnswer.isEmpty {
+                                Text("إجابتك: \(givenAnswer)").font(.subheadline).foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.center)
+                            }
+                            if !answerExplanation.isEmpty {
+                                Text(answerExplanation).font(.subheadline).multilineTextAlignment(.center)
+                            }
                         }.frame(maxWidth: .infinity)
                     }
                 } else {
@@ -1399,18 +1415,6 @@ struct V40DailyChallengeView: View {
                             }
                         }
                     }
-                    Button {
-                        Task { await submit() }
-                    } label: {
-                        HStack {
-                            if busy { ProgressView().tint(.white) }
-                            Image(systemName: "checkmark.seal.fill")
-                            Text(busy ? "جاري التصحيح…" : "إنهاء تحدي اليوم")
-                        }
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
-                    .disabled(busy || !allAnswered)
-                    .opacity(allAnswered ? 1 : 0.55)
                 }
 
                 if !message.isEmpty {
@@ -1419,6 +1423,24 @@ struct V40DailyChallengeView: View {
             }
             .padding(16)
             .padding(.bottom, 26)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !loading && available && !done {
+                Button { Task { await submit() } } label: {
+                    HStack(spacing: 9) {
+                        if busy { ProgressView().tint(.white) }
+                        Image(systemName: "checkmark.seal.fill")
+                        Text(busy ? "جاري تصحيح الإجابة…" : "تسليم الإجابة")
+                    }
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(busy || !allAnswered)
+                .opacity(allAnswered ? 1 : 0.55)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity)
+                .background(.regularMaterial)
+            }
         }
         .background(Color.murshidBackground.ignoresSafeArea())
         .navigationTitle("تحدي اليوم")
@@ -1463,6 +1485,9 @@ struct V40DailyChallengeView: View {
                 score = jInt(d["score"])
                 total = jInt(d["total"])
                 reward = jInt(d["reward"])
+                correctAnswer = jString(d["correct_answer"])
+                givenAnswer = jString(d["given_answer"])
+                answerExplanation = jString(d["explanation"])
                 questions = jArray(d["questions"]).map(V40DailyQuestion.init)
                 loading = false
                 message = ""
@@ -1487,6 +1512,9 @@ struct V40DailyChallengeView: View {
                 done = jBool(d["done"])
                 score = jInt(d["score"])
                 total = jInt(d["total"])
+                correctAnswer = jString(d["correct_answer"])
+                givenAnswer = jString(d["given_answer"])
+                answerExplanation = jString(d["explanation"])
                 if jBool(d["quota_blocked"]) { message = "تعذّر تسجيل الإجابة؛ جرّب مجدداً." }
                 haptic(.success)
             }
