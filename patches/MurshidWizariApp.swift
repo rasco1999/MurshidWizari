@@ -25,6 +25,7 @@ struct MurshidWizariApp: App {
                     .environmentObject(app)
                     .environmentObject(device)
                     .environment(\.layoutDirection, .rightToLeft)
+                    .environment(\.locale, Locale(identifier: "en_US_POSIX"))
                     .preferredColorScheme(colorScheme)
                     .opacity(showAcademicWelcome ? 0 : 1)
 
