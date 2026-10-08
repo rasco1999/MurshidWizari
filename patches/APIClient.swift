@@ -142,15 +142,28 @@ final class APIClient {
                 let looksLikeHTML = contentType.contains("text/html") || raw.lowercased().contains("<html") || raw.hasPrefix("<")
                 let message: String
                 if looksLikeHTML {
-                    message = "تعذر إكمال الطلب الآن. تحقق من الاتصال وحاول مجددًا."
+                    switch http.statusCode {
+                    case 403:
+                        message = "رفضت حماية الموقع الطلب (403). حاول بعد قليل أو تواصل مع الدعم."
+                    case 429:
+                        message = "حماية الموقع حدّت الطلبات مؤقتًا (429). انتظر قليلًا ثم حاول مجددًا."
+                    case 500...599:
+                        message = "الخادم يواجه مشكلة مؤقتة (\(http.statusCode)). حاول مجددًا بعد قليل."
+                    default:
+                        message = "وصلت صفحة ويب بدل رد التطبيق المطلوب (\(http.statusCode)). تحقق من إعدادات الموقع أو تواصل مع الدعم."
+                    }
                 } else if raw.isEmpty {
-                    message = "تعذر قراءة استجابة الخادم. حاول مجددًا."
+                    message = "أعاد الخادم ردًا فارغًا (\(http.statusCode)). حاول مجددًا."
                 } else {
-                    message = String(raw.prefix(240))
+                    message = "تعذر تفسير رد الخادم (\(http.statusCode)). حاول مجددًا أو تواصل مع الدعم."
                 }
                 throw APIError(message: message, status: http.statusCode, paymentRequired: false)
             }
-            if http.statusCode == 401 {
+            // A rejected login is not an expired session. Preserve the API's
+            // specific invalid-credentials message for the login screen.
+            if http.statusCode == 401,
+               path != "api/login.php",
+               (AppSession.shared.authenticated || AppSession.shared.v3Authenticated) {
                 AppSession.shared.reset(expired: true)
                 throw APIError(message: "انتهت الجلسة. سجّل الدخول مجددًا.", status: 401, paymentRequired: false)
             }
