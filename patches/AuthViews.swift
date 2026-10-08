@@ -1725,9 +1725,11 @@ struct MainV3TabView: View {
                 .tabItem { Label("النجاح", systemImage: "chart.line.uptrend.xyaxis") }
                 .tag(2)
 
-            NavigationStack { V44PredictionsView() }
-                .tabItem { Label("المرشحات", systemImage: "scope") }
-                .tag(3)
+            if app.subscribed {
+                NavigationStack { V44PredictionsView() }
+                    .tabItem { Label("المرشحات", systemImage: "scope") }
+                    .tag(3)
+            }
 
             NavigationStack { V3AccountView() }
                 .tabItem { Label("حسابي", systemImage: "person.crop.circle.fill") }
@@ -1737,6 +1739,7 @@ struct MainV3TabView: View {
         .toolbarBackground(.visible, for: .tabBar)
         .environment(\.layoutDirection, .rightToLeft)
         .onChange(of: selection) { _ in selectionHaptic() }
+        .onChange(of: app.subscribed) { active in if !active && selection == 3 { selection = 0 } }
         .task { await keepSessionAlive() }
         .onOpenURL { url in
             switch (url.host ?? url.path.replacingOccurrences(of: "/", with: "")).lowercased() {
@@ -1855,7 +1858,7 @@ struct V3HomeView: View {
 
                 HStack(spacing: 9) {
                     V3HeroMetric(title: "الدقة", value: "\(app.accuracy)%")
-                    V3HeroMetric(title: "XP", value: "\(jInt(app.stats["xp"]))")
+                    V3HeroMetric(title: "النقاط", value: "\(jInt(app.stats["xp"]))")
                     V3HeroMetric(title: "السلسلة", value: "\(jInt(app.stats["streak"])) يوم")
                 }
             }
@@ -2532,7 +2535,7 @@ struct V3ContestView: View {
                     Text("مركزك الحالي").font(.subheadline).foregroundStyle(.secondary)
                     if let mine = contest["mine"] as? JSON {
                         Text("#\(jInt(mine["rank"]))").font(.largeTitle.bold()).foregroundStyle(Color.murshidBlue)
-                        Text("\(jInt(mine["xp"])) XP · \(jInt(mine["correct"])) إجابة صحيحة").font(.caption).foregroundStyle(.secondary)
+                        Text("\(jInt(mine["xp"])) نقطة · \(jInt(mine["correct"])) إجابة صحيحة").font(.caption).foregroundStyle(.secondary)
                     } else {
                         Text("ابدأ الإجابة لتدخل الترتيب").font(.headline)
                     }
@@ -2560,7 +2563,7 @@ struct V3ContestView: View {
                                 if !jString(row["grade"]).isEmpty { Text(jString(row["grade"])).font(.caption).foregroundStyle(.secondary) }
                             }
                             Spacer()
-                            Text("\(jInt(row[xpKey])) XP").font(.subheadline.bold()).foregroundStyle(.secondary)
+                            Text("\(jInt(row[xpKey])) نقطة").font(.subheadline.bold()).foregroundStyle(.secondary)
                         }
                     }
                 }
