@@ -1,0 +1,29 @@
+name: Gallows City iOS Preview
+on:
+  push:
+    branches: [gallows-city-ios-preview]
+    paths:
+      - 'GallowsCity_iOSPreview/**'
+      - '.github/workflows/gallows-ios-native.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode version
+        run: xcodebuild -version
+      - name: Compile real iOS app
+        run: bash GallowsCity_iOSPreview/build-ios.sh
+      - name: Verify unsigned Mach-O payload
+        run: |
+          unzip -l GallowsCity_iOSPreview/dist/GallowsCity_iOS_PREVIEW_UNSIGNED.ipa | grep -F Payload/GallowsCity.app/GallowsCity
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GallowsCity-iOS-PREVIEW-UNSIGNED-IPA
+          path: GallowsCity_iOSPreview/dist/GallowsCity_iOS_PREVIEW_UNSIGNED.ipa
+          if-no-files-found: error
+          retention-days: 7
