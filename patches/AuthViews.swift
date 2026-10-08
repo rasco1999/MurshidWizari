@@ -1739,6 +1739,7 @@ struct MainV3TabView: View {
         .toolbarBackground(.visible, for: .tabBar)
         .environment(\.layoutDirection, .rightToLeft)
         .onChange(of: selection) { _ in selectionHaptic() }
+        .onChange(of: app.subscribed) { active in if !active && selection == 3 { selection = 0 } }
         .task { await keepSessionAlive() }
         .onOpenURL { url in
             switch (url.host ?? url.path.replacingOccurrences(of: "/", with: "")).lowercased() {

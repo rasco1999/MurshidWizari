@@ -90,6 +90,7 @@ struct V31HomeView: View {
             }
         }
         .task { await refreshAll(); await refreshHomeAvatar() }
+        .onAppear { Task { await refreshHomeAvatar() } }
         .refreshable { await refreshAll(); await refreshHomeAvatar() }
         .modifier(V44SchoolAdPopupModifier())
     }
