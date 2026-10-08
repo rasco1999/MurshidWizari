@@ -891,10 +891,9 @@ struct V31AccountView: View {
                 account = d
                 loading = false
                 error = ""
-                let status = jString(d["avatar_status"])
-                if status == "approved" || status == "blocked" || status == "rejected" || status == "none" {
+                // Keep the successful image visible until the remote avatar finishes loading.
+                if ["blocked", "rejected", "none"].contains(jString(d["avatar_status"])) {
                     avatarPreview = nil
-                    avatarItem = nil
                 }
             }
         } catch {
@@ -928,12 +927,20 @@ struct V31AccountView: View {
                 avatarMessage = ""
             }
             let d = try await APIClient.shared.uploadAvatarJPEG(jpeg, csrf: app.csrf)
+            // Server must return a usable avatar URL; otherwise the upload is not complete.
+            let urlText = jString(d["avatar_url"])
+            guard V43AvatarCache.url(urlText, revision: jString(d["avatar_revision"])) != nil else {
+                throw APIError(message: "حُفظت الصورة لكن الخادم لم يُرجع رابطاً صالحاً للعرض.", status: 502, paymentRequired: false)
+            }
             await MainActor.run {
+                V43AvatarCache.save(jpeg, userID: app.user?.id ?? 0)
+                account["avatar_url"] = urlText
+                account["avatar_revision"] = jString(d["avatar_revision"])
+                account["avatar_status"] = "approved"
                 uploadingAvatar = false
-                avatarPreview = nil
                 avatarItem = nil
-                avatarMessage = jString(d["message"], default: "تم تغيير صورة الحساب فورًا.")
-                haptic()
+                avatarMessage = "تم تغيير صورة الحساب. الصورة ظاهرة وجاري تحديث رابطها."
+                haptic(.success)
             }
             await load()
         } catch {
@@ -1045,7 +1052,7 @@ extension APIClient {
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.httpBody = body
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw APIError(message: "تعذر الاتصال بالخادم.", status: 0, paymentRequired: false) }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? JSON else { throw APIError(message: "تعذر قراءة استجابة رفع الصورة.", status: http.statusCode, paymentRequired: false) }
         if !(200...299).contains(http.statusCode) || !jBool(json["ok"]) { throw APIError(message: jString(json["message"], default: "تعذر رفع الصورة."), status: http.statusCode, paymentRequired: false) }
