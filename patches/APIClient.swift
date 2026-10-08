@@ -25,6 +25,7 @@ final class AppSession: ObservableObject {
     @Published var subjects: [Subject] = []
     @Published var plans: [SubscriptionPlan] = []
     @Published var subscribed = false
+    @Published var subscriptionDaysRemaining: Int? = nil
     @Published var freeLimit = 15
     @Published var freeUsed = 0
     @Published var freeRemaining: Int?
@@ -51,6 +52,7 @@ final class AppSession: ObservableObject {
         subjects = []
         plans = []
         subscribed = false
+        subscriptionDaysRemaining = nil
         freeUsed = 0
         freeRemaining = nil
         csrf = ""
@@ -67,6 +69,7 @@ final class AppSession: ObservableObject {
         subjects = jArray(json["subjects"]).map(Subject.init)
         plans = jArray(json["plans"]).map(SubscriptionPlan.init)
         subscribed = jBool(json["subscribed"])
+        subscriptionDaysRemaining = subscribed ? jInt(json["subscription_days_remaining"]) : nil
         freeLimit = jInt(json["free_limit"], default: 15)
         freeUsed = jInt(json["free_used"])
         freeRemaining = (json["free_remaining"] is NSNull || json["free_remaining"] == nil) ? nil : jInt(json["free_remaining"])
@@ -101,8 +104,8 @@ final class APIClient {
         config.httpCookieStorage = .shared
         config.httpShouldSetCookies = true
         config.waitsForConnectivity = false
-        config.timeoutIntervalForRequest = 12
-        config.timeoutIntervalForResource = 25
+        config.timeoutIntervalForRequest = 25
+        config.timeoutIntervalForResource = 45
         config.requestCachePolicy = .useProtocolCachePolicy
         config.urlCache = URLCache(memoryCapacity: 24 * 1024 * 1024, diskCapacity: 96 * 1024 * 1024, diskPath: "MurshidHTTP")
         config.httpAdditionalHeaders = [
@@ -150,7 +153,7 @@ final class APIClient {
                 }
                 throw APIError(message: message, status: http.statusCode, paymentRequired: false)
             }
-            if http.statusCode == 401 {
+            if http.statusCode == 401 && path != "api/login.php" {
                 AppSession.shared.reset(expired: true)
                 throw APIError(message: "انتهت الجلسة. سجّل الدخول مجددًا.", status: 401, paymentRequired: false)
             }
