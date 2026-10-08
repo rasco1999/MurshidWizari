@@ -3,6 +3,7 @@ import Foundation
 
 // v4.5. Contest rules are loaded from the SAME published student page as the website.
 // These bundled copies keep the instructions readable if the network is briefly unavailable.
+@MainActor
 private enum V45ContestRulesSnapshot {
     static let rules: [JSON] = [
         ["number":1,"title":"الفائز بالجائزة","text":"الفائز هو الطالب الذي يحتل المركز الأول في الترتيب النهائي عند إغلاق التحدي، بعد مراجعة الحساب والنشاط من الإدارة."],
