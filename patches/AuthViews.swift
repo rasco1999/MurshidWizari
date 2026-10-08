@@ -1857,7 +1857,7 @@ struct V3HomeView: View {
 
                 HStack(spacing: 9) {
                     V3HeroMetric(title: "الدقة", value: "\(app.accuracy)%")
-                    V3HeroMetric(title: "XP", value: "\(jInt(app.stats["xp"]))")
+                    V3HeroMetric(title: "النقاط", value: "\(jInt(app.stats["xp"]))")
                     V3HeroMetric(title: "السلسلة", value: "\(jInt(app.stats["streak"])) يوم")
                 }
             }
@@ -2349,7 +2349,7 @@ struct V3SuccessView: View {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 NavigationLink(destination: ReviewView()) { V3ToolCard(title: "المراجعة الذكية", subtitle: "آخر الأخطاء", icon: "brain.head.profile") }
                 NavigationLink(destination: StudyPlanView()) { V3ToolCard(title: "خطة الدراسة", subtitle: "هدف يومي", icon: "calendar") }
-                NavigationLink(destination: AchievementsView()) { V3ToolCard(title: "الإنجازات", subtitle: "XP والمستوى", icon: "medal.fill") }
+                NavigationLink(destination: AchievementsView()) { V3ToolCard(title: "الإنجازات", subtitle: "النقاط والمستوى", icon: "medal.fill") }
                 NavigationLink(destination: V3ContestView()) { V3ToolCard(title: "تحدي المليون", subtitle: "المتصدرون", icon: "trophy.fill") }
             }
             .buttonStyle(.plain)
@@ -2534,7 +2534,7 @@ struct V3ContestView: View {
                     Text("مركزك الحالي").font(.subheadline).foregroundStyle(.secondary)
                     if let mine = contest["mine"] as? JSON {
                         Text("#\(jInt(mine["rank"]))").font(.largeTitle.bold()).foregroundStyle(Color.murshidBlue)
-                        Text("\(jInt(mine["xp"])) XP · \(jInt(mine["correct"])) إجابة صحيحة").font(.caption).foregroundStyle(.secondary)
+                        Text("\(jInt(mine["xp"])) نقطة · \(jInt(mine["correct"])) إجابة صحيحة").font(.caption).foregroundStyle(.secondary)
                     } else {
                         Text("ابدأ الإجابة لتدخل الترتيب").font(.headline)
                     }
@@ -2562,7 +2562,7 @@ struct V3ContestView: View {
                                 if !jString(row["grade"]).isEmpty { Text(jString(row["grade"])).font(.caption).foregroundStyle(.secondary) }
                             }
                             Spacer()
-                            Text("\(jInt(row[xpKey])) XP").font(.subheadline.bold()).foregroundStyle(.secondary)
+                            Text("\(jInt(row[xpKey])) نقطة").font(.subheadline.bold()).foregroundStyle(.secondary)
                         }
                     }
                 }

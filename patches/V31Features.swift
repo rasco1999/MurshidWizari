@@ -144,6 +144,13 @@ struct V31HomeView: View {
                         .accessibilityLabel("تاريخ ووقت بغداد")
                 }
 
+                HStack(spacing: 6) {
+                    Image(systemName: "star.circle.fill")
+                    Text("\(jInt(app.stats["xp"])) نقطة")
+                }
+                .font(.subheadline.bold().monospacedDigit())
+                .foregroundStyle(Color.murshidGold)
+
                 HStack(spacing: 10) {
                     welcomeStat(
                         value: "\(jInt(app.stats["total_answers"]))",
