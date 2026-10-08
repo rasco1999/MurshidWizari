@@ -7,6 +7,12 @@ struct MurshidWizariApp: App {
     @StateObject private var device = DeviceServices.shared
     @AppStorage("appearance") private var appearance = "system"
     @State private var showAcademicWelcome = true
+    // A native iOS app often resumes instead of relaunching when its icon is tapped.
+    // Remember genuine background visits so the greeting is visible on both paths.
+    @State private var backgroundedAt: Date?
+    @State private var pendingWelcomeAfterUnlock = false
+    @State private var welcomePlaybackInProgress = false
+    @State private var completedInitialWelcome = false
 
     private var colorScheme: ColorScheme? {
         appearance == "dark" ? .dark : (appearance == "light" ? .light : nil)
@@ -36,24 +42,67 @@ struct MurshidWizariApp: App {
                 }
             }
             .task {
+                // Cold start: show the branded transition long enough to be noticed,
+                // while restoring authentication in parallel.
+                guard !completedInitialWelcome else { return }
                 async let restore: Void = restoreSession()
-                try? await Task.sleep(nanoseconds: 2_200_000_000)
+                try? await Task.sleep(nanoseconds: 2_350_000_000)
                 await restore
-                withAnimation(.easeOut(duration: 0.28)) { showAcademicWelcome = false }
+                withAnimation(.easeInOut(duration: 0.48)) {
+                    showAcademicWelcome = false
+                }
+                completedInitialWelcome = true
             }
             .onChange(of: scenePhase) { phase in
                 switch phase {
                 case .background:
+                    backgroundedAt = Date()
                     device.didEnterBackground()
                 case .active:
-                    Task {
+                    Task { @MainActor in
                         await device.didBecomeActive()
-                        if app.authenticated { try? await APIClient.shared.heartbeat() }
+                        if app.v3Authenticated { try? await APIClient.shared.heartbeat() }
+                        // A brief system interruption should not replay the greeting.
+                        guard completedInitialWelcome,
+                              let left = backgroundedAt else { return }
+                        backgroundedAt = nil
+                        guard Date().timeIntervalSince(left) >= 3 else { return }
+                        if device.isLocked {
+                            // Preserve Face ID privacy: wait until the student unlocks.
+                            pendingWelcomeAfterUnlock = true
+                        } else {
+                            await replayWelcome()
+                        }
                     }
                 default: break
                 }
             }
+            .onChange(of: device.isLocked) { locked in
+                guard !locked, pendingWelcomeAfterUnlock, scenePhase == .active else { return }
+                pendingWelcomeAfterUnlock = false
+                Task { @MainActor in await replayWelcome() }
+            }
         }
+    }
+
+    @MainActor
+    private func replayWelcome() async {
+        guard completedInitialWelcome,
+              !device.isLocked,
+              !showAcademicWelcome,
+              !welcomePlaybackInProgress,
+              scenePhase == .active else { return }
+
+        welcomePlaybackInProgress = true
+        withAnimation(.spring(response: 0.55, dampingFraction: 0.86)) {
+            showAcademicWelcome = true
+        }
+        // Resume greeting is lightweight; it never waits for network access.
+        try? await Task.sleep(nanoseconds: 2_150_000_000)
+        withAnimation(.easeInOut(duration: 0.45)) {
+            showAcademicWelcome = false
+        }
+        welcomePlaybackInProgress = false
     }
 
     @MainActor
