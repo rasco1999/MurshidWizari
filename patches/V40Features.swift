@@ -937,22 +937,40 @@ struct V40AttemptHistoryView: View {
 }
 
 struct V40WhatsNewView: View {
+    @EnvironmentObject var app: AppSession
+
+    private var installedVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "4.3.0"
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
                 V3IntroCard(
-                    eyebrow: "الإصدار 4.2",
+                    eyebrow: "الإصدار \(installedVersion)",
                     title: "ما الجديد؟",
-                    text: "تحديث شامل لتجربة الطالب، بنك الأسئلة، والملف الشخصي.",
+                    text: "تحسينات واجهة الطالب، الاشتراك، الصورة الشخصية، والقصص.",
                     icon: "sparkles"
                 )
-                feature("line.3.horizontal.decrease.circle.fill", "مرشحات متقدمة", "فلترة حسب النوع والسنة والدور والصعوبة وحالتك السابقة.")
-                feature("slider.horizontal.3", "اختبار مخصص", "حدد المادة والمواضيع وعدد الأسئلة والمؤقت.")
-                feature("plus.bubble.fill", "اقترح سؤالًا", "أرسل سؤالًا مع الإجابة والمصدر وتابع حالته.")
-                feature("note.text", "ملاحظات خاصة", "احفظ ملاحظة خاصة على أي سؤال.")
-                feature("shield.checkered", "سلامة أعلى", "فحص نوع السؤال وخياراته وإجابته ومساره قبل عرضه.")
-                feature("person.crop.circle.badge.checkmark", "صورة الحساب فورًا", "تتغير الصورة مباشرة بدون انتظار موافقة يدوية أو خدمة فحص خارجية.")
-                feature("magnifyingglass", "بحث في الأسئلة", "ابحث داخل بنك الأسئلة والمواضيع بسرعة.")
+                feature("crown.fill", "زر اشتراك واضح", "يظهر الاشتراك في واجهة الطالب، وفي الاختبار عند انتهاء الأسئلة المجانية.")
+                feature("person.crop.circle.badge.checkmark", "تحسين صورة الحساب", "عرض الصورة مباشرة بعد رفعها والاحتفاظ بها أثناء تحديث رابط الخادم.")
+                feature("book.closed.fill", "غيّر جو", "عناوين القصص تظهر أولاً؛ افتح أي عنوان لقراءة القصة كاملة.")
+                feature("arrow.down.app.fill", "تنبيهات التحديث", "مقارنة نسخة تطبيقك الحالية بآخر إصدار منشور على الخادم.")
+                feature("line.3.horizontal.decrease.circle.fill", "مرشحات الاختبارات", "فلترة حسب النوع والسنة والدور والصعوبة وحالة السؤال.")
+                feature("slider.horizontal.3", "اختبار مخصص", "حدد المادة والموضوع وعدد الأسئلة.")
+                feature("plus.bubble.fill", "اقترح سؤالًا", "أرسل سؤالًا مع الإجابة والمصدر.")
+                let liveNotes = jString(app.releaseInfo["notes"])
+                let remoteVersion = jString(app.releaseInfo["version"])
+                if !liveNotes.isEmpty && !remoteVersion.isEmpty {
+                    MurshidCard {
+                        VStack(alignment: .leading, spacing: 7) {
+                            Label("ملاحظات الإصدار \(remoteVersion)", systemImage: "newspaper.fill")
+                                .font(.headline)
+                            Text(liveNotes).font(.subheadline).foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
             }
             .padding(16)
         }
@@ -964,10 +982,8 @@ struct V40WhatsNewView: View {
     private func feature(_ icon: String, _ title: String, _ text: String) -> some View {
         MurshidCard {
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: icon)
-                    .font(.title2)
-                    .foregroundStyle(Color.murshidBlue)
-                    .frame(width: 40)
+                Image(systemName: icon).font(.title2)
+                    .foregroundStyle(Color.murshidBlue).frame(width: 40)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).font(.headline)
                     Text(text).font(.subheadline).foregroundStyle(.secondary)
@@ -977,7 +993,6 @@ struct V40WhatsNewView: View {
         }
     }
 }
-
 
 struct V40QuestionSearchView: View {
     @State private var query = ""
