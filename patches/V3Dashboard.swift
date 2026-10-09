@@ -933,7 +933,7 @@ struct V3SubjectRow: View {
         if name.contains("فيزياء") { return "atom" }
         if name.contains("كيمي") { return "flask.fill" }
         if name.contains("أحياء") { return "leaf.fill" }
-        if name.contains("إنك") || name.contains("انك") || name.contains("فرنسي") { return "globe" }
+        if name.contains("إنك") || name.contains("انك") { return "globe" }
         if name.contains("إسلام") || name.contains("اسلام") { return "book.closed.fill" }
         if name.contains("تاريخ") || name.contains("اجتماع") || name.contains("جغراف") { return "map.fill" }
         return "book.closed.fill"
