@@ -1,0 +1,43 @@
+name: Package Murshid Admin Server Files
+
+on:
+  push:
+    branches: [ build/ios-study-recovery-20261009 ]
+    paths:
+      - '.github/workflows/package-admin-server.yml'
+      - 'server_updates/admin_app_v1/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify PHP and two durations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in server_updates/admin_app_v1/admin/*.php server_updates/admin_app_v1/mobile/*.php server_updates/admin_app_v1/tools/*.php; do php -l "$f"; done
+          grep -Fq 'in_array($months, [1, 3], true)' server_updates/admin_app_v1/admin/mobile-console.php
+          grep -Fq 'in_array($months, [1, 3], true)' server_updates/admin_app_v1/mobile/redeem-subscription-code.php
+      - name: Package installation files
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd server_updates/admin_app_v1
+          zip -r -q ../../Murshid_Admin_Server_v1_0_0.zip README_AR.md admin mobile sql tools
+          cd ../..
+          sha256sum Murshid_Admin_Server_v1_0_0.zip > Murshid_Admin_Server_v1_0_0.sha256
+          unzip -t Murshid_Admin_Server_v1_0_0.zip
+      - name: Upload server package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Murshid-Admin-Server-v1.0.0
+          path: |
+            Murshid_Admin_Server_v1_0_0.zip
+            Murshid_Admin_Server_v1_0_0.sha256
+          retention-days: 14
+          if-no-files-found: error
