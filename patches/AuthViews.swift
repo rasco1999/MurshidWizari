@@ -4439,16 +4439,18 @@ struct V3PasswordRecoveryView: View {
                                 AuthMessage(text: resultMessage, kind: .success)
                             }
 
-                            Button {
-                                Task { await beginRecovery() }
-                            } label: {
-                                HStack(spacing: 10) {
-                                    if sending { ProgressView().tint(.white) }
-                                    Label(sending ? "جاري إرسال طلب الاستعادة…" : "إرسال إلى وسيلة الحساب المسجلة", systemImage: "lock.shield.fill")
+                            if !email.isEmpty || !phone.isEmpty {
+                                Button {
+                                    Task { await beginRecovery() }
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        if sending { ProgressView().tint(.white) }
+                                        Label(sending ? "جاري إرسال طلب الاستعادة…" : "إرسال إلى وسيلة الحساب المسجلة", systemImage: "lock.shield.fill")
+                                    }
                                 }
+                                .buttonStyle(PrimaryButtonStyle())
+                                .disabled(fetching || sending || !canSend || !resultMessage.isEmpty)
                             }
-                            .buttonStyle(PrimaryButtonStyle())
-                            .disabled(fetching || sending || !canSend || !resultMessage.isEmpty)
                         }
                     }
                 }
