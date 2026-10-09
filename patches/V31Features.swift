@@ -1191,6 +1191,10 @@ struct V31AccountView: View {
     @State private var uploadingAvatar = false
     @State private var faceIDMessage = ""
     @State private var avatarMessage = ""
+    @State private var activationCode = ""
+    @State private var activatingCode = false
+    @State private var activationSuccess = ""
+    @State private var activationError = ""
 
     var body: some View {
         ScrollView {
@@ -1198,6 +1202,7 @@ struct V31AccountView: View {
                 profileCard
                 if loading { V3SkeletonCard(height: 90) }
                 subscriptionCard
+                activationCodeCard
                 servicesSection
                 securitySection
                 logoutSection
@@ -1315,6 +1320,88 @@ struct V31AccountView: View {
                 }
             }
         }.buttonStyle(.plain)
+    }
+
+    private var activationCodeCard: some View {
+        MurshidCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("تفعيل الاشتراك بكود", systemImage: "ticket.fill")
+                    .font(.headline.bold())
+                    .foregroundStyle(Color.murshidBlue)
+                Text("إذا حصلت على كود من إدارة المنصة، أدخله هنا لتفعيل اشتراكك لمدة شهر أو أكثر حسب صلاحية الكود.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                TextField("MW-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX", text: $activationCode)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled(true)
+                    .keyboardType(.asciiCapable)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(activatingCode)
+                    .accessibilityLabel("كود تفعيل الاشتراك")
+                Button {
+                    Task { await redeemActivationCode() }
+                } label: {
+                    HStack(spacing: 9) {
+                        if activatingCode { ProgressView().tint(.white) }
+                        Image(systemName: "checkmark.shield.fill")
+                        Text(activatingCode ? "جاري التحقق من الكود…" : "تفعيل الاشتراك")
+                    }
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(activatingCode || activationCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                if !activationSuccess.isEmpty {
+                    V3InlineMessage(text: activationSuccess, icon: "checkmark.seal.fill", tone: .success)
+                }
+                if !activationError.isEmpty {
+                    V3InlineMessage(text: activationError, icon: "exclamationmark.triangle.fill", tone: .warning)
+                }
+                Text("كل كود يُستخدم مرة واحدة فقط، ومدته يحددها إصدار الكود من الإدارة.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @MainActor
+    private func redeemActivationCode() async {
+        guard !activatingCode else { return }
+        activationError = ""
+        activationSuccess = ""
+        let normalized = activationCode.uppercased()
+            .replacingOccurrences(of: "-", with: "")
+            .filter { !$0.isWhitespace }
+        guard normalized.range(of: #"^MW[A-F0-9]{24}$"#, options: .regularExpression) != nil else {
+            activationError = "صيغة الكود غير صحيحة. تأكد من كتابة الكود الصادر من الإدارة كاملاً."
+            haptic(.error)
+            return
+        }
+        activatingCode = true
+        do {
+            let result = try await APIClient.shared.request("mobile/redeem-subscription-code.php", method: "POST", body: [
+                "csrf": app.csrf,
+                "code": normalized
+            ])
+            guard jBool(result["subscribed"]) else {
+                throw APIError(message: "لم يؤكد الخادم تفعيل الاشتراك. لا يزال الكود غير مفعّل.", status: 502, paymentRequired: false)
+            }
+            // Only a successful, authenticated server response can unlock a subscription.
+            // A failed follow-up refresh must not spend a valid code a second time.
+            let refreshed = try? await APIClient.shared.bootstrap()
+            if let refreshed, jBool(refreshed["subscribed"]) {
+                app.applyBootstrap(refreshed)
+            } else {
+                app.subscribed = true
+                app.subscriptionDaysRemaining = max(0, jInt(result["subscription_days_remaining"]))
+            }
+            activationCode = ""
+            activationSuccess = jString(result["message"], default: "تم تأكيد تفعيل اشتراكك من الخادم.")
+            haptic()
+        } catch {
+            activationError = error.localizedDescription
+            haptic(.error)
+        }
+        activatingCode = false
     }
 
     private var servicesSection: some View {
