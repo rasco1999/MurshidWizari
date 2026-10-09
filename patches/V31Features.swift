@@ -40,7 +40,7 @@ struct V31HomeView: View {
     @State private var error = ""
     @State private var currentClock = Date()
     @State private var homeAvatarURL: URL?
-    private let clockTicker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    private let clockTicker = Timer.publish(every: 15, on: .main, in: .common).autoconnect()
 
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
@@ -151,11 +151,6 @@ struct V31HomeView: View {
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.89))
                     .fixedSize(horizontal: false, vertical: true)
-                Label(clockText, systemImage: "clock")
-                    .font(.system(.caption, design: .monospaced).weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.94))
-                    .environment(\.layoutDirection, .leftToRight)
-
                 HStack(spacing: 10) {
                     welcomeStat(
                         value: "\(jInt(app.stats["total_answers"]))",
@@ -178,6 +173,27 @@ struct V31HomeView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .clipShape(RoundedRectangle(cornerRadius: 25, style: .continuous))
+        .overlay(alignment: .topTrailing) {
+            VStack(spacing: 2) {
+                HStack(spacing: 5) {
+                    Image(systemName: "clock.fill")
+                        .foregroundStyle(Color.murshidGold)
+                    Text(clockTimeText).font(.system(.subheadline, design: .rounded).bold().monospacedDigit())
+                }
+                Text(clockDateText)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.82))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.white.opacity(0.13), in: RoundedRectangle(cornerRadius: 13))
+            .overlay(RoundedRectangle(cornerRadius: 13).stroke(Color.murshidGold.opacity(0.45)))
+            .environment(\.layoutDirection, .leftToRight)
+            .padding(.top, 14)
+            .padding(.trailing, 14)
+            .accessibilityLabel("الوقت \(clockTimeText)، التاريخ \(clockDateText)")
+        }
         .shadow(color: Color.murshidNavy.opacity(0.20), radius: 20, y: 9)
         .padding(.top, 6)
         .accessibilityElement(children: .combine)
@@ -491,12 +507,21 @@ struct V31HomeView: View {
         return messages[abs(day) % messages.count]
     }
 
-    private var clockText: String {
+    private var clockTimeText: String {
         let fmt = DateFormatter()
         fmt.locale = Locale(identifier: "en_US_POSIX")
         fmt.calendar = Calendar(identifier: .gregorian)
         fmt.timeZone = .current
-        fmt.dateFormat = "yyyy/MM/dd  HH:mm:ss"
+        fmt.dateFormat = "HH:mm"
+        return fmt.string(from: currentClock)
+    }
+
+    private var clockDateText: String {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.calendar = Calendar(identifier: .gregorian)
+        fmt.timeZone = .current
+        fmt.dateFormat = "dd/MM"
         return fmt.string(from: currentClock)
     }
 
@@ -539,6 +564,7 @@ struct V31HomeView: View {
 
 private struct V31WebsiteHeroSlider: View {
     @Environment(\.openURL) private var openURL
+    @EnvironmentObject private var device: DeviceServices
     @State private var selection = 0
     @State private var images: [Int: UIImage] = [:]
     @State private var ready = false
@@ -559,9 +585,15 @@ private struct V31WebsiteHeroSlider: View {
             .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color.primary.opacity(0.05)))
             .shadow(color: Color.black.opacity(0.08), radius: 18, y: 8)
             .onReceive(timer) { _ in
-                guard ready else { return }
+                // Avoid rotating through four network images on metered 4G/5G.
+                guard ready && !device.isMeteredConnection else { return }
                 withAnimation(.easeInOut(duration: 0.35)) {
                     selection = (selection + 1) % V31SlideKind.allCases.count
+                }
+            }
+            .onChange(of: selection) { value in
+                if device.isMeteredConnection, let slide = V31SlideKind(rawValue: value) {
+                    Task { await loadImage(for: slide) }
                 }
             }
 
@@ -575,6 +607,9 @@ private struct V31WebsiteHeroSlider: View {
             }
         }
         .task { await preloadAllImages() }
+        .onChange(of: device.isMeteredConnection) { metered in
+            if !metered { Task { await preloadAllImages() } }
+        }
         .alert("أعلن هنا", isPresented: $showingAdvertisePrice) {
             Button("إلغاء", role: .cancel) { }
             Button("إكمال") {
@@ -632,13 +667,19 @@ private struct V31WebsiteHeroSlider: View {
 
     @MainActor
     private func preloadAllImages() async {
+        if device.isMeteredConnection {
+            // Only the visible slide is downloaded; the rest remain lightweight
+            // gradients until the student actually swipes to them.
+            if let current = V31SlideKind(rawValue: selection) { await loadImage(for: current) }
+            return
+        }
         guard images.count < V31SlideKind.allCases.count else {
             ready = true
             return
         }
 
         let requests: [(Int, URL)] = V31SlideKind.allCases.compactMap { kind in
-            guard let url = kind.imageURL else { return nil }
+            guard images[kind.rawValue] == nil, let url = kind.imageURL else { return nil }
             return (kind.rawValue, url)
         }
 
@@ -668,6 +709,19 @@ private struct V31WebsiteHeroSlider: View {
             if let image = UIImage(data: data) { images[id] = image }
         }
         ready = images.count == V31SlideKind.allCases.count
+    }
+
+    @MainActor
+    private func loadImage(for kind: V31SlideKind) async {
+        guard images[kind.rawValue] == nil, let url = kind.imageURL else { return }
+        var request = URLRequest(url: url)
+        request.cachePolicy = .returnCacheDataElseLoad
+        request.timeoutInterval = 8
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode),
+              let image = UIImage(data: data) else { return }
+        images[kind.rawValue] = image
     }
 }
 
@@ -785,33 +839,239 @@ private struct V31SchoolAdTicker: View {
     }
 }
 
-struct V31StudyPlaceholderView: View {
+// A dedicated grade-scoped catalogue keeps study content separate from exams
+// and predictions. The server is authoritative about the student's grade.
+struct V31StudyView: View {
     @EnvironmentObject private var app: AppSession
+    @State private var subjects: [Subject] = []
+    @State private var loading = true
+    @State private var error = ""
 
     var body: some View {
         ScrollView {
+            LazyVStack(spacing: 13) {
+                V3IntroCard(
+                    eyebrow: "ادرس • \(app.user?.grade ?? "صفّك")",
+                    title: "موادك وفصولك الدراسية",
+                    text: "تظهر مواد صفك فقط. افتح المادة لاختيار الفصل، وستظهر روابط شرح YouTube عند إضافتها من الإدارة.",
+                    icon: "books.vertical.fill"
+                )
+                if loading {
+                    ForEach(0..<3, id: \.self) { _ in V3SkeletonCard(height: 94) }
+                } else if subjects.isEmpty {
+                    EmptyStateView(systemImage: "books.vertical", title: "لا توجد مواد لهذا الصف", message: "سيتم عرض المواد فور تفعيلها من الإدارة.")
+                } else {
+                    V3SectionHeader(title: "مواد صفّك", subtitle: "\(subjects.count) مادة متاحة", icon: "square.grid.2x2.fill")
+                    ForEach(subjects) { subject in
+                        NavigationLink(destination: V31StudySubjectView(subject: subject)) {
+                            MurshidCard {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "book.closed.fill")
+                                        .font(.title2)
+                                        .foregroundStyle(Color.murshidBlue)
+                                        .frame(width: 45, height: 45)
+                                        .background(Color.murshidBlue.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(subject.name).font(.headline).foregroundStyle(.primary)
+                                        Text("استعرض فصول المادة وروابط شرحها")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer(minLength: 4)
+                                    Image(systemName: "chevron.left").font(.caption.bold()).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                if !error.isEmpty { V3InlineMessage(text: error, icon: "wifi.exclamationmark", tone: .warning) }
+            }
+            .padding(16)
+            .padding(.bottom, 16)
+        }
+        .background(Color.murshidBackground.ignoresSafeArea())
+        .navigationTitle("ادرس")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await loadSubjects() }
+        .refreshable { await loadSubjects() }
+    }
+
+    private func loadSubjects() async {
+        let fallback = app.subjects
+        do {
+            let data = try await APIClient.shared.request(
+                "mobile/study-catalog.php",
+                cacheKey: "study-subjects-\(app.user?.id ?? 0)-\(app.user?.gradeID ?? 0)"
+            )
+            await MainActor.run {
+                subjects = jArray(data["subjects"]).map(Subject.init)
+                loading = false
+                error = ""
+            }
+        } catch {
+            // Older server installations still expose the student's grade via bootstrap.
+            await MainActor.run {
+                subjects = fallback
+                loading = false
+                error = fallback.isEmpty ? "تعذر تحديث المواد، تأكد من اتصالك بالإنترنت." : ""
+            }
+        }
+    }
+}
+
+private struct V31StudyVideo: Identifiable {
+    let title: String
+    let url: URL
+    var id: String { url.absoluteString }
+
+    init?(title: String, rawURL: String) {
+        guard let url = URL(string: rawURL), url.scheme?.lowercased() == "https",
+              let host = url.host?.lowercased(),
+              ["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be", "www.youtube-nocookie.com"].contains(host) else { return nil }
+        self.title = title.isEmpty ? "شاهد شرح الفصل" : title
+        self.url = url
+    }
+}
+
+private struct V31StudyChapter: Identifiable {
+    let id: Int
+    let name: String
+    let questionCount: Int
+    let videos: [V31StudyVideo]
+
+    init(_ json: JSON) {
+        id = jInt(json["id"])
+        name = jString(json["name"])
+        questionCount = jInt(json["count"])
+        var result = jArray(json["videos"]).compactMap { row in
+            V31StudyVideo(title: jString(row["title"]), rawURL: jString(row["url"]))
+        }
+        if result.isEmpty {
+            let singleURL = jString(json["video_url"], default: jString(json["youtube_url"]))
+            if let video = V31StudyVideo(title: "شاهد شرح الفصل", rawURL: singleURL) { result = [video] }
+        }
+        videos = result
+    }
+}
+
+struct V31StudySubjectView: View {
+    @EnvironmentObject private var app: AppSession
+    let subject: Subject
+    @State private var chapters: [V31StudyChapter] = []
+    @State private var loading = true
+    @State private var error = ""
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 13) {
+                V3IntroCard(eyebrow: app.user?.grade ?? "صفّك", title: subject.name, text: "فصول المادة الحالية، وروابط الشرح تظهر عند نشرها من الإدارة.", icon: "book.pages.fill")
+                if loading {
+                    ForEach(0..<3, id: \.self) { _ in V3SkeletonCard(height: 100) }
+                } else if !error.isEmpty {
+                    ErrorStateView(message: error, retry: { Task { await loadChapters() } })
+                } else if chapters.isEmpty {
+                    EmptyStateView(systemImage: "book.closed", title: "لم تُضف فصول بعد", message: "ستظهر فصول \(subject.name) المرتبطة بصفّك عند إدراجها.")
+                } else {
+                    ForEach(chapters) { chapter in
+                        MurshidCard {
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack(spacing: 11) {
+                                    Image(systemName: "text.book.closed.fill")
+                                        .foregroundStyle(Color.murshidBlue).frame(width: 28)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(chapter.name).font(.headline)
+                                        Text(chapter.questionCount > 0 ? "\(chapter.questionCount) سؤال للمراجعة" : "الفصل متاح للدراسة")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                }
+                                if chapter.videos.isEmpty {
+                                    Label("فيديوهات الشرح ستُضاف من الإدارة", systemImage: "video.badge.plus")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                } else {
+                                    ForEach(chapter.videos) { video in
+                                        Link(destination: video.url) {
+                                            Label(video.title, systemImage: "play.rectangle.fill")
+                                                .font(.subheadline.bold())
+                                                .foregroundStyle(Color.murshidBlue)
+                                                .frame(maxWidth: .infinity, alignment: .leading)
+                                                .padding(11)
+                                                .background(Color.murshidBlue.opacity(0.08), in: RoundedRectangle(cornerRadius: 11))
+                                        }
+                                    }
+                                }
+                                if chapter.questionCount > 0 {
+                                    NavigationLink(destination: V3ExamView(
+                                        topic: Topic(["id": chapter.id, "name": chapter.name, "count": chapter.questionCount]),
+                                        subject: subject
+                                    )) {
+                                        Label("اختبر نفسك في هذا الفصل", systemImage: "checkmark.circle.fill")
+                                            .font(.footnote.weight(.semibold))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(16)
+            .padding(.bottom, 16)
+        }
+        .background(Color.murshidBackground.ignoresSafeArea())
+        .navigationTitle(subject.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await loadChapters() }
+        .refreshable { await loadChapters() }
+    }
+
+    private func loadChapters() async {
+        let query = [URLQueryItem(name: "subject_id", value: "\(subject.id)")]
+        do {
+            let data: JSON
+            do {
+                data = try await APIClient.shared.request(
+                    "mobile/study-catalog.php", query: query,
+                    cacheKey: "study-chapters-\(app.user?.id ?? 0)-\(subject.id)"
+                )
+            } catch let failure as APIError where failure.status == 404 {
+                // Grade-bound existing API, until the new study endpoint is deployed.
+                data = try await APIClient.shared.request(
+                    "mobile/topics.php", query: query,
+                    cacheKey: "topics-\(app.user?.id ?? 0)-\(subject.id)"
+                )
+            }
+            await MainActor.run {
+                chapters = jArray(data["topics"]).map(V31StudyChapter.init).filter { $0.id > 0 && !$0.name.isEmpty }
+                loading = false
+                error = ""
+            }
+        } catch {
+            await MainActor.run { loading = false; self.error = error.localizedDescription }
+        }
+    }
+}
+
+struct V31PredictionsLockedView: View {
+    var body: some View {
+        ScrollView {
             LazyVStack(spacing: 18) {
-                V3IntroCard(eyebrow: "ادرس", title: "مساحتك للدراسة", text: "سنعمل على تطوير هذا القسم في تحديث لاحق.", icon: "book.fill")
+                V3IntroCard(eyebrow: "المرشحات", title: "المرشحات الوزارية", text: "هذا القسم مستقل عن ادرس والإعلانات ومتاح للمشتركين.", icon: "scope")
                 MurshidCard {
                     VStack(spacing: 12) {
-                        Image(systemName: "books.vertical.fill")
-                            .font(.system(size: 44)).foregroundStyle(Color.murshidBlue)
-                        Text("قسم ادرس قيد الإعداد").font(.title3.bold())
-                        Text("سيكون هنا محتوى الدراسة في تحديث لاحق.")
-                            .foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        Image(systemName: "lock.shield.fill").font(.largeTitle).foregroundStyle(Color.murshidBlue)
+                        Text("المرشحات متاحة بعد الاشتراك").font(.headline)
+                        NavigationLink(destination: V31SubscriptionView()) {
+                            Label("عرض الاشتراكات", systemImage: "arrow.left.circle.fill")
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
                     }
                     .frame(maxWidth: .infinity)
-                }
-                if app.subscribed {
-                    NavigationLink(destination: V44PredictionsView()) {
-                        V3ToolCard(title: "المرشحات الوزارية", subtitle: "مرشحات 2027 للمشتركين", icon: "scope")
-                    }
                 }
             }
             .padding(16)
         }
         .background(Color.murshidBackground.ignoresSafeArea())
-        .navigationTitle("ادرس")
+        .navigationTitle("المرشحات")
     }
 }
 
