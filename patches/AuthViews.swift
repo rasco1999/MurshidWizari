@@ -1710,44 +1710,105 @@ struct SafariSheet: UIViewControllerRepresentable {
 struct MainV3TabView: View {
     @EnvironmentObject var app: AppSession
     @State private var selection = 0
+    @State private var visited: Set<Int> = [0]
+    @State private var keyboardVisible = false
+
+    // Six actual destinations, with the predictions button immediately left of Study.
+    // A native iPhone TabView moves the sixth destination into "More".
+    private let tabs: [(title: String, symbol: String)] = [
+        ("الرئيسية", "house.fill"),
+        ("الاختبارات", "checklist.checked"),
+        ("ادرس", "book.fill"),
+        ("المرشحات", "scope"),
+        ("الإعلانات", "megaphone.fill"),
+        ("حسابي", "person.crop.circle.fill")
+    ]
 
     var body: some View {
-        TabView(selection: $selection) {
-            NavigationStack { V3HomeView() }
-                .tabItem { Label("الرئيسية", systemImage: "house.fill") }
-                .tag(0)
-
-            NavigationStack { V3TestsView() }
-                .tabItem { Label("الاختبارات", systemImage: "checklist.checked") }
-                .tag(1)
-
-            NavigationStack { V31StudyPlaceholderView() }
-                .tabItem { Label("ادرس", systemImage: "book.fill") }
-                .tag(2)
-
-            NavigationStack { V31SchoolAdsView() }
-                .tabItem { Label("الإعلانات", systemImage: "megaphone.fill") }
-                .tag(3)
-
-            NavigationStack { V3AccountView() }
-                .tabItem { Label("حسابي", systemImage: "person.crop.circle.fill") }
-                .tag(4)
+        ZStack {
+            Color.murshidBackground.ignoresSafeArea()
+            if visited.contains(0) {
+                tabPane(0) { NavigationStack { V31HomeView() } }
+            }
+            if visited.contains(1) {
+                tabPane(1) { NavigationStack { V3TestsView() } }
+            }
+            if visited.contains(2) {
+                tabPane(2) { NavigationStack { V31StudyView() } }
+            }
+            if visited.contains(3) {
+                tabPane(3) {
+                    NavigationStack {
+                        if app.subscribed { V44PredictionsView() }
+                        else { V31PredictionsLockedView() }
+                    }
+                }
+            }
+            if visited.contains(4) {
+                tabPane(4) { NavigationStack { V31SchoolAdsView() } }
+            }
+            if visited.contains(5) {
+                tabPane(5) { NavigationStack { V31AccountView() } }
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !keyboardVisible { bottomBar }
         }
         .tint(.murshidBlue)
-        .toolbarBackground(.visible, for: .tabBar)
         .environment(\.layoutDirection, .rightToLeft)
-        .onChange(of: selection) { _ in selectionHaptic() }
+        .onChange(of: selection) { value in
+            visited.insert(value)
+            selectionHaptic()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardVisible = true }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardVisible = false }
         .task { await keepSessionAlive() }
         .onOpenURL { url in
             switch (url.host ?? url.path.replacingOccurrences(of: "/", with: "")).lowercased() {
             case "tests", "exam", "subjects": selection = 1
-            case "study", "learn", "success", "progress", "predictions", "filters": selection = 2
-            case "ads", "advertisements": selection = 3
-            case "account", "subscription": selection = 4
+            case "study", "learn", "success", "progress": selection = 2
+            case "predictions", "filters": selection = 3
+            case "ads", "advertisements": selection = 4
+            case "account", "subscription": selection = 5
             default: selection = 0
             }
-            selectionHaptic()
         }
+    }
+
+    private func tabPane<Content: View>(_ index: Int, @ViewBuilder content: () -> Content) -> some View {
+        content()
+            .opacity(selection == index ? 1 : 0)
+            .allowsHitTesting(selection == index)
+            .accessibilityHidden(selection != index)
+    }
+
+    private var bottomBar: some View {
+        HStack(spacing: 0) {
+            ForEach(tabs.indices, id: \.self) { index in
+                Button {
+                    selection = index
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: tabs[index].symbol)
+                            .font(.system(size: 19, weight: selection == index ? .bold : .medium))
+                        Text(tabs[index].title)
+                            .font(.system(size: 10, weight: selection == index ? .bold : .medium))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    .foregroundStyle(selection == index ? Color.murshidBlue : Color.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 49)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(tabs[index].title)
+            }
+        }
+        .padding(.horizontal, 5)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .background(.regularMaterial)
+        .overlay(alignment: .top) { Divider() }
     }
 
     private func keepSessionAlive() async {
