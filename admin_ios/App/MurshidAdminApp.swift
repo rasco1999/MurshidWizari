@@ -52,12 +52,12 @@ enum LoginStage {case loading, signin, otp, ready}
     private let endpoint=URL(string:"https://www.mur-iq.com/admin/native-api.php")!
     private func dataWithSafeRetry(_ request: URLRequest, retryRead: Bool) async throws -> (Data, URLResponse) {
         let retryCodes: Set<Int> = [
-            URLError.timedOut.rawValue,
-            URLError.networkConnectionLost.rawValue,
-            URLError.notConnectedToInternet.rawValue,
-            URLError.cannotConnectToHost.rawValue,
-            URLError.cannotFindHost.rawValue,
-            URLError.dnsLookupFailed.rawValue
+            URLError.Code.timedOut.rawValue,
+            URLError.Code.networkConnectionLost.rawValue,
+            URLError.Code.notConnectedToInternet.rawValue,
+            URLError.Code.cannotConnectToHost.rawValue,
+            URLError.Code.cannotFindHost.rawValue,
+            URLError.Code.dnsLookupFailed.rawValue
         ]
         let attempts = retryRead ? 2 : 1
         for attempt in 0..<attempts {
