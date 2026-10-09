@@ -134,7 +134,7 @@ struct V31HomeView: View {
                     .overlay(Circle().stroke(.white.opacity(0.3), lineWidth: 2))
                     .foregroundStyle(.white)
                     VStack(alignment: .leading, spacing: 5) {
-                        Text("أهلًا بعودتك ✨")
+                        Text(timeOfDayGreeting)
                             .font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.79))
                         Text(firstName)
                             .font(.system(.title, design: .rounded, weight: .bold))
@@ -540,6 +540,19 @@ struct V31HomeView: View {
         app.user?.name.split(separator: " ").first.map(String.init) ?? "طالبنا"
     }
 
+    private var timeOfDayGreeting: String {
+        // Use Baghdad civil time even when the student's device is set to
+        // another timezone. The existing clock ticker refreshes this label.
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = displayTimeZone
+        let hour = calendar.component(.hour, from: currentClock)
+        return hour < 12 ? "صباح الخير" : "مساء الخير"
+    }
+
+    private var displayTimeZone: TimeZone {
+        TimeZone(identifier: "Asia/Baghdad") ?? .current
+    }
+
     private var motivation: String {
         let messages = ["الاستمرار اليوم يصنع تفوق الغد.", "كل خطوة صغيرة تقرّبك من حلمك.", "اجعل هذا اليوم فرصة جديدة للنجاح.", "ثق بقدرتك، وابدأ من السؤال الأول.", "لا تقارن تقدمك إلا بنفسك بالأمس.", "الاجتهاد المتكرر يصنع إنجازاً كبيراً.", "أنت أقرب إلى هدفك مما تتصور.", "بعض الصبر وكثير من العمل يصنع الفرق.", "مراجعتك اليوم ترفع ثقتك غداً.", "العلم طريقك إلى مستقبل تستحقه."]
         let day = Calendar.current.ordinality(of: .day, in: .era, for: currentClock) ?? 0
@@ -550,7 +563,7 @@ struct V31HomeView: View {
         let fmt = DateFormatter()
         fmt.locale = Locale(identifier: "en_US_POSIX")
         fmt.calendar = Calendar(identifier: .gregorian)
-        fmt.timeZone = .current
+        fmt.timeZone = displayTimeZone
         fmt.dateFormat = "HH:mm"
         return fmt.string(from: currentClock)
     }
@@ -559,7 +572,7 @@ struct V31HomeView: View {
         let fmt = DateFormatter()
         fmt.locale = Locale(identifier: "en_US_POSIX")
         fmt.calendar = Calendar(identifier: .gregorian)
-        fmt.timeZone = .current
+        fmt.timeZone = displayTimeZone
         fmt.dateFormat = "dd/MM"
         return fmt.string(from: currentClock)
     }
@@ -845,7 +858,10 @@ private struct V31SchoolAdTicker: View {
     @State private var measuredWidth: CGFloat = 0
 
     private var repeatedText: some View {
-        Text(text).font(.subheadline.bold()).fixedSize(horizontal: true, vertical: false)
+        Text(text)
+            .font(.subheadline.bold())
+            .fixedSize(horizontal: true, vertical: false)
+            .environment(\.layoutDirection, .rightToLeft)
     }
 
     var body: some View {
@@ -854,18 +870,21 @@ private struct V31SchoolAdTicker: View {
                 repeatedText.frame(maxWidth: .infinity, alignment: .trailing)
             } else {
                 TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
-                    let distance = max(measuredWidth + 24, 1)
-                    let travel = CGFloat(context.date.timeIntervalSinceReferenceDate * 28)
-                        .truncatingRemainder(dividingBy: distance)
-                    HStack(spacing: 24) {
+                    GeometryReader { viewport in
+                        let textWidth = max(measuredWidth, 1)
+                        let distance = max(viewport.size.width, 1) + textWidth + 24
+                        let travel = CGFloat((context.date.timeIntervalSinceReferenceDate * 28)
+                            .truncatingRemainder(dividingBy: Double(distance)))
+                        // Physical left → right motion, independent of the
+                        // Arabic text's right-to-left reading direction.
                         repeatedText.background {
                             GeometryReader { geometry in
                                 Color.clear.preference(key: V31SchoolAdTickerWidth.self, value: geometry.size.width)
                             }
                         }
-                        repeatedText.accessibilityHidden(true)
+                        .position(x: travel - textWidth / 2, y: viewport.size.height / 2)
                     }
-                    .offset(x: -distance + travel)
+                    .environment(\.layoutDirection, .leftToRight)
                 }
                 .onPreferenceChange(V31SchoolAdTickerWidth.self) { measuredWidth = $0 }
             }
@@ -873,7 +892,7 @@ private struct V31SchoolAdTicker: View {
         .frame(maxWidth: .infinity, minHeight: 48, maxHeight: 48)
         .background(Color.murshidBlue.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
         .clipped()
-        .accessibilityLabel("شريط إعلانات المدارس المتحرك")
+        .accessibilityLabel(text)
     }
 }
 
