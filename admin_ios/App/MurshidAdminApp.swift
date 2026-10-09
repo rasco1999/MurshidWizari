@@ -129,7 +129,7 @@ enum LoginStage {case loading, signin, otp, ready}
             notice=s(response,"message","تم حفظ العملية بنجاح.")
             if !area.isEmpty {await refresh(area)}
             return response
-        }catch {error=error.localizedDescription;return nil}
+        }catch {self.error=error.localizedDescription;return nil}
     }
 }
 @main struct MurshidAdministration:App {
