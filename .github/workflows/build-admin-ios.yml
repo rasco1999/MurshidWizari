@@ -7,6 +7,7 @@ on:
     paths:
       - 'admin_ios/**'
       - 'server_updates/admin_app_v1/**'
+      - 'server_updates/admin_native_v2/**'
       - '.github/workflows/build-admin-ios.yml'
 
 permissions:
@@ -23,6 +24,7 @@ jobs:
         run: |
           set -euo pipefail
           php -l server_updates/admin_app_v1/admin/mobile-console.php
+          php -l server_updates/admin_native_v2/admin/native-api.php
           php -l server_updates/admin_app_v1/mobile/redeem-subscription-code.php
           php -l server_updates/admin_app_v1/tools/issue-subscription-codes.php
       - name: Restrict new codes to 1 or 3 months
@@ -32,9 +34,11 @@ jobs:
           grep -Fq 'in_array($months, [1, 3], true)' server_updates/admin_app_v1/mobile/redeem-subscription-code.php
           grep -Fq 'in_array($months, [1, 3], true)' server_updates/admin_app_v1/tools/issue-subscription-codes.php
           grep -Fq 'in_array($months, [1, 3], true)' server_updates/admin_app_v1/admin/mobile-console.php
+          grep -Fq 'in_array($months,[1,3],true)' server_updates/admin_native_v2/admin/native-api.php
+          ! grep -Eq 'import WebKit|WKWebView|UIWebView' admin_ios/App/MurshidAdminApp.swift
 
   build_admin:
-    name: Build Admin v1.0.0 unsigned iOS IPA
+    name: Build Admin v2.0.0 unsigned iOS IPA
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -68,17 +72,17 @@ jobs:
           mkdir -p ipa-work/Payload
           cp -R build-admin/Build/Products/Release-iphoneos/MurshidAdmin.app ipa-work/Payload/
           cd ipa-work
-          /usr/bin/zip -qry ../Murshid_Admin_v1_0_0_BUILD1_unsigned.ipa Payload
+          /usr/bin/zip -qry ../Murshid_Admin_v2_0_0_BUILD2_unsigned.ipa Payload
           cd ..
-          shasum -a 256 Murshid_Admin_v1_0_0_BUILD1_unsigned.ipa > Murshid_Admin_v1_0_0_BUILD1_unsigned.sha256
-          unzip -t Murshid_Admin_v1_0_0_BUILD1_unsigned.ipa
+          shasum -a 256 Murshid_Admin_v2_0_0_BUILD2_unsigned.ipa > Murshid_Admin_v2_0_0_BUILD2_unsigned.sha256
+          unzip -t Murshid_Admin_v2_0_0_BUILD2_unsigned.ipa
           python3 - <<'PY'
           import plistlib, zipfile
-          with zipfile.ZipFile('Murshid_Admin_v1_0_0_BUILD1_unsigned.ipa') as archive:
+          with zipfile.ZipFile('Murshid_Admin_v2_0_0_BUILD2_unsigned.ipa') as archive:
               names = archive.namelist()
               info = plistlib.loads(archive.read('Payload/MurshidAdmin.app/Info.plist'))
-          assert info['CFBundleShortVersionString'] == '1.0.0', info
-          assert info['CFBundleVersion'] == '1', info
+          assert info['CFBundleShortVersionString'] == '2.0.0', info
+          assert info['CFBundleVersion'] == '2', info
           assert info['CFBundleIdentifier'] == 'com.muriq.murshid.admin', info
           assert 'Payload/MurshidAdmin.app/AppIcon60x60@2x.png' in names, 'Missing icon'
           assert not any('.appex' in name for name in names), 'Unexpected extension'
@@ -88,9 +92,9 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Admin-v1.0.0-Build1-Unsigned
+          name: Murshid-Admin-v2.0.0-Build2-Unsigned
           path: |
-            Murshid_Admin_v1_0_0_BUILD1_unsigned.ipa
-            Murshid_Admin_v1_0_0_BUILD1_unsigned.sha256
+            Murshid_Admin_v2_0_0_BUILD2_unsigned.ipa
+            Murshid_Admin_v2_0_0_BUILD2_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
