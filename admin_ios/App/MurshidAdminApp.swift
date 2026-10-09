@@ -39,11 +39,41 @@ enum LoginStage {case loading, signin, otp, ready}
         let c=URLSessionConfiguration.default
         c.httpCookieAcceptPolicy = .always
         c.httpShouldSetCookies = true
-        c.timeoutIntervalForRequest = 25
+        // Permit essential HTTPS administration calls on cellular and Low Data Mode.
+        // DNS resolution still belongs to iOS/the mobile provider.
+        c.allowsCellularAccess = true
+        c.allowsExpensiveNetworkAccess = true
+        c.allowsConstrainedNetworkAccess = true
+        c.timeoutIntervalForRequest = 18
+        c.timeoutIntervalForResource = 38
         c.waitsForConnectivity = true
         return URLSession(configuration:c)
     }()
     private let endpoint=URL(string:"https://www.mur-iq.com/admin/native-api.php")!
+    private func dataWithSafeRetry(_ request: URLRequest, retryRead: Bool) async throws -> (Data, URLResponse) {
+        let retryCodes: Set<Int> = [
+            URLError.timedOut.rawValue,
+            URLError.networkConnectionLost.rawValue,
+            URLError.notConnectedToInternet.rawValue,
+            URLError.cannotConnectToHost.rawValue,
+            URLError.cannotFindHost.rawValue,
+            URLError.dnsLookupFailed.rawValue
+        ]
+        let attempts = retryRead ? 2 : 1
+        for attempt in 0..<attempts {
+            do {
+                return try await session.data(for:request)
+            } catch {
+                let reason=error as NSError
+                guard !Task.isCancelled,
+                      attempt+1<attempts,
+                      reason.domain==NSURLErrorDomain,
+                      retryCodes.contains(reason.code) else { throw error }
+                try await Task.sleep(nanoseconds:650_000_000)
+            }
+        }
+        throw URLError(.unknown)
+    }
     func call(_ action:String, params:J?=nil, query:String?=nil) async throws -> J {
         var components=URLComponents(url:endpoint,resolvingAgainstBaseURL:false)!
         var qs=[URLQueryItem(name:"action",value:action)]
@@ -52,6 +82,9 @@ enum LoginStage {case loading, signin, otp, ready}
         guard let url=components.url else {throw ServiceError(message:"رابط الخدمة غير صحيح.")}
         var request=URLRequest(url:url)
         request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.allowsCellularAccess = true
+        request.allowsExpensiveNetworkAccess = true
+        request.allowsConstrainedNetworkAccess = true
         request.setValue("application/json",forHTTPHeaderField:"Accept")
         if var params {
             params["action"]=action
@@ -62,7 +95,20 @@ enum LoginStage {case loading, signin, otp, ready}
             request.setValue("application/json; charset=utf-8",forHTTPHeaderField:"Content-Type")
             request.httpBody=try JSONSerialization.data(withJSONObject:params,options:[])
         }
-        let (data,response)=try await session.data(for:request)
+        let data:Data
+        let response:URLResponse
+        do {
+            (data,response)=try await dataWithSafeRetry(request,retryRead:request.httpMethod=="GET")
+        } catch let failure as URLError {
+            let message:String
+            switch failure.code {
+            case .timedOut: message="انتهت مهلة الاتصال بالخادم. تحقق من بيانات الهاتف وأعد المحاولة."
+            case .cannotFindHost, .dnsLookupFailed, .cannotConnectToHost:
+                message="تعذّر الوصول إلى خادم المنصة عبر DNS لهذه الشبكة. جرّب إعادة المحاولة."
+            default: message="تعذّر الاتصال بالمنصة. تحقق من اتصال الإنترنت."
+            }
+            throw ServiceError(message:message)
+        }
         let result=(try? JSONSerialization.jsonObject(with:data)) as? J ?? [:]
         let http=(response as? HTTPURLResponse)?.statusCode ?? 0
         if http == 428 || (result["two_factor"] as? Bool == true && action == "status") {
@@ -77,8 +123,11 @@ enum LoginStage {case loading, signin, otp, ready}
     }
     func bootstrap() async {
         stage = .loading
-        do {let r=try await call("status"); applyAuth(r)}
-        catch { if stage != .otp {stage = .signin} }
+        do {let r=try await call("status"); applyAuth(r); error=""}
+        catch {
+            if stage != .otp {stage = .signin}
+            self.error=error.localizedDescription
+        }
     }
     private func applyAuth(_ r:J) {
         name=s(r,"name","مدير المنصة")
