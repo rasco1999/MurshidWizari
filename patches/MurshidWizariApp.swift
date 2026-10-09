@@ -14,6 +14,9 @@ struct MurshidWizariApp: App {
     @State private var welcomePlaybackInProgress = false
     @State private var completedInitialWelcome = false
     @State private var bootstrapNeedsNetworkRetry = false
+    @State private var bootstrapAttempt = 0
+    @State private var bootstrapTask: Task<Void, Never>?
+    @State private var bootstrapTimeoutTask: Task<Void, Never>?
 
     private var colorScheme: ColorScheme? {
         appearance == "dark" ? .dark : (appearance == "light" ? .light : nil)
@@ -22,7 +25,7 @@ struct MurshidWizariApp: App {
     var body: some Scene {
         WindowGroup {
             ZStack {
-                RootView()
+                RootView(onRetryBootstrap: { beginBootstrap() })
                     .environmentObject(app)
                     .environmentObject(device)
                     .environment(\.layoutDirection, .rightToLeft)
@@ -49,7 +52,7 @@ struct MurshidWizariApp: App {
                 guard !completedInitialWelcome else { return }
                 // Restore the account independently: never make the splash longer
                 // than three seconds because of a slow network call.
-                Task { await restoreSession() }
+                beginBootstrap()
                 try? await Task.sleep(nanoseconds: 2_700_000_000)
                 withAnimation(.easeInOut(duration: 0.30)) {
                     showAcademicWelcome = false
@@ -63,7 +66,7 @@ struct MurshidWizariApp: App {
                     device.didEnterBackground()
                 case .active:
                     Task { @MainActor in
-                        if bootstrapNeedsNetworkRetry { await retryBootstrapAfterReconnect() }
+                        if bootstrapNeedsNetworkRetry { beginBootstrap() }
                         await device.didBecomeActive()
                         if app.v3Authenticated { Task { try? await APIClient.shared.heartbeat() } }
                         // A brief system interruption should not replay the greeting.
@@ -83,7 +86,7 @@ struct MurshidWizariApp: App {
             }
             .onChange(of: device.isOnline) { online in
                 guard online, bootstrapNeedsNetworkRetry else { return }
-                Task { @MainActor in await retryBootstrapAfterReconnect() }
+                Task { @MainActor in beginBootstrap() }
             }
             .onChange(of: device.isLocked) { locked in
                 guard !locked, pendingWelcomeAfterUnlock, scenePhase == .active else { return }
@@ -113,35 +116,66 @@ struct MurshidWizariApp: App {
         welcomePlaybackInProgress = false
     }
 
+    // Run one session bootstrap at a time. A separate deadline prevents an
+    // indefinitely spinning login screen when carrier DNS or connectivity stalls.
     @MainActor
-    private func restoreSession() async {
-        defer { app.bootstrapping = false }
-        do {
-            app.applyBootstrap(try await APIClient.shared.bootstrap())
-            app.bootstrapNetworkFailed = false
-            bootstrapNeedsNetworkRetry = false
-        } catch let failure as APIError where failure.status == 0 {
-            // A dropped network connection is not an invalid login session.
-            // Keep cookies and retry when iOS reports connectivity again.
+    private func beginBootstrap() {
+        guard !app.bootstrapping || bootstrapTask == nil else { return }
+        bootstrapAttempt += 1
+        let attempt = bootstrapAttempt
+        bootstrapTask?.cancel()
+        bootstrapTimeoutTask?.cancel()
+        app.bootstrapping = true
+        app.bootstrapNetworkFailed = false
+        bootstrapNeedsNetworkRetry = false
+
+        bootstrapTask = Task { @MainActor in
+            do {
+                let response = try await APIClient.shared.bootstrap()
+                guard bootstrapAttempt == attempt else { return }
+                app.applyBootstrap(response)
+                bootstrapNeedsNetworkRetry = false
+            } catch let failure as APIError where failure.status == 0 {
+                guard bootstrapAttempt == attempt else { return }
+                // Network timeouts are not invalid credentials. Keep stored
+                // cookies and allow retry; never reset the student account.
+                app.bootstrapNetworkFailed = true
+                bootstrapNeedsNetworkRetry = true
+            } catch is CancellationError {
+                return
+            } catch {
+                guard bootstrapAttempt == attempt else { return }
+                // Real expired/invalid sessions still return to sign-in.
+                bootstrapNeedsNetworkRetry = false
+                app.reset()
+            }
+            guard bootstrapAttempt == attempt else { return }
+            app.bootstrapping = false
+            bootstrapTask = nil
+            bootstrapTimeoutTask?.cancel()
+            bootstrapTimeoutTask = nil
+        }
+
+        bootstrapTimeoutTask = Task { @MainActor in
+            do { try await Task.sleep(nanoseconds: 20_000_000_000) }
+            catch { return }
+            guard bootstrapAttempt == attempt, app.bootstrapping else { return }
+            // Invalidate this attempt *before* cancellation so its late
+            // response cannot overwrite the next attempt or restore the spinner.
+            bootstrapAttempt += 1
+            bootstrapTask?.cancel()
+            bootstrapTask = nil
+            bootstrapTimeoutTask = nil
             app.bootstrapNetworkFailed = true
             bootstrapNeedsNetworkRetry = true
-        } catch {
-            bootstrapNeedsNetworkRetry = false
-            app.reset()
+            app.bootstrapping = false
         }
-    }
-
-    @MainActor
-    private func retryBootstrapAfterReconnect() async {
-        guard bootstrapNeedsNetworkRetry, !app.bootstrapping else { return }
-        bootstrapNeedsNetworkRetry = false
-        app.bootstrapping = true
-        await restoreSession()
     }
 }
 
 struct RootView: View {
     @EnvironmentObject var app: AppSession
+    let onRetryBootstrap: () -> Void
     var body: some View {
         Group {
             if app.bootstrapping { LoadingView(text: "جاري تجهيز حسابك…") }
@@ -156,18 +190,7 @@ struct RootView: View {
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.secondary)
                     Button {
-                        Task { @MainActor in
-                            guard !app.bootstrapping else { return }
-                            app.bootstrapping = true
-                            defer { app.bootstrapping = false }
-                            do {
-                                app.applyBootstrap(try await APIClient.shared.bootstrap())
-                            } catch let failure as APIError where failure.status == 0 {
-                                app.bootstrapNetworkFailed = true
-                            } catch {
-                                app.reset()
-                            }
-                        }
+                        onRetryBootstrap()
                     } label: {
                         Label("إعادة المحاولة", systemImage: "arrow.clockwise")
                             .font(.headline)
