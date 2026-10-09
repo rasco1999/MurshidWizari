@@ -901,7 +901,7 @@ struct V31StudyView: View {
             error = ""
         } catch {
             subjects = ownGradeSubjects
-            error = ownGradeSubjects.isEmpty ? "تعذّر جلب مواد صفّك. حاول تحديث الصفحة." : ""
+            self.error = ownGradeSubjects.isEmpty ? "تعذّر جلب مواد صفّك. حاول تحديث الصفحة." : ""
         }
         loading = false
     }
