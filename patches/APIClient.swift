@@ -103,7 +103,13 @@ final class APIClient {
         let config = URLSessionConfiguration.default
         config.httpCookieStorage = .shared
         config.httpShouldSetCookies = true
+        // API requests work on Wi-Fi, 4G, 5G and Low Data Mode. Optional
+        // media downloads are throttled separately by the presentation layer.
+        config.allowsCellularAccess = true
+        config.allowsExpensiveNetworkAccess = true
+        config.allowsConstrainedNetworkAccess = true
         config.waitsForConnectivity = false
+        config.httpMaximumConnectionsPerHost = 4
         config.timeoutIntervalForRequest = 25
         config.timeoutIntervalForResource = 45
         config.requestCachePolicy = .useProtocolCachePolicy
