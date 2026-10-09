@@ -1677,12 +1677,10 @@ struct MainV3TabView: View {
     @State private var visited: Set<Int> = [0]
     @State private var keyboardVisible = false
 
-    // Six actual destinations, with the predictions button immediately left of Study.
-    // A native iPhone TabView moves the sixth destination into "More".
+    // Five destinations fit in one native bottom bar without a Study tab.
     private let tabs: [(title: String, symbol: String)] = [
         ("الرئيسية", "house.fill"),
         ("الاختبارات", "checklist.checked"),
-        ("ادرس", "book.fill"),
         ("المرشحات", "scope"),
         ("الإعلانات", "megaphone.fill"),
         ("حسابي", "person.crop.circle.fill")
@@ -1698,10 +1696,7 @@ struct MainV3TabView: View {
                 tabPane(1) { NavigationStack { tabRoot { V3TestsView() } } }
             }
             if visited.contains(2) {
-                tabPane(2) { NavigationStack { tabRoot { V31StudyView() } } }
-            }
-            if visited.contains(3) {
-                tabPane(3) {
+                tabPane(2) {
                     NavigationStack {
                         tabRoot {
                             if app.subscribed { V44PredictionsView() }
@@ -1710,11 +1705,11 @@ struct MainV3TabView: View {
                     }
                 }
             }
-            if visited.contains(4) {
-                tabPane(4) { NavigationStack { tabRoot { V31SchoolAdsView() } } }
+            if visited.contains(3) {
+                tabPane(3) { NavigationStack { tabRoot { V31SchoolAdsView() } } }
             }
-            if visited.contains(5) {
-                tabPane(5) { NavigationStack { tabRoot { V31AccountView() } } }
+            if visited.contains(4) {
+                tabPane(4) { NavigationStack { tabRoot { V31AccountView() } } }
             }
         }
         .tint(.murshidBlue)
@@ -1729,10 +1724,9 @@ struct MainV3TabView: View {
         .onOpenURL { url in
             switch (url.host ?? url.path.replacingOccurrences(of: "/", with: "")).lowercased() {
             case "tests", "exam", "subjects": selection = 1
-            case "study", "learn", "success", "progress": selection = 2
-            case "predictions", "filters": selection = 3
-            case "ads", "advertisements": selection = 4
-            case "account", "subscription": selection = 5
+            case "predictions", "filters": selection = 2
+            case "ads", "advertisements": selection = 3
+            case "account", "subscription": selection = 4
             default: selection = 0
             }
         }
@@ -1745,7 +1739,7 @@ struct MainV3TabView: View {
             .accessibilityHidden(selection != index)
     }
 
-    // Keep the six-tab bar on top-level screens only. A pushed question/detail
+    // Keep the five-tab bar on top-level screens only. A pushed question/detail
     // screen may have its own pinned answer/next buttons; a bar applied outside
     // NavigationStack would cover those controls and the last scroll content.
     private func tabRoot<Content: View>(@ViewBuilder content: () -> Content) -> some View {
@@ -3254,12 +3248,6 @@ struct V3ExamView: View {
                         .foregroundStyle(.secondary)
                         .lineSpacing(5)
                         .fixedSize(horizontal: false, vertical: true)
-                    NavigationLink(destination: V31StudySubjectView(subject: subject, focusedTopicID: topic.id)) {
-                        Label("افتح شرح هذا الموضوع في ادرس", systemImage: "play.rectangle.fill")
-                            .font(.subheadline.bold())
-                            .foregroundStyle(Color.murshidBlue)
-                            .padding(.vertical, 6)
-                    }
                 }
             }
         }
@@ -3750,20 +3738,6 @@ struct V3ExamResultView: View {
                         .background(Color.murshidBlue.opacity(0.10), in: RoundedRectangle(cornerRadius: 17, style: .continuous))
                 }
                 .buttonStyle(.plain)
-
-                NavigationLink(destination: V31StudySubjectView(subject: subject, focusedTopicID: topic.id)) {
-                    Label("شاهد شرح موضوعات \(subject.name) في ادرس", systemImage: "play.rectangle.fill")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .foregroundStyle(Color.murshidBlue)
-                        .background(Color.murshidGold.opacity(0.16), in: RoundedRectangle(cornerRadius: 17))
-                }
-                .buttonStyle(.plain)
-
-                Text("لا تُعرض روابط فيديو إلا إذا أضافتها الإدارة للموضوع نفسه.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
 
                 Button("العودة إلى المواضيع", action: onDone)
                     .font(.headline)

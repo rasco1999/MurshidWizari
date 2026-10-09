@@ -307,16 +307,9 @@ struct ReviewView: View {
                                         .font(.caption).foregroundStyle(.secondary)
                                     ProgressView(value: Double(max(0, min(100, jInt(item["rate"])))), total: 100)
                                         .tint(jInt(item["rate"]) >= 70 ? .green : .orange)
-                                    if let subject = subjectFor(item) {
-                                        HStack(spacing: 12) {
-                                            NavigationLink(destination: V31StudySubjectView(subject: subject, focusedTopicID: jInt(item["chapter_id"]))) {
-                                                Label("شرح المادة", systemImage: "play.rectangle")
-                                            }
-                                            if app.featureEnabled("custom_exam") {
-                                                NavigationLink(destination: V40CustomExamBuilderView(initialSubjectID: subject.id, mistakesOnly: true)) {
-                                                    Label("اختبر أخطاءك", systemImage: "arrow.clockwise")
-                                                }
-                                            }
+                                    if let subject = subjectFor(item), app.featureEnabled("custom_exam") {
+                                        NavigationLink(destination: V40CustomExamBuilderView(initialSubjectID: subject.id, mistakesOnly: true)) {
+                                            Label("اختبر أخطاءك", systemImage: "arrow.clockwise")
                                         }
                                         .font(.caption.weight(.semibold))
                                         .foregroundStyle(Color.murshidBlue)
@@ -341,17 +334,11 @@ struct ReviewView: View {
                                 if !explanation.isEmpty {
                                     Text(explanation).font(.footnote).foregroundStyle(.secondary)
                                 } else {
-                                    Text("الشرح التفصيلي غير متاح بعد؛ تستطيع مراجعة فيديوهات المادة إن وُجدت.")
+                                    Text("الشرح التفصيلي غير متاح بعد؛ راجع أسئلة المادة من قسم الاختبارات.")
                                         .font(.footnote).foregroundStyle(.secondary)
                                 }
                                 Text(jString(item["subject_name"]) + " • " + jString(item["chapter_name"]))
                                     .font(.caption2).foregroundStyle(.secondary)
-                                if let subject = subjectFor(item) {
-                                    NavigationLink(destination: V31StudySubjectView(subject: subject, focusedTopicID: jInt(item["chapter_id"]))) {
-                                        Label("انتقل إلى ادرس", systemImage: "play.rectangle.fill")
-                                            .font(.subheadline.weight(.medium))
-                                    }
-                                }
                             }.padding(.vertical, 6)
                         }
                     }
