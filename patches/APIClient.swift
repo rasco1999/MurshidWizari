@@ -151,7 +151,13 @@ final class APIClient {
                 let looksLikeHTML = contentType.contains("text/html") || raw.lowercased().contains("<html") || raw.hasPrefix("<")
                 let message: String
                 if looksLikeHTML {
-                    message = "تعذر إكمال الطلب الآن. تحقق من الاتصال وحاول مجددًا."
+                    if http.statusCode == 404 {
+                        message = "هذه الخدمة غير موجودة على خادم المنصة حالياً. يرجى التواصل مع الإدارة لتفعيلها."
+                    } else if http.statusCode >= 500 {
+                        message = "حدث خلل مؤقت في خادم المنصة. حاول لاحقاً أو تواصل مع الدعم."
+                    } else {
+                        message = "تعذر إكمال الطلب من الخادم الآن. حاول مجددًا."
+                    }
                 } else if raw.isEmpty {
                     message = "تعذر قراءة استجابة الخادم. حاول مجددًا."
                 } else {
