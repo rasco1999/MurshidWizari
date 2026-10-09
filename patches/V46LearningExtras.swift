@@ -268,7 +268,7 @@ struct V46LearningDeckView: View {
                 loading = false
             }
         } catch {
-            await MainActor.run { error = error.localizedDescription; loading = false; loaded = true; questions = [] }
+            await MainActor.run { self.error = error.localizedDescription; loading = false; loaded = true; questions = [] }
         }
     }
 }
