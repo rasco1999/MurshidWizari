@@ -844,6 +844,7 @@ struct V31AccountView: View {
             let d = try await APIClient.shared.request("mobile/account.php")
             await MainActor.run {
                 account = d
+                app.setAvatarURL(jString(d["avatar_url"]))
                 loading = false
                 error = ""
                 let status = jString(d["avatar_status"])
