@@ -838,15 +838,72 @@ private struct V31SchoolAdTicker: View {
     }
 }
 
-// A dedicated grade-scoped catalogue keeps study content separate from exams
-// and predictions. The server is authoritative about the student's grade.
+// Grade-scoped study catalogue: subject -> topic -> direct YouTube videos.
+// Keep this separate from both exams and predictions.
 struct V31StudyView: View {
+    @EnvironmentObject private var app: AppSession
+    @State private var subjects: [Subject] = []
+    @State private var loading = true
+    @State private var error = ""
+
     var body: some View {
-        // Intentionally blank until the administrator publishes the study
-        // hierarchy. Avoid querying the server or displaying sample subjects.
-        Color.murshidBackground.ignoresSafeArea()
+        ScrollView {
+            LazyVStack(spacing: 13) {
+                V3SectionHeader(title: "المواد الدراسية", subtitle: app.user?.grade ?? "مواد صفّك", icon: "books.vertical.fill")
+                if loading {
+                    ForEach(0..<3, id: \.self) { _ in V3SkeletonCard(height: 90) }
+                } else if subjects.isEmpty {
+                    EmptyStateView(systemImage: "books.vertical", title: "لا توجد مواد لهذا الصف", message: "ستظهر مواد صفّك عند نشرها من الإدارة.")
+                } else {
+                    ForEach(subjects) { subject in
+                        NavigationLink(destination: V31StudySubjectView(subject: subject)) {
+                            MurshidCard {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "book.closed.fill")
+                                        .font(.title2).foregroundStyle(Color.murshidBlue)
+                                        .frame(width: 44, height: 44)
+                                        .background(Color.murshidBlue.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+                                    Text(subject.name).font(.headline).foregroundStyle(.primary)
+                                    Spacer(minLength: 4)
+                                    Image(systemName: "chevron.left").font(.caption.bold()).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                if !error.isEmpty {
+                    V3InlineMessage(text: error, icon: "wifi.exclamationmark", tone: .warning)
+                }
+            }
+            .padding(16)
+            .padding(.bottom, 20)
+        }
+        .background(Color.murshidBackground.ignoresSafeArea())
         .navigationTitle("ادرس")
         .navigationBarTitleDisplayMode(.inline)
+        .task { await loadSubjects() }
+        .refreshable { await loadSubjects() }
+    }
+
+    @MainActor
+    private func loadSubjects() async {
+        let ownGradeSubjects = app.subjects.filter { $0.id > 0 && !$0.name.isEmpty }
+        do {
+            let data = try await APIClient.shared.request("mobile/study-catalog.php")
+            subjects = jArray(data["subjects"]).map(Subject.init)
+                .filter { $0.id > 0 && !$0.name.isEmpty }
+            error = ""
+        } catch let failure as APIError where failure.status == 404 {
+            // The existing grade-filtered bootstrap already provides a safe
+            // fallback while the optional study endpoint is being installed.
+            subjects = ownGradeSubjects
+            error = ""
+        } catch {
+            subjects = ownGradeSubjects
+            error = ownGradeSubjects.isEmpty ? "تعذّر جلب مواد صفّك. حاول تحديث الصفحة." : ""
+        }
+        loading = false
     }
 }
 
@@ -859,7 +916,7 @@ private struct V31StudyVideo: Identifiable {
         guard let url = URL(string: rawURL), url.scheme?.lowercased() == "https",
               let host = url.host?.lowercased(),
               ["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be", "www.youtube-nocookie.com"].contains(host) else { return nil }
-        self.title = title.isEmpty ? "شاهد شرح الفصل" : title
+        self.title = title.isEmpty ? "مشاهدة فيديو الموضوع على يوتيوب" : title
         self.url = url
     }
 }
@@ -879,7 +936,7 @@ private struct V31StudyChapter: Identifiable {
         }
         if result.isEmpty {
             let singleURL = jString(json["video_url"], default: jString(json["youtube_url"]))
-            if let video = V31StudyVideo(title: "شاهد شرح الفصل", rawURL: singleURL) { result = [video] }
+            if let video = V31StudyVideo(title: "مشاهدة فيديو الموضوع على يوتيوب", rawURL: singleURL) { result = [video] }
         }
         videos = result
     }
@@ -895,13 +952,13 @@ struct V31StudySubjectView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 13) {
-                V3IntroCard(eyebrow: app.user?.grade ?? "صفّك", title: subject.name, text: "فصول المادة الحالية، وروابط الشرح تظهر عند نشرها من الإدارة.", icon: "book.pages.fill")
+                V3SectionHeader(title: "موضوعات \(subject.name)", subtitle: app.user?.grade ?? "صفّك", icon: "book.pages.fill")
                 if loading {
                     ForEach(0..<3, id: \.self) { _ in V3SkeletonCard(height: 100) }
                 } else if !error.isEmpty {
                     ErrorStateView(message: error, retry: { Task { await loadChapters() } })
                 } else if chapters.isEmpty {
-                    EmptyStateView(systemImage: "book.closed", title: "لم تُضف فصول بعد", message: "ستظهر فصول \(subject.name) المرتبطة بصفّك عند إدراجها.")
+                    EmptyStateView(systemImage: "book.closed", title: "لا توجد موضوعات بعد", message: "ستظهر موضوعات \(subject.name) عند إضافتها من الإدارة.")
                 } else {
                     ForEach(chapters) { chapter in
                         MurshidCard {
@@ -911,13 +968,11 @@ struct V31StudySubjectView: View {
                                         .foregroundStyle(Color.murshidBlue).frame(width: 28)
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text(chapter.name).font(.headline)
-                                        Text(chapter.questionCount > 0 ? "\(chapter.questionCount) سؤال للمراجعة" : "الفصل متاح للدراسة")
-                                            .font(.caption).foregroundStyle(.secondary)
                                     }
                                     Spacer()
                                 }
                                 if chapter.videos.isEmpty {
-                                    Label("فيديوهات الشرح ستُضاف من الإدارة", systemImage: "video.badge.plus")
+                                    Label("سيُضاف فيديو شرح هذا الموضوع من الإدارة", systemImage: "video.badge.plus")
                                         .font(.caption).foregroundStyle(.secondary)
                                 } else {
                                     ForEach(chapter.videos) { video in
@@ -929,15 +984,6 @@ struct V31StudySubjectView: View {
                                                 .padding(11)
                                                 .background(Color.murshidBlue.opacity(0.08), in: RoundedRectangle(cornerRadius: 11))
                                         }
-                                    }
-                                }
-                                if chapter.questionCount > 0 {
-                                    NavigationLink(destination: V3ExamView(
-                                        topic: Topic(["id": chapter.id, "name": chapter.name, "count": chapter.questionCount]),
-                                        subject: subject
-                                    )) {
-                                        Label("اختبر نفسك في هذا الفصل", systemImage: "checkmark.circle.fill")
-                                            .font(.footnote.weight(.semibold))
                                     }
                                 }
                             }
