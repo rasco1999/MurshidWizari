@@ -87,30 +87,31 @@ jobs:
           # challenge without fetching media or duplicating the student's data.
           spec = p.read_text()
           anchor = '    scheme: {}\n'
-          widget_target = '''    dependencies:
-      - target: MurshidQuestionWidget
-        embed: true
-  MurshidQuestionWidget:
-    type: app-extension
-    platform: iOS
-    sources:
-      - path: MurshidQuestionWidget
-        excludes:
-          - Info.plist
-    info:
-      path: MurshidQuestionWidget/Info.plist
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.muriq.murshid.widget
-        PRODUCT_NAME: MurshidQuestionWidget
-        INFOPLIST_FILE: MurshidQuestionWidget/Info.plist
-        APPLICATION_EXTENSION_API_ONLY: YES
-        TARGETED_DEVICE_FAMILY: "1"
-        SKIP_INSTALL: YES
-        CODE_SIGNING_ALLOWED: NO
-        CODE_SIGNING_REQUIRED: NO
-        CODE_SIGN_IDENTITY: ""
-'''
+          widget_target = '\n'.join([
+              '    dependencies:',
+              '      - target: MurshidQuestionWidget',
+              '        embed: true',
+              '  MurshidQuestionWidget:',
+              '    type: app-extension',
+              '    platform: iOS',
+              '    sources:',
+              '      - path: MurshidQuestionWidget',
+              '        excludes:',
+              '          - Info.plist',
+              '    info:',
+              '      path: MurshidQuestionWidget/Info.plist',
+              '    settings:',
+              '      base:',
+              '        PRODUCT_BUNDLE_IDENTIFIER: com.muriq.murshid.widget',
+              '        PRODUCT_NAME: MurshidQuestionWidget',
+              '        INFOPLIST_FILE: MurshidQuestionWidget/Info.plist',
+              '        APPLICATION_EXTENSION_API_ONLY: YES',
+              '        TARGETED_DEVICE_FAMILY: "1"',
+              '        SKIP_INSTALL: YES',
+              '        CODE_SIGNING_ALLOWED: NO',
+              '        CODE_SIGNING_REQUIRED: NO',
+              '        CODE_SIGN_IDENTITY: ""',
+          ]) + '\n'
           if spec.count(anchor) != 1:
               raise SystemExit('Widget target anchor not unique')
           p.write_text(spec.replace(anchor, anchor + widget_target, 1))
