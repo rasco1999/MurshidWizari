@@ -20,7 +20,7 @@ private struct ServiceError: LocalizedError {
     let message:String
     var errorDescription:String? {message}
 }
-private enum LoginStage {case loading, signin, otp, ready}
+enum LoginStage {case loading, signin, otp, ready}
 @MainActor final class AdminState: ObservableObject {
     @Published var stage:LoginStage = .loading
     @Published var name = "الإدارة"
@@ -92,13 +92,13 @@ private enum LoginStage {case loading, signin, otp, ready}
             let r=try await call("login",params:["identifier":identifier,"password":password])
             if r["two_factor"] as? Bool == true {stage = .otp}
             else {applyAuth(r)}
-        } catch {error=error.localizedDescription}
+        } catch {self.error=error.localizedDescription}
     }
     func verify(_ code:String) async {
         busy=true;error=""
         defer{busy=false}
         do {applyAuth(try await call("verify_2fa",params:["code":code]))}
-        catch {error=error.localizedDescription}
+        catch {self.error=error.localizedDescription}
     }
     func logout() async {
         _=try? await call("logout",params:[:])
@@ -119,7 +119,7 @@ private enum LoginStage {case loading, signin, otp, ready}
             case "curriculum": curriculum=result
             default: break
             }
-        } catch { error=error.localizedDescription }
+        } catch { self.error=error.localizedDescription }
     }
     func mutation(_ action:String,_ payload:J,refresh area:String) async -> J? {
         busy=true;error="";notice=""
@@ -352,56 +352,71 @@ private struct CodesScreen:View {
     @State private var toDelete:J?
     @State private var issued:[String]=[]
     @State private var showIssued=false
+
     var body:some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment:.leading,spacing:16){
-                    ScreenTitle(text:"أكواد الاشتراك",detail:"إدارة التفعيل الحقيقي • شهر أو 3 أشهر")
-                    HStack{
-                        Text("\(state.codes.count) سجل").foregroundStyle(Ink.faded)
-                        Spacer()
-                        Button {showCreate=true} label:{Label("إنشاء أكواد",systemImage:"plus.circle.fill").fontWeight(.bold)}
-                            .buttonStyle(.borderedProminent).tint(Ink.gold).foregroundStyle(Ink.navy)
+            content
+                .adminBG()
+                .refreshable{await state.refresh("codes")}
+                .task{await state.refresh("codes")}
+                .sheet(isPresented:$showCreate,onDismiss:{if !issued.isEmpty {showIssued=true}}) {
+                    CodeCreate(state:state,onIssued:{newCodes in issued=newCodes})
+                }
+                .sheet(item:$editing){row in CodeEdit(state:state,row:row)}
+                .sheet(isPresented:$showIssued){IssuedCodes(codes:issued)}
+                .confirmationDialog("إلغاء هذا الكود غير المستخدم؟",
+                                    isPresented:Binding(get:{toRevoke != nil},set:{if !$0{toRevoke=nil}})) {
+                    Button("إلغاء الكود",role:.destructive){if let row=toRevoke{Task{_ = await state.mutation("revoke_code",["id":num(row,"id")],refresh:"codes")}};toRevoke=nil}
+                }
+                .confirmationDialog("حذف السجل الملغى نهائياً؟",
+                                    isPresented:Binding(get:{toDelete != nil},set:{if !$0{toDelete=nil}})) {
+                    Button("حذف نهائياً",role:.destructive){if let row=toDelete{Task{_ = await state.mutation("delete_code",["id":num(row,"id")],refresh:"codes")}};toDelete=nil}
+                }
+        }
+    }
+    private var content:some View {
+        ScrollView {
+            LazyVStack(alignment:.leading,spacing:16) {
+                ScreenTitle(text:"أكواد الاشتراك",detail:"إدارة التفعيل الحقيقي • شهر أو 3 أشهر")
+                HStack {
+                    Text("\(state.codes.count) سجل").foregroundStyle(Ink.faded)
+                    Spacer()
+                    Button {showCreate=true} label:{
+                        Label("إنشاء أكواد",systemImage:"plus.circle.fill").fontWeight(.bold)
+                    }.buttonStyle(.borderedProminent).tint(Ink.gold).foregroundStyle(Ink.navy)
+                }
+                Note(state:state)
+                if state.codes.isEmpty {GlassBox{Text("لا توجد أكواد، أو لم تتصل الخدمة بعد.").foregroundStyle(Ink.faded)}}
+                ForEach(state.codes){code in codeCard(code)}
+            }.padding(16)
+        }
+    }
+    private func codeCard(_ code:J)->some View {
+        GlassBox {
+            VStack(alignment:.leading,spacing:12) {
+                HStack {
+                    Label("كود #\(s(code,"id"))",systemImage:"ticket.fill")
+                        .foregroundStyle(Ink.gold).fontWeight(.bold)
+                    Spacer()
+                    Text(status(s(code,"status")))
+                        .font(.caption)
+                        .foregroundStyle(s(code,"status")=="available" ? Color.green : Ink.faded)
+                }
+                Text(s(code,"months")=="3" ? "اشتراك 3 أشهر" : "اشتراك شهر واحد").font(.headline)
+                Text("المجموعة: \(s(code,"batch_label"))").font(.caption).foregroundStyle(Ink.faded)
+                if s(code,"status")=="available" {
+                    HStack {
+                        Button("تعديل"){editing=code}.buttonStyle(.bordered)
+                        Button("إلغاء"){toRevoke=code}.buttonStyle(.bordered).tint(.orange)
                     }
-                    Note(state:state)
-                    if state.codes.isEmpty {GlassBox{Text("لا توجد أكواد، أو لم تتصل الخدمة بعد.").foregroundStyle(Ink.faded)}}
-                    ForEach(state.codes) { code in
-                        GlassBox{
-                            VStack(alignment:.leading,spacing:12){
-                                HStack{
-                                    Label("كود #\(s(code,"id"))",systemImage:"ticket.fill").foregroundStyle(Ink.gold).bold()
-                                    Spacer()
-                                    Text(status(s(code,"status"))).font(.caption).foregroundStyle(s(code,"status")==="available" ? .green : Ink.faded)
-                                }
-                                Text(s(code,"months")=="3" ? "اشتراك 3 أشهر" : "اشتراك شهر واحد").font(.headline)
-                                Text("المجموعة: \(s(code,"batch_label"))").foregroundStyle(Ink.faded).font(.caption)
-                                if s(code,"status")=="available"{
-                                    HStack{
-                                        Button("تعديل"){editing=code}.buttonStyle(.bordered)
-                                        Button("إلغاء"){toRevoke=code}.buttonStyle(.bordered).tint(.orange)
-                                    }
-                                }else if s(code,"status")=="revoked"{
-                                    Button("حذف السجل"){toDelete=code}.buttonStyle(.bordered).tint(.red)
-                                }
-                            }
-                        }
-                    }
-                }.padding(16)
-            }.adminBG().refreshable{await state.refresh("codes")}
-            .task{await state.refresh("codes")}
-            .sheet(isPresented:$showCreate){CodeCreate(state:state,onIssued:{cs in issued=cs;showIssued=true})}
-            .sheet(item:$editing){row in CodeEdit(state:state,row:row)}
-            .sheet(isPresented:$showIssued){IssuedCodes(codes:issued)}
-            .confirmationDialog("هل تريد إلغاء هذا الكود غير المستخدم؟",isPresented:Binding(get:{toRevoke != nil},set:{if !$0{toRevoke=nil}}),titleVisibility:.visible){
-                Button("إلغاء الكود",role:.destructive){if let row=toRevoke{Task{_ = await state.mutation("revoke_code",["id":num(row,"id")],refresh:"codes")}};toRevoke=nil}
-            }
-            .confirmationDialog("حذف سجل الكود الملغى نهائياً؟",isPresented:Binding(get:{toDelete != nil},set:{if !$0{toDelete=nil}}),titleVisibility:.visible){
-                Button("حذف نهائياً",role:.destructive){if let row=toDelete{Task{_ = await state.mutation("delete_code",["id":num(row,"id")],refresh:"codes")}};toDelete=nil}
+                } else if s(code,"status")=="revoked" {
+                    Button("حذف السجل"){toDelete=code}.buttonStyle(.bordered).tint(.red)
+                }
             }
         }
     }
-    private func status(_ status:String)->String {
-        switch status {case "available":return "متاح";case "redeemed":return "مستخدم";default:return "ملغى"}
+    private func status(_ value:String)->String {
+        switch value {case "available":return "متاح";case "redeemed":return "مستخدم";default:return "ملغى"}
     }
 }
 extension Dictionary: @retroactive Identifiable where Key==String, Value==Any {
@@ -827,13 +842,14 @@ private struct CurriculumEditor:View {
     @State private var name=""
     @State private var parent=0
     @State private var visible=true
+    private var pickerRows:[J] { kind == "subject" ? list(state.curriculum,"grades") : list(state.curriculum,"subjects") }
     var body:some View{
         NavigationStack {
             Form{
                 TextField("اسم المادة أو الفصل",text:$name)
                 Picker(kind=="subject" ? "الصف الدراسي":"المادة",selection:$parent){
                     Text("اختر").tag(0)
-                    ForEach(kind=="subject" ? list(state.curriculum,"grades"):list(state.curriculum,"subjects"),id:\.self){item in Text(s(item,"name")).tag(num(item,"id"))}
+                    ForEach(pickerRows){item in Text(s(item,"name")).tag(num(item,"id"))}
                 }
                 Toggle("متاح للطلاب",isOn:$visible)
                 Primary(title:"حفظ",busy:state.busy){

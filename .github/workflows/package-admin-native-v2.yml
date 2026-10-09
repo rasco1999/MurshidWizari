@@ -1,0 +1,42 @@
+name: Package Murshid Native Admin Server v2
+on:
+  workflow_dispatch:
+  push:
+    branches: [ build/ios-study-recovery-20261009 ]
+    paths:
+      - 'server_updates/admin_native_v2/**'
+      - '.github/workflows/package-admin-native-v2.yml'
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate PHP
+        run: |
+          set -euo pipefail
+          php -l server_updates/admin_native_v2/admin/native-api.php
+          php -l server_updates/admin_app_v1/mobile/redeem-subscription-code.php
+          grep -Fq 'in_array($months,[1,3],true)' server_updates/admin_native_v2/admin/native-api.php
+          grep -Fq 'in_array($months, [1, 3], true)' server_updates/admin_app_v1/mobile/redeem-subscription-code.php
+      - name: Assemble deployment
+        run: |
+          set -euo pipefail
+          mkdir -p stage/admin stage/mobile stage/sql
+          cp server_updates/admin_native_v2/admin/native-api.php stage/admin/
+          cp server_updates/admin_app_v1/mobile/redeem-subscription-code.php stage/mobile/
+          cp server_updates/admin_app_v1/sql/subscription_access_codes.sql stage/sql/
+          cp server_updates/admin_native_v2/README_AR.md stage/README_AR.md
+          cd stage
+          zip -qr ../Murshid_Admin_Native_Server_v2_0_0.zip README_AR.md admin mobile sql
+          cd ..
+          sha256sum Murshid_Admin_Native_Server_v2_0_0.zip > Murshid_Admin_Native_Server_v2_0_0.sha256
+          unzip -t Murshid_Admin_Native_Server_v2_0_0.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Murshid-Admin-Native-Server-v2.0.0
+          path: |
+            Murshid_Admin_Native_Server_v2_0_0.zip
+            Murshid_Admin_Native_Server_v2_0_0.sha256
+          retention-days: 14
