@@ -913,7 +913,7 @@ struct V31StudyView: View {
             await MainActor.run {
                 subjects = fallback
                 loading = false
-                error = fallback.isEmpty ? "تعذر تحديث المواد، تأكد من اتصالك بالإنترنت." : ""
+                self.error = fallback.isEmpty ? "تعذر تحديث المواد، تأكد من اتصالك بالإنترنت." : ""
             }
         }
     }
