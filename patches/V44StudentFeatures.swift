@@ -228,10 +228,6 @@ struct V44PredictionsView: View {
                                         Text(explanation).font(.body).textSelection(.enabled)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                     }
-                                    Text("سبب الترشيح").font(.subheadline.bold())
-                                        .foregroundStyle(Color.murshidBlue)
-                                    Text(jString(prediction["reason"])).font(.footnote)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                                 .padding(.top, 8)
                             } label: {
