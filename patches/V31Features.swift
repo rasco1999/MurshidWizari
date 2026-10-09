@@ -740,7 +740,6 @@ struct V31SchoolAdsView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 14) {
-                V3IntroCard(eyebrow: "الإعلانات", title: "إعلانات المدارس", text: "إعلانات المدارس المنشورة والنشطة فقط. تكلفة الإعلان ٥ آلاف دينار لليوم الواحد.", icon: "megaphone.fill")
                 if loading {
                     V3SkeletonCard(height: 130)
                 } else if ads.isEmpty {
@@ -842,80 +841,12 @@ private struct V31SchoolAdTicker: View {
 // A dedicated grade-scoped catalogue keeps study content separate from exams
 // and predictions. The server is authoritative about the student's grade.
 struct V31StudyView: View {
-    @EnvironmentObject private var app: AppSession
-    @State private var subjects: [Subject] = []
-    @State private var loading = true
-    @State private var error = ""
-
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 13) {
-                V3IntroCard(
-                    eyebrow: "ادرس • \(app.user?.grade ?? "صفّك")",
-                    title: "موادك وفصولك الدراسية",
-                    text: "تظهر مواد صفك فقط. افتح المادة لاختيار الفصل، وستظهر روابط شرح YouTube عند إضافتها من الإدارة.",
-                    icon: "books.vertical.fill"
-                )
-                if loading {
-                    ForEach(0..<3, id: \.self) { _ in V3SkeletonCard(height: 94) }
-                } else if subjects.isEmpty {
-                    EmptyStateView(systemImage: "books.vertical", title: "لا توجد مواد لهذا الصف", message: "سيتم عرض المواد فور تفعيلها من الإدارة.")
-                } else {
-                    V3SectionHeader(title: "مواد صفّك", subtitle: "\(subjects.count) مادة متاحة", icon: "square.grid.2x2.fill")
-                    ForEach(subjects) { subject in
-                        NavigationLink(destination: V31StudySubjectView(subject: subject)) {
-                            MurshidCard {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "book.closed.fill")
-                                        .font(.title2)
-                                        .foregroundStyle(Color.murshidBlue)
-                                        .frame(width: 45, height: 45)
-                                        .background(Color.murshidBlue.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(subject.name).font(.headline).foregroundStyle(.primary)
-                                        Text("استعرض فصول المادة وروابط شرحها")
-                                            .font(.caption).foregroundStyle(.secondary)
-                                    }
-                                    Spacer(minLength: 4)
-                                    Image(systemName: "chevron.left").font(.caption.bold()).foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                if !error.isEmpty { V3InlineMessage(text: error, icon: "wifi.exclamationmark", tone: .warning) }
-            }
-            .padding(16)
-            .padding(.bottom, 16)
-        }
-        .background(Color.murshidBackground.ignoresSafeArea())
+        // Intentionally blank until the administrator publishes the study
+        // hierarchy. Avoid querying the server or displaying sample subjects.
+        Color.murshidBackground.ignoresSafeArea()
         .navigationTitle("ادرس")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await loadSubjects() }
-        .refreshable { await loadSubjects() }
-    }
-
-    private func loadSubjects() async {
-        let fallback = app.subjects
-        do {
-            let data = try await APIClient.shared.request(
-                "mobile/study-catalog.php",
-                cacheKey: "study-subjects-\(app.user?.id ?? 0)-\(app.user?.gradeID ?? 0)"
-            )
-            await MainActor.run {
-                subjects = jArray(data["subjects"]).map(Subject.init)
-                loading = false
-                error = ""
-            }
-        } catch {
-            // Older server installations still expose the student's grade via bootstrap.
-            await MainActor.run {
-                subjects = fallback
-                loading = false
-                self.error = fallback.isEmpty ? "تعذر تحديث المواد، تأكد من اتصالك بالإنترنت." : ""
-            }
-        }
     }
 }
 
