@@ -4522,7 +4522,13 @@ struct V3PasswordRecoveryView: View {
             let phone = contacts["phone"] as? JSON ?? [:]
             channel = jBool(email["enabled"]) ? "email" :
                       (jBool(phone["enabled"]) ? "phone" : "")
+        } catch let failure as APIError where failure.status == 404 {
+            contacts = [:]
+            channel = ""
+            self.error = "خدمة استعادة كلمة المرور لم تُثبَّت على الموقع بعد. يرجى إبلاغ إدارة المنصة لتفعيلها."
         } catch {
+            contacts = [:]
+            channel = ""
             self.error = error.localizedDescription
         }
         fetching = false
