@@ -118,10 +118,12 @@ struct MurshidWizariApp: App {
         defer { app.bootstrapping = false }
         do {
             app.applyBootstrap(try await APIClient.shared.bootstrap())
+            app.bootstrapNetworkFailed = false
             bootstrapNeedsNetworkRetry = false
         } catch let failure as APIError where failure.status == 0 {
             // A dropped network connection is not an invalid login session.
             // Keep cookies and retry when iOS reports connectivity again.
+            app.bootstrapNetworkFailed = true
             bootstrapNeedsNetworkRetry = true
         } catch {
             bootstrapNeedsNetworkRetry = false
@@ -143,6 +145,42 @@ struct RootView: View {
     var body: some View {
         Group {
             if app.bootstrapping { LoadingView(text: "جاري تجهيز حسابك…") }
+            else if app.bootstrapNetworkFailed {
+                VStack(spacing: 18) {
+                    Image(systemName: "wifi.exclamationmark")
+                        .font(.system(size: 52, weight: .semibold))
+                        .foregroundStyle(Color.murshidBlue)
+                    Text("تعذّر تحميل بيانات الحساب")
+                        .font(.title3.bold())
+                    Text("تعذّر الوصول إلى خادم المنصة عبر هذه الشبكة. حسابك محفوظ، ويمكنك إعادة المحاولة عند تحسن الاتصال.")
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
+                    Button {
+                        Task { @MainActor in
+                            guard !app.bootstrapping else { return }
+                            app.bootstrapping = true
+                            defer { app.bootstrapping = false }
+                            do {
+                                app.applyBootstrap(try await APIClient.shared.bootstrap())
+                            } catch let failure as APIError where failure.status == 0 {
+                                app.bootstrapNetworkFailed = true
+                            } catch {
+                                app.reset()
+                            }
+                        }
+                    } label: {
+                        Label("إعادة المحاولة", systemImage: "arrow.clockwise")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(14)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.murshidBlue)
+                }
+                .frame(maxWidth: 420)
+                .padding(24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
             else if app.authenticated { MainV3TabView() }
             else { AuthFlowView() }
         }
