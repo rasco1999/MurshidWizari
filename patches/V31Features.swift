@@ -53,7 +53,7 @@ struct V31HomeView: View {
                 V31WebsiteHeroSlider()
                 releaseUpdateStrip
                 performanceStrip
-                learningImpactStrip
+                if app.featureEnabled("custom_exam") { mockExamStrip }
                 subjectsSection
                 nextStepsSection
                 quickTools
@@ -371,6 +371,33 @@ struct V31HomeView: View {
         }
     }
 
+    private var mockExamStrip: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            V3SectionHeader(title: "محاكاة الوزاري", subtitle: "تدرّب على أجواء الامتحان الوزاري", icon: "timer")
+            NavigationLink(destination: V40CustomExamBuilderView(initialMode: "mock")) {
+                MurshidCard {
+                    HStack(spacing: 12) {
+                        Image(systemName: "timer")
+                            .font(.title2)
+                            .foregroundStyle(Color.murshidBlue)
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("ابدأ محاكاة الوزاري")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                            Text("30 سؤالًا · 45 دقيقة")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.left")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
     private var subjectsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             V3SectionHeader(title: "موادك", subtitle: "اختر المادة ثم الموضوع", icon: "books.vertical.fill")
@@ -424,7 +451,6 @@ struct V31HomeView: View {
                 NavigationLink(destination: ReviewView()) { V3ToolCard(title: "راجع أخطاءك", subtitle: "مراجعة ذكية", icon: "brain.head.profile") }
                 if app.featureEnabled("custom_exam") {
                     NavigationLink(destination: V40CustomExamBuilderView()) { V3ToolCard(title: "اختبار مخصص", subtitle: "عدد · نوع · مؤقت", icon: "slider.horizontal.3") }
-                    NavigationLink(destination: V40CustomExamBuilderView(initialMode: "mock")) { V3ToolCard(title: "محاكاة الوزاري", subtitle: "30 سؤالًا · 45 دقيقة", icon: "timer") }
                 }
                 if app.featureEnabled("daily_challenge") {
                     NavigationLink(destination: V40DailyChallengeView()) { V3ToolCard(title: "تحدي اليوم", subtitle: "سؤال واحد كل 24 ساعة", icon: "flame.fill") }
@@ -440,6 +466,7 @@ struct V31HomeView: View {
                 NavigationLink(destination: V43StoriesView()) { V3ToolCard(title: "غيّر جو", subtitle: "استراحة قصيرة", icon: "sparkles") }
             }
             .buttonStyle(.plain)
+            learningImpactStrip
         }
     }
 
