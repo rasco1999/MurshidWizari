@@ -1728,31 +1728,30 @@ struct MainV3TabView: View {
         ZStack {
             Color.murshidBackground.ignoresSafeArea()
             if visited.contains(0) {
-                tabPane(0) { NavigationStack { V31HomeView() } }
+                tabPane(0) { NavigationStack { tabRoot { V31HomeView() } } }
             }
             if visited.contains(1) {
-                tabPane(1) { NavigationStack { V3TestsView() } }
+                tabPane(1) { NavigationStack { tabRoot { V3TestsView() } } }
             }
             if visited.contains(2) {
-                tabPane(2) { NavigationStack { V31StudyView() } }
+                tabPane(2) { NavigationStack { tabRoot { V31StudyView() } } }
             }
             if visited.contains(3) {
                 tabPane(3) {
                     NavigationStack {
-                        if app.subscribed { V44PredictionsView() }
-                        else { V31PredictionsLockedView() }
+                        tabRoot {
+                            if app.subscribed { V44PredictionsView() }
+                            else { V31PredictionsLockedView() }
+                        }
                     }
                 }
             }
             if visited.contains(4) {
-                tabPane(4) { NavigationStack { V31SchoolAdsView() } }
+                tabPane(4) { NavigationStack { tabRoot { V31SchoolAdsView() } } }
             }
             if visited.contains(5) {
-                tabPane(5) { NavigationStack { V31AccountView() } }
+                tabPane(5) { NavigationStack { tabRoot { V31AccountView() } } }
             }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if !keyboardVisible { bottomBar }
         }
         .tint(.murshidBlue)
         .environment(\.layoutDirection, .rightToLeft)
@@ -1782,6 +1781,16 @@ struct MainV3TabView: View {
             .accessibilityHidden(selection != index)
     }
 
+    // Keep the six-tab bar on top-level screens only. A pushed question/detail
+    // screen may have its own pinned answer/next buttons; a bar applied outside
+    // NavigationStack would cover those controls and the last scroll content.
+    private func tabRoot<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !keyboardVisible { bottomBar }
+            }
+    }
+
     private var bottomBar: some View {
         HStack(spacing: 0) {
             ForEach(tabs.indices, id: \.self) { index in
@@ -1794,10 +1803,10 @@ struct MainV3TabView: View {
                         Text(tabs[index].title)
                             .font(.system(size: 10, weight: selection == index ? .bold : .medium))
                             .lineLimit(1)
-                            .minimumScaleFactor(0.7)
+                            .minimumScaleFactor(0.6)
                     }
                     .foregroundStyle(selection == index ? Color.murshidBlue : Color.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 49)
+                    .frame(minWidth: 0, maxWidth: .infinity, minHeight: 49)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
