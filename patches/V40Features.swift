@@ -567,7 +567,7 @@ struct V40CustomExamBuilderView: View {
             if subjectID > 0 { Task { await loadTopics() } }
         }
         .navigationDestination(isPresented: $goExam) {
-            V40CustomExamSessionView(sessionID: sessionID, displayMode: mode).environmentObject(app)
+            V40CustomExamSessionView(sessionID: sessionID, displayMode: mode, subjectID: subjectID).environmentObject(app)
         }
     }
 
@@ -637,8 +637,10 @@ private struct V40PracticeQuestion: Identifiable {
 
 struct V40CustomExamSessionView: View {
     @EnvironmentObject var app: AppSession
+    @StateObject private var speechReader = V46SpeechReader()
     let sessionID: Int
     let displayMode: String
+    let subjectID: Int
     @State private var title = "اختبار مخصص"
     @State private var questions: [V40PracticeQuestion] = []
     @State private var current = 0
@@ -650,8 +652,12 @@ struct V40CustomExamSessionView: View {
     @State private var remaining = 0
     @State private var timerEnabled = false
     @State private var deadline: Date?
+    @State private var enteredQuestionAt = Date()
+    @State private var questionSeconds: [Int: TimeInterval] = [:]
+    @State private var previousMockScore: Double?
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     private var deadlineKey: String { "murshid-practice-deadline-\(app.user?.id ?? 0)-\(sessionID)" }
+    private var mockScoreKey: String { "murshid-mock-score-\(app.user?.id ?? 0)-\(subjectID)" }
 
     var body: some View {
         Group {
@@ -670,6 +676,8 @@ struct V40CustomExamSessionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
         .task { await load() }
+        .onChange(of: current) { _ in speechReader.stop() }
+        .onDisappear { speechReader.stop() }
         .onReceive(timer) { _ in
             guard timerEnabled, result == nil, !loading, !submitting, let deadline else { return }
             let seconds = max(0, Int(ceil(deadline.timeIntervalSinceNow)))
@@ -704,6 +712,7 @@ struct V40CustomExamSessionView: View {
                                 .font(.title3.weight(.semibold))
                                 .lineSpacing(5)
                                 .fixedSize(horizontal: false, vertical: true)
+                            V46SpeechButton(reader: speechReader, text: questions[current].text)
                             let meta = [questions[current].year, questions[current].round].filter { !$0.isEmpty }
                             if !meta.isEmpty {
                                 Text(meta.joined(separator: " • "))
@@ -730,7 +739,7 @@ struct V40CustomExamSessionView: View {
 
             HStack(spacing: 12) {
                 Button("السابق") {
-                    if current > 0 { current -= 1 }
+                    if current > 0 { recordQuestionTime(); current -= 1; enteredQuestionAt = Date() }
                 }
                 .buttonStyle(.bordered)
                 .disabled(current == 0 || submitting)
@@ -747,7 +756,9 @@ struct V40CustomExamSessionView: View {
                 } else {
                     Button("التالي") {
                         guard hasCurrentAnswer else { return }
+                        recordQuestionTime()
                         current += 1
+                        enteredQuestionAt = Date()
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.murshidBlue)
@@ -841,6 +852,8 @@ struct V40CustomExamSessionView: View {
                 deadline = restoredDeadline
                 loading = false
                 error = ""
+                enteredQuestionAt = Date()
+                previousMockScore = UserDefaults.standard.object(forKey: mockScoreKey) as? Double
             }
         } catch {
             await MainActor.run { loading = false; self.error = error.localizedDescription }
@@ -849,6 +862,7 @@ struct V40CustomExamSessionView: View {
 
     private func finish() async {
         guard !submitting, !questions.isEmpty else { return }
+        await MainActor.run { recordQuestionTime() }
         await MainActor.run { submitting = true; error = "" }
         do {
             var payload: JSON = [:]
@@ -866,6 +880,9 @@ struct V40CustomExamSessionView: View {
             await MainActor.run {
                 result = d
                 submitting = false
+                if displayMode == "mock" {
+                    UserDefaults.standard.set(jDouble(d["score"]), forKey: mockScoreKey)
+                }
                 UserDefaults.standard.removeObject(forKey: deadlineKey)
                 app.freeUsed += jInt(d["answered"])
                 haptic(jDouble(d["score"]) >= 70 ? .success : .warning)
@@ -877,6 +894,14 @@ struct V40CustomExamSessionView: View {
                 haptic(.error)
             }
         }
+    }
+
+    private func recordQuestionTime() {
+        guard questions.indices.contains(current) else { return }
+        let id = questions[current].id
+        let duration = max(0, min(3600, Date().timeIntervalSince(enteredQuestionAt)))
+        questionSeconds[id, default: 0] += duration
+        enteredQuestionAt = Date()
     }
 
     private func resultView(_ result: JSON) -> some View {
@@ -894,6 +919,37 @@ struct V40CustomExamSessionView: View {
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity)
+                }
+
+                if displayMode == "mock" {
+                    MurshidCard {
+                        VStack(alignment: .leading, spacing: 11) {
+                            Label("تحليل المحاكاة", systemImage: "chart.bar.xaxis")
+                                .font(.headline).foregroundStyle(Color.murshidBlue)
+                            if let previousMockScore {
+                                let change = Int((jDouble(result["score"]) - previousMockScore).rounded())
+                                Text(change == 0 ? "نتيجتك مماثلة للمحاولة السابقة في هذه المادة." :
+                                        "\(abs(change)) نقطة مئوية \(change > 0 ? "أعلى" : "أقل") من المحاولة السابقة في هذه المادة.")
+                                    .font(.subheadline)
+                            } else {
+                                Text("هذه أول محاكاة محفوظة لهذه المادة على هذا الجهاز.")
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                            }
+                            Text("الأسئلة التي استغرقت أطول وقت (مدة تقريبية على هذا الجهاز):")
+                                .font(.subheadline.bold())
+                            ForEach(Array(questionSeconds.sorted(by: { $0.value > $1.value }).prefix(3)), id: \.key) { entry in
+                                if let q = questions.first(where: { $0.id == entry.key }) {
+                                    HStack(alignment: .top) {
+                                        Text("\(Int(entry.value.rounded())) ث")
+                                            .font(.caption.bold().monospacedDigit())
+                                            .foregroundStyle(Color.murshidBlue)
+                                            .frame(minWidth: 44, alignment: .leading)
+                                        Text(q.text).font(.caption).lineLimit(2)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 ForEach(Array(jArray(result["review"]).enumerated()), id: \.offset) { _, row in
@@ -1395,6 +1451,7 @@ private struct V40DailyQuestion: Identifiable {
 
 struct V40DailyChallengeView: View {
     @EnvironmentObject var app: AppSession
+    @StateObject private var speechReader = V46SpeechReader()
     @State private var questions: [V40DailyQuestion] = []
     @State private var answers: [Int: String] = [:]
     @State private var loading = true
@@ -1451,6 +1508,7 @@ struct V40DailyChallengeView: View {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("سؤال اليوم").font(.caption.bold()).foregroundStyle(Color.murshidBlue)
                                 Text(murshidQuestionDisplayText(q.text)).font(.headline).fixedSize(horizontal: false, vertical: true)
+                                V46SpeechButton(reader: speechReader, text: q.text)
                                 if q.type == "true_false" && q.options.isEmpty {
                                     choices(q, ["صح", "خطأ"])
                                 } else if !q.options.isEmpty {
@@ -1498,6 +1556,7 @@ struct V40DailyChallengeView: View {
         .navigationTitle("تحدي اليوم")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        .onDisappear { speechReader.stop() }
         .refreshable { await load() }
     }
 

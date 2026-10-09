@@ -1676,6 +1676,8 @@ struct MainV3TabView: View {
     @State private var selection = 0
     @State private var visited: Set<Int> = [0]
     @State private var keyboardVisible = false
+    @State private var sharedQuestionRoute: V46SharedQuestionRoute?
+    @State private var showQuickDailyChallenge = false
 
     // Six actual destinations, with the predictions button immediately left of Study.
     // A native iPhone TabView moves the sixth destination into "More".
@@ -1726,8 +1728,29 @@ struct MainV3TabView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardVisible = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardVisible = false }
         .task { await keepSessionAlive() }
+        .sheet(item: $sharedQuestionRoute) { route in
+            NavigationStack { V46SharedQuestionView(route: route) }
+                .environmentObject(app)
+        }
+        .sheet(isPresented: $showQuickDailyChallenge) {
+            NavigationStack {
+                V40DailyChallengeView()
+                    .toolbar { ToolbarItem(placement: .topBarLeading) { Button("إغلاق") { showQuickDailyChallenge = false } } }
+            }
+            .environmentObject(app)
+        }
         .onOpenURL { url in
             switch (url.host ?? url.path.replacingOccurrences(of: "/", with: "")).lowercased() {
+            case "daily": showQuickDailyChallenge = true
+            case "question":
+                let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+                let values = Dictionary(query.map { ($0.name, $0.value ?? "") }, uniquingKeysWith: { first, _ in first })
+                if let sid = Int(values["subject_id"] ?? ""), sid > 0,
+                   let tid = Int(values["topic_id"] ?? ""), tid > 0,
+                   let qid = Int(values["question_id"] ?? ""), qid > 0 {
+                    selection = 1
+                    sharedQuestionRoute = V46SharedQuestionRoute(subjectID: sid, topicID: tid, questionID: qid)
+                }
             case "tests", "exam", "subjects": selection = 1
             case "study", "learn", "success", "progress": selection = 2
             case "predictions", "filters": selection = 3
@@ -2153,6 +2176,7 @@ struct V3TopicsView: View {
     @State private var loading = true
     @State private var error = ""
     @State private var search = ""
+    @State private var showChapterMap = false
 
     private var filteredTopics: [Topic] {
         let q = search.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2178,9 +2202,23 @@ struct V3TopicsView: View {
                             text: "شاهد تقدمك وعدد الأسئلة قبل البدء.",
                             icon: "book.pages.fill"
                         )
+                        Picker("عرض مواضيع الفصل", selection: $showChapterMap) {
+                            Text("القائمة").tag(false)
+                            Text("خريطة الفصل").tag(true)
+                        }
+                        .pickerStyle(.segmented)
                         if filteredTopics.isEmpty {
                             EmptyStateView(systemImage: "magnifyingglass", title: "لا توجد نتيجة", message: "جرّب البحث باسم آخر من مواضيع \(subject.name).")
                                 .frame(minHeight: 240)
+                        } else if showChapterMap {
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                                ForEach(Array(filteredTopics.enumerated()), id: \.element.id) { index, topic in
+                                    NavigationLink(destination: V3ExamView(topic: topic, subject: subject)) {
+                                        chapterMapTile(topic, index: index)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
                         } else {
                             ForEach(Array(filteredTopics.enumerated()), id: \.element.id) { index, topic in
                                 NavigationLink(destination: V3ExamView(topic: topic, subject: subject)) {
@@ -2201,6 +2239,29 @@ struct V3TopicsView: View {
         .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: "ابحث عن موضوع")
         .task { await load() }
         .refreshable { await load() }
+    }
+
+    private func chapterMapTile(_ topic: Topic, index: Int) -> some View {
+        let m = metrics[topic.id] ?? [:]
+        let coverage = jInt(m["coverage"])
+        let complete = jBool(m["completed"])
+        let tint: Color = complete ? .green : (coverage > 0 ? .murshidBlue : .gray)
+        return MurshidCard {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Image(systemName: complete ? "checkmark.seal.fill" : "circle.hexagongrid.fill")
+                        .font(.title2).foregroundStyle(tint)
+                    Spacer()
+                    Text("\(index + 1)").font(.caption.bold().monospacedDigit()).foregroundStyle(.secondary)
+                }
+                Text(topic.name).font(.subheadline.bold()).foregroundStyle(.primary)
+                    .lineLimit(3).frame(maxWidth: .infinity, alignment: .leading)
+                ProgressView(value: Double(coverage), total: 100).tint(tint)
+                Text(complete ? "مكتمل" : coverage > 0 ? "\(coverage)% قيد التقدم" : "لم يبدأ")
+                    .font(.caption).foregroundStyle(tint)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private func topicRow(_ topic: Topic, index: Int) -> some View {
@@ -2834,9 +2895,17 @@ struct V3SkeletonCard: View {
 struct V3ExamView: View {
     let topic: Topic
     let subject: Subject
+    let startingQuestionID: Int
+
+    init(topic: Topic, subject: Subject, startingQuestionID: Int = 0) {
+        self.topic = topic
+        self.subject = subject
+        self.startingQuestionID = startingQuestionID
+    }
 
     @EnvironmentObject var app: AppSession
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var speechReader = V46SpeechReader()
 
     @State private var questions: [Question] = []
     @State private var current = 0
@@ -2848,6 +2917,8 @@ struct V3ExamView: View {
     @State private var matches: [Int: [Int: MatchDraft]] = [:]
     @State private var english: [Int: [String: String]] = [:]
     @State private var grades: [Int: JSON] = [:]
+    @State private var eliminationMode = false
+    @State private var eliminatedOptions: [Int: Set<Int>] = [:]
     @State private var showSubscription = false
     @State private var alertMessage = ""
     @State private var showAlert = false
@@ -2952,8 +3023,8 @@ struct V3ExamView: View {
                         Button { showMoreQuestions = true } label: {
                             Label("طلب أسئلة جديدة", systemImage: "plus.bubble")
                         }
-                        ShareLink(item: murshidQuestionDisplayText(questions[current].text) + "\n\nمنصة المرشد الوزاري") {
-                            Label("مشاركة السؤال", systemImage: "square.and.arrow.up")
+                        ShareLink(item: URL(string: "murshid://question?subject_id=\(subject.id)&topic_id=\(topic.id)&question_id=\(questions[current].id)")!, subject: Text("سؤال من المرشد الوزاري"), message: Text("افتح السؤال مباشرة داخل تطبيق المرشد الوزاري")) {
+                            Label("مشاركة رابط السؤال", systemImage: "square.and.arrow.up")
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -2969,6 +3040,8 @@ struct V3ExamView: View {
             }
         }
         .task { await load() }
+        .onChange(of: current) { _ in speechReader.stop() }
+        .onDisappear { speechReader.stop() }
         .alert("المرشد الوزاري", isPresented: $showAlert) {
             Button("حسنًا", role: .cancel) {}
         } message: { Text(alertMessage) }
@@ -3090,6 +3163,10 @@ struct V3ExamView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color.murshidBlue.opacity(0.10), in: Capsule())
+                    if q.verified {
+                        Label("سؤال مدقّق", systemImage: "checkmark.seal.fill")
+                            .font(.caption.bold()).foregroundStyle(.green)
+                    }
                     Spacer()
                 }
                 Text(murshidQuestionDisplayText(q.text))
@@ -3097,12 +3174,23 @@ struct V3ExamView: View {
                     .lineSpacing(5)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
+                V46SpeechButton(reader: speechReader, text: q.text)
                 let meta = [q.examYear, q.examRound].filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
                 if !meta.isEmpty {
                     Label(meta.joined(separator: " • "), systemImage: "calendar")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                if q.verified && !q.sourceLabel.isEmpty {
+                    Label("المصدر: \(q.sourceLabel)", systemImage: "text.book.closed")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Button { showReport = true } label: {
+                    Label("هل وجدت خطأ في السؤال؟ بلّغ الإدارة", systemImage: "flag")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -3122,6 +3210,20 @@ struct V3ExamView: View {
                 }
 
                 if !options.isEmpty {
+                    if options.count >= 3 && !isAnswered(q) {
+                        Button {
+                            eliminationMode.toggle()
+                            selectionHaptic()
+                        } label: {
+                            Label(eliminationMode ? "إنهاء تدريب استبعاد الخيارات" : "تحدّي احذف خيارين", systemImage: "line.3.horizontal.decrease.circle")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .buttonStyle(.bordered)
+                        if eliminationMode {
+                            Text("اضغط × بجانب خيار لاستبعاده، ثم اختر إجابتك. الاستبعاد تدريب فقط ولا يُرسل إلى التصحيح.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
                     VStack(spacing: 10) {
                         ForEach(Array(options.enumerated()), id: \.element.id) { index, option in
                             optionButton(q: q, option: option, index: index)
@@ -3184,33 +3286,58 @@ struct V3ExamView: View {
         let wrongSelected = graded && selected && !correctOption
         let accent: Color = correctOption ? .green : (wrongSelected ? .red : Color.murshidBlue)
         let icon = correctOption ? "checkmark.circle.fill" : (wrongSelected ? "xmark.circle.fill" : (selected ? "checkmark.circle.fill" : "circle"))
+        let excluded = eliminatedOptions[q.id]?.contains(option.id) ?? false
 
-        return Button {
-            guard !graded, !submitting else { return }
-            answers[q.id] = option.text
-            selectionHaptic()
-            submitCurrent(answerOverride: option.text)
-        } label: {
-            HStack(spacing: 12) {
-                Text(optionLetter(index))
-                    .font(.subheadline.bold())
-                    .frame(width: 34, height: 34)
-                    .foregroundStyle((selected || correctOption) ? .white : accent)
-                    .background((selected || correctOption) ? accent : accent.opacity(0.10), in: Circle())
-                Text(option.text)
-                    .font(.body.weight(.medium))
-                    .multilineTextAlignment(.leading)
-                    .foregroundStyle(.primary)
-                Spacer(minLength: 0)
-                Image(systemName: icon)
-                    .foregroundStyle((selected || correctOption) ? accent : Color.secondary)
+        return HStack(spacing: 7) {
+            Button {
+                guard !graded, !submitting, !excluded else { return }
+                answers[q.id] = option.text
+                selectionHaptic()
+                submitCurrent(answerOverride: option.text)
+            } label: {
+                HStack(spacing: 12) {
+                    Text(optionLetter(index))
+                        .font(.subheadline.bold())
+                        .frame(width: 34, height: 34)
+                        .foregroundStyle((selected || correctOption) ? .white : accent)
+                        .background((selected || correctOption) ? accent : accent.opacity(0.10), in: Circle())
+                    Text(option.text)
+                        .font(.body.weight(.medium))
+                        .strikethrough(excluded)
+                        .multilineTextAlignment(.leading)
+                        .foregroundStyle(excluded ? .secondary : .primary)
+                    Spacer(minLength: 0)
+                    Image(systemName: icon)
+                        .foregroundStyle((selected || correctOption) ? accent : Color.secondary)
+                }
+                .padding(12)
+                .background((selected || correctOption) ? accent.opacity(0.10) : Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).stroke((selected || correctOption) ? accent.opacity(0.42) : Color.primary.opacity(0.05), lineWidth: 1))
             }
-            .padding(12)
-            .background((selected || correctOption) ? accent.opacity(0.10) : Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 15, style: .continuous).stroke((selected || correctOption) ? accent.opacity(0.42) : Color.primary.opacity(0.05), lineWidth: 1))
+            .buttonStyle(.plain)
+            .disabled(graded || submitting || excluded)
+
+            if eliminationMode && !graded {
+                Button {
+                    var excludedIDs = eliminatedOptions[q.id] ?? Set<Int>()
+                    if excludedIDs.contains(option.id) {
+                        excludedIDs.remove(option.id)
+                    } else if excludedIDs.count < 2 {
+                        excludedIDs.insert(option.id)
+                    }
+                    eliminatedOptions[q.id] = excludedIDs
+                    selectionHaptic()
+                } label: {
+                    Image(systemName: excluded ? "arrow.uturn.backward.circle.fill" : "xmark.circle")
+                        .font(.title2)
+                        .foregroundStyle(excluded ? .orange : .secondary)
+                        .frame(minWidth: 35, minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .disabled(submitting)
+                .accessibilityLabel(excluded ? "إعادة الخيار" : "استبعاد الخيار")
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(graded || submitting)
         .animation(.easeInOut(duration: 0.2), value: graded)
     }
 
@@ -3458,7 +3585,7 @@ struct V3ExamView: View {
             let difficultyValues = (available["difficulties"] as? [String]) ?? []
             await MainActor.run {
                 questions = qs
-                current = 0
+                current = qs.firstIndex(where: { $0.id == startingQuestionID }) ?? 0
                 availableFilterTypes = typeValues
                 availableFilterYears = yearValues
                 availableFilterRounds = roundValues
