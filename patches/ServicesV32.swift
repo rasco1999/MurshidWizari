@@ -10,6 +10,8 @@ final class DeviceServices: ObservableObject {
     static let shared = DeviceServices()
 
     @Published var isOnline = true
+    // Start conservatively until NWPathMonitor identifies Wi-Fi or cellular.
+    @Published var isMeteredConnection = true
     @Published var isLocked = false
     @Published var biometricAvailable = false
 
@@ -36,6 +38,7 @@ final class DeviceServices: ObservableObject {
         monitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
                 self?.isOnline = path.status == .satisfied
+                self?.isMeteredConnection = path.isExpensive || path.isConstrained
             }
         }
         monitor.start(queue: queue)
