@@ -261,8 +261,9 @@ struct ProgressHubView: View {
 }
 
 struct ReviewView: View {
-    @State private var weak: [WeakTopic] = []
-    @State private var mistakes: [ReviewMistake] = []
+    @EnvironmentObject private var app: AppSession
+    @State private var weak: [JSON] = []
+    @State private var mistakes: [JSON] = []
     @State private var loading = true
     @State private var error = ""
     var body: some View {
@@ -271,29 +272,86 @@ struct ReviewView: View {
             else if !error.isEmpty { ErrorStateView(message: error, retry: { Task { await load() } }) }
             else {
                 List {
+                    Section {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("تحليل مبني على إجاباتك الفعلية", systemImage: "chart.bar.xaxis")
+                                .font(.headline)
+                                .foregroundStyle(Color.murshidBlue)
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("\(app.accuracy)%").font(.title.bold()).monospacedDigit()
+                                    Text("دقة إجاباتك").font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("\(weak.filter { jInt($0["rate"]) < 70 }.count)").font(.title.bold()).monospacedDigit()
+                                    Text("موضوع يحتاج مراجعة").font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                            Text("المؤشرات تتغير مع إجاباتك. قلة الإجابات لا تكفي للحكم على مستواك النهائي.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }.padding(.vertical, 6)
+                    }
                     if !weak.isEmpty {
                         Section("المواضيع التي تحتاج تركيزًا") {
-                            ForEach(weak) { item in
-                                VStack(alignment: .leading, spacing: 6) {
-                                    HStack { Text(item.chapter).font(.headline); Spacer(); Text("\(item.rate)%").font(.headline).foregroundStyle(item.rate >= 70 ? .green : .orange) }
-                                    Text(item.subject + " • أخطاء: \(item.wrong) من \(item.total)").font(.caption).foregroundStyle(.secondary)
-                                }.padding(.vertical, 5)
+                            ForEach(Array(weak.enumerated()), id: \.offset) { _, item in
+                                VStack(alignment: .leading, spacing: 9) {
+                                    HStack {
+                                        Text(jString(item["chapter_name"])).font(.headline)
+                                        Spacer()
+                                        Text("\(jInt(item["rate"]))%")
+                                            .font(.headline.monospacedDigit())
+                                            .foregroundStyle(jInt(item["rate"]) >= 70 ? Color.green : Color.orange)
+                                    }
+                                    Text(jString(item["subject_name"]) + " • " + "\(jInt(item["wrong"])) أخطاء من \(jInt(item["total"])) إجابة")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                    ProgressView(value: Double(max(0, min(100, jInt(item["rate"])))), total: 100)
+                                        .tint(jInt(item["rate"]) >= 70 ? .green : .orange)
+                                    if let subject = subjectFor(item) {
+                                        HStack(spacing: 12) {
+                                            NavigationLink(destination: V31StudySubjectView(subject: subject, focusedTopicID: jInt(item["chapter_id"]))) {
+                                                Label("شرح المادة", systemImage: "play.rectangle")
+                                            }
+                                            if app.featureEnabled("custom_exam") {
+                                                NavigationLink(destination: V40CustomExamBuilderView(initialSubjectID: subject.id, mistakesOnly: true)) {
+                                                    Label("اختبر أخطاءك", systemImage: "arrow.clockwise")
+                                                }
+                                            }
+                                        }
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(Color.murshidBlue)
+                                    }
+                                }.padding(.vertical, 7)
                             }
                         }
                     }
-                    Section("آخر الأخطاء") {
-                        if mistakes.isEmpty { Text("لا توجد أخطاء مسجلة. ممتاز 👏").foregroundStyle(.secondary) }
-                        ForEach(mistakes) { item in
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("وزاري")
+                    Section("دفتر أخطائي السابقة") {
+                        if mistakes.isEmpty { Text("لا توجد أخطاء سابقة مسجلة حتى الآن. 👏").foregroundStyle(.secondary) }
+                        ForEach(Array(mistakes.enumerated()), id: \.offset) { _, item in
+                            VStack(alignment: .leading, spacing: 9) {
+                                Text("من بنك الأسئلة")
                                     .font(.caption.bold())
                                     .foregroundStyle(Color.murshidBlue)
                                     .padding(.horizontal, 8).padding(.vertical, 4)
                                     .background(Color.murshidBlue.opacity(0.10), in: Capsule())
-                                Text(murshidQuestionDisplayText(item.text)).font(.body.weight(.semibold))
-                                Text("الإجابة الصحيحة: \(item.answer)").font(.subheadline).foregroundStyle(.green)
-                                if !item.explanation.isEmpty { Text(item.explanation).font(.footnote).foregroundStyle(.secondary) }
-                                Text(item.subject + " • " + item.chapter).font(.caption2).foregroundStyle(.secondary)
+                                Text(murshidQuestionDisplayText(jString(item["question_text"]))).font(.body.weight(.semibold))
+                                Text("الإجابة الصحيحة: \(jString(item["correct_answer"]))")
+                                    .font(.subheadline.weight(.semibold)).foregroundStyle(.green)
+                                let explanation = murshidUsefulExplanation(jString(item["explanation"]))
+                                if !explanation.isEmpty {
+                                    Text(explanation).font(.footnote).foregroundStyle(.secondary)
+                                } else {
+                                    Text("الشرح التفصيلي غير متاح بعد؛ تستطيع مراجعة فيديوهات المادة إن وُجدت.")
+                                        .font(.footnote).foregroundStyle(.secondary)
+                                }
+                                Text(jString(item["subject_name"]) + " • " + jString(item["chapter_name"]))
+                                    .font(.caption2).foregroundStyle(.secondary)
+                                if let subject = subjectFor(item) {
+                                    NavigationLink(destination: V31StudySubjectView(subject: subject, focusedTopicID: jInt(item["chapter_id"]))) {
+                                        Label("انتقل إلى ادرس", systemImage: "play.rectangle.fill")
+                                            .font(.subheadline.weight(.medium))
+                                    }
+                                }
                             }.padding(.vertical, 6)
                         }
                     }
@@ -304,10 +362,15 @@ struct ReviewView: View {
         .task { await load() }
         .refreshable { await load() }
     }
+    private func subjectFor(_ row: JSON) -> Subject? {
+        let id = jInt(row["subject_id"])
+        return app.subjects.first(where: { $0.id == id })
+    }
     private func load() async {
+        await MainActor.run { loading = true }
         do {
             let data = try await APIClient.shared.request("mobile/review.php")
-            await MainActor.run { weak = jArray(data["weak"]).map(WeakTopic.init); mistakes = jArray(data["mistakes"]).map(ReviewMistake.init); loading = false; error = "" }
+            await MainActor.run { weak = jArray(data["weak"]); mistakes = jArray(data["mistakes"]); loading = false; error = "" }
         } catch { await MainActor.run { loading = false; self.error = error.localizedDescription } }
     }
 }

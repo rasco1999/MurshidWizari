@@ -53,6 +53,7 @@ struct V31HomeView: View {
                 V31WebsiteHeroSlider()
                 releaseUpdateStrip
                 performanceStrip
+                learningImpactStrip
                 subjectsSection
                 nextStepsSection
                 quickTools
@@ -238,11 +239,11 @@ struct V31HomeView: View {
                             .frame(width: 42, height: 42)
                             .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
                         VStack(alignment: .leading, spacing: 5) {
-                            Text(app.freeRemaining == 0 ? "انتهت الأسئلة المجانية" : "افتح جميع الأسئلة الوزارية")
+                            Text(app.freeRemaining == 0 ? "جاهز تكمل تطوّرك؟" : "جرّب، تعلّم، ثم قرّر")
                                 .font(.headline).foregroundStyle(.white)
                             Text(app.freeRemaining == 0
-                                 ? "للمتابعة اختر الباقة المناسبة من صفحة الاشتراك."
-                                 : "المتبقي مجاناً: \(max(0, app.freeRemaining ?? max(0, app.freeLimit - app.freeUsed))) من \(app.freeLimit) سؤال")
+                                 ? "راجع أخطاءك مجانًا، واشترك لحل أسئلة جديدة والاستمرار في التدريب."
+                                 : "حل \(max(0, app.freeRemaining ?? max(0, app.freeLimit - app.freeUsed))) أسئلة مجانية متبقية، واطّلع على التصحيح قبل أن تختار الاشتراك.")
                                 .font(.subheadline).foregroundStyle(.white.opacity(0.82))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -250,7 +251,7 @@ struct V31HomeView: View {
                     }
                     HStack(spacing: 9) {
                         Image(systemName: "creditcard.fill")
-                        Text("اشتراك").font(.title3.bold())
+                        Text("اكتشف مزايا الاشتراك").font(.title3.bold())
                         Spacer()
                         Image(systemName: "arrow.left").font(.headline.bold())
                     }
@@ -328,7 +329,44 @@ struct V31HomeView: View {
                 V3MetricCard(title: "الإجابات", value: "\(jInt(app.stats["total_answers"]))", icon: "checkmark.circle.fill")
                 V3MetricCard(title: "اختبارات مكتملة", value: "\(jInt(app.stats["exams_completed"]))", icon: "flag.checkered")
                 V3MetricCard(title: "هذا الأسبوع", value: "\(jInt(weekly["answers"]))", icon: "calendar")
-                V3MetricCard(title: "مؤشر النجاح", value: "\(jInt(insights["success_index"]))%", icon: "sparkles")
+                V3MetricCard(title: "مؤشر المراجعة", value: "\(jInt(insights["success_index"]))%", icon: "sparkles")
+            }
+        }
+    }
+
+    private var learningImpactStrip: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            V3SectionHeader(title: "تعلّم من إجاباتك", subtitle: "خطوة صغيرة بعد كل اختبار", icon: "chart.xyaxis.line")
+            MurshidCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    if jInt(weekly["answers"]) > 0 && jInt(weekly["previous"]) > 0,
+                       weekly["accuracy_change"] != nil {
+                        let delta = jInt(weekly["accuracy_change"])
+                        HStack(spacing: 9) {
+                            Image(systemName: delta >= 0 ? "arrow.up.right.circle.fill" : "arrow.down.right.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(delta >= 0 ? Color.green : Color.orange)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("دقتك هذا الأسبوع \(jInt(weekly["accuracy"]))%")
+                                    .font(.headline)
+                                Text(delta == 0 ? "مماثلة للأسبوع السابق" : "\(abs(delta)) نقطة مئوية \(delta > 0 ? "أعلى" : "أقل") من الأسبوع السابق")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    } else {
+                        Label("كل إجابة تساهم في تحليل نقاط قوتك والمواضيع التي تحتاج مراجعة.", systemImage: "brain.head.profile")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    NavigationLink(destination: ReviewView()) {
+                        HStack {
+                            Label("افتح دفتر الأخطاء والتحليل", systemImage: "book.closed.fill")
+                                .font(.subheadline.bold())
+                            Spacer()
+                            Image(systemName: "arrow.left")
+                        }
+                        .foregroundStyle(Color.murshidBlue)
+                    }
+                }
             }
         }
     }
@@ -386,6 +424,7 @@ struct V31HomeView: View {
                 NavigationLink(destination: ReviewView()) { V3ToolCard(title: "راجع أخطاءك", subtitle: "مراجعة ذكية", icon: "brain.head.profile") }
                 if app.featureEnabled("custom_exam") {
                     NavigationLink(destination: V40CustomExamBuilderView()) { V3ToolCard(title: "اختبار مخصص", subtitle: "عدد · نوع · مؤقت", icon: "slider.horizontal.3") }
+                    NavigationLink(destination: V40CustomExamBuilderView(initialMode: "mock")) { V3ToolCard(title: "محاكاة الوزاري", subtitle: "30 سؤالًا · 45 دقيقة", icon: "timer") }
                 }
                 if app.featureEnabled("daily_challenge") {
                     NavigationLink(destination: V40DailyChallengeView()) { V3ToolCard(title: "تحدي اليوم", subtitle: "سؤال واحد كل 24 ساعة", icon: "flame.fill") }
@@ -945,13 +984,15 @@ private struct V31StudyChapter: Identifiable {
 struct V31StudySubjectView: View {
     @EnvironmentObject private var app: AppSession
     let subject: Subject
+    var focusedTopicID: Int = 0
     @State private var chapters: [V31StudyChapter] = []
     @State private var loading = true
     @State private var error = ""
 
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 13) {
+        ScrollViewReader { reader in
+            ScrollView {
+                LazyVStack(spacing: 13) {
                 V3SectionHeader(title: "موضوعات \(subject.name)", subtitle: app.user?.grade ?? "صفّك", icon: "book.pages.fill")
                 if loading {
                     ForEach(0..<3, id: \.self) { _ in V3SkeletonCard(height: 100) }
@@ -988,11 +1029,18 @@ struct V31StudySubjectView: View {
                                 }
                             }
                         }
+                        .overlay(RoundedRectangle(cornerRadius: 19).stroke(chapter.id == focusedTopicID ? Color.murshidGold : Color.clear, lineWidth: 2))
+                        .id(chapter.id)
                     }
                 }
+                }
+                .padding(16)
+                .padding(.bottom, 16)
             }
-            .padding(16)
-            .padding(.bottom, 16)
+            .onChange(of: chapters.count) { _ in
+                guard focusedTopicID > 0, chapters.contains(where: { $0.id == focusedTopicID }) else { return }
+                withAnimation(.easeInOut(duration: 0.3)) { reader.scrollTo(focusedTopicID, anchor: .top) }
+            }
         }
         .background(Color.murshidBackground.ignoresSafeArea())
         .navigationTitle(subject.name)
@@ -1059,7 +1107,7 @@ struct V31SubscriptionView: View {
     @Environment(\.openURL) private var openURL
     @AppStorage("last_payment_order") private var storedOrderID = 0
     @State private var plan = ""
-        @State private var loading = false
+    @State private var loading = false
     @State private var error = ""
     @State private var statusMessage = ""
 
@@ -1067,10 +1115,11 @@ struct V31SubscriptionView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
-                V3IntroCard(eyebrow: "الاشتراك", title: app.subscribed ? "اشتراكك مفعّل" : "افتح كامل الأسئلة", text: app.subscribed ? "يمكنك الوصول إلى كامل المحتوى المتاح في صفك." : "اختر الباقة فقط، ثم انتقل مباشرة إلى صفحة الدفع الخارجية الآمنة.", icon: app.subscribed ? "checkmark.seal.fill" : "arrow.up.forward.app.fill")
+                membershipHero
                 if app.subscribed {
                     MurshidCard { Label("لا تحتاج إلى أي عملية دفع الآن.", systemImage: "checkmark.circle.fill").font(.headline).foregroundStyle(.green) }
                 } else {
+                    premiumBenefits
                     plansSection
                     actionSection
                 }
@@ -1080,6 +1129,72 @@ struct V31SubscriptionView: View {
         .navigationTitle("الاشتراك")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { if plan.isEmpty { plan = app.plans.first?.id ?? "month1" } }
+    }
+
+    private var membershipHero: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("المرشد الوزاري", systemImage: "crown.fill")
+                    .font(.subheadline.bold()).foregroundStyle(Color.murshidGold)
+                Spacer()
+                Image(systemName: app.subscribed ? "checkmark.seal.fill" : "sparkles")
+                    .font(.title).foregroundStyle(Color.murshidGold)
+            }
+            Text(app.subscribed ? "دراستك مستمرة بلا حدّ الأسئلة المجانية" : "لا تحفظ الإجابة فقط… افهم أين تتطور")
+                .font(.system(.title2, design: .rounded, weight: .bold))
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(app.subscribed
+                 ? "وصولك إلى بنك أسئلة صفك فعّال وفق مدة اشتراكك."
+                 : "تدرّب على أسئلة صفك، راجع أخطاءك، واستخدم المحاكاة والمؤشرات المتاحة لتعرف الخطوة التالية.")
+                .font(.subheadline).foregroundStyle(.white.opacity(0.87))
+                .fixedSize(horizontal: false, vertical: true)
+            if !app.subscribed {
+                HStack(spacing: 10) {
+                    Image(systemName: "gift.fill")
+                    Text("تجربة مجانية: \(app.freeLimit) سؤال · المتبقي \(max(0, app.freeRemaining ?? max(0, app.freeLimit - app.freeUsed)))")
+                }
+                .font(.caption.bold())
+                .foregroundStyle(Color.murshidNavy)
+                .padding(.horizontal, 12).padding(.vertical, 9)
+                .background(Color.murshidGold, in: Capsule())
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(21)
+        .background(LinearGradient(colors: [.murshidNavy, .murshidBlue], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 23))
+        .overlay(RoundedRectangle(cornerRadius: 23).stroke(Color.murshidGold.opacity(0.45), lineWidth: 1))
+    }
+
+    private var premiumBenefits: some View {
+        MurshidCard {
+            VStack(alignment: .leading, spacing: 15) {
+                Text("ماذا تكسب عند الاشتراك؟")
+                    .font(.title3.bold())
+                benefit("أسئلة صفّك", detail: "تابع الحل بعد انتهاء الرصيد المجاني مع إظهار الإجابة الصحيحة.", icon: "checkmark.seal.fill")
+                benefit("دفتر الأخطاء", detail: "ارجع للأسئلة التي أخطأت بها والمواضيع الأضعف.", icon: "book.closed.fill")
+                if app.featureEnabled("custom_exam") {
+                    benefit("اختبار ومحاكاة", detail: "حدد أسئلة للتدريب أو جرّب محاكاة مؤقتة والتصحيح بعد النهاية.", icon: "timer")
+                }
+                benefit("ادرس حسب صفّك", detail: "افتح المادة ثم الموضوع وفيديو يوتيوب إن نشرته الإدارة.", icon: "play.rectangle.fill")
+                Label("الشرح التفصيلي والمصادر يظهران فقط حيث تتوفر بيانات صحيحة لهما.", systemImage: "info.circle")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func benefit(_ name: String, detail: String, icon: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(Color.murshidBlue)
+                .frame(width: 35, height: 35)
+                .background(Color.murshidBlue.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(name).font(.headline)
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private var plansSection: some View {
@@ -1093,7 +1208,12 @@ struct V31SubscriptionView: View {
                         Image(systemName: plan == p.id ? "checkmark.circle.fill" : "circle").foregroundStyle(plan == p.id ? Color.murshidBlue : Color.secondary)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(p.label).font(.headline).foregroundStyle(.primary)
-                            Text("وصول كامل حسب مدة الباقة").font(.caption).foregroundStyle(.secondary)
+                            if p.id == "month3", let monthly = app.plans.first(where: { $0.id == "month1" }), monthly.amount * 3 > p.amount {
+                                Text("توفّر \((monthly.amount * 3 - p.amount).formatted()) د.ع مقارنة بثلاث باقات شهرية")
+                                    .font(.caption.bold()).foregroundStyle(.green)
+                            } else {
+                                Text("وصول إلى المحتوى حسب مدة الباقة").font(.caption).foregroundStyle(.secondary)
+                            }
                         }
                         Spacer(); Text("\(p.amount.formatted()) د.ع").font(.headline).foregroundStyle(Color.murshidBlue)
                     }

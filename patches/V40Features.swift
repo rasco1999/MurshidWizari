@@ -427,20 +427,53 @@ struct V40CustomExamBuilderView: View {
     @State private var type = "all"
     @State private var state = "all"
     @State private var minutes = 0
+    @State private var mode = "custom"
     @State private var loading = false
     @State private var error = ""
     @State private var sessionID = 0
     @State private var goExam = false
 
+    init(initialSubjectID: Int = 0, mistakesOnly: Bool = false, initialMode: String = "custom") {
+        _subjectID = State(initialValue: initialSubjectID)
+        _state = State(initialValue: mistakesOnly ? "wrong" : "all")
+        if initialMode == "mock" {
+            _mode = State(initialValue: "mock")
+            _count = State(initialValue: 30)
+            _minutes = State(initialValue: 45)
+        }
+    }
+
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
                 V3IntroCard(
-                    eyebrow: "اختبارك",
-                    title: "أنشئ اختبارًا مخصصًا",
-                    text: "حدد المادة والمواضيع وعدد الأسئلة، ويمكنك إضافة مؤقت. التصحيح يظهر في النهاية.",
-                    icon: "slider.horizontal.3"
+                    eyebrow: "اختبر استعدادك",
+                    title: mode == "mock" ? "محاكاة وزارية تدريبية" : "أنشئ اختبارًا مخصصًا",
+                    text: mode == "mock"
+                        ? "اختبار مؤقت من بنك أسئلة صفّك. لا يظهر التصحيح إلا عند النهاية، وهو تدريب لا ورقة امتحان رسمية."
+                        : "حدد المادة والمواضيع وعدد الأسئلة، ويمكنك إضافة مؤقت. التصحيح يظهر في النهاية.",
+                    icon: mode == "mock" ? "clock.badge.checkmark" : "slider.horizontal.3"
                 )
+
+                Picker("نمط الاختبار", selection: $mode) {
+                    Text("اختبار مخصص").tag("custom")
+                    Text("محاكاة وزارية").tag("mock")
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: mode) { selected in
+                    if selected == "mock" {
+                        count = 30
+                        minutes = 45
+                        type = "all"
+                        state = "all"
+                        selectedTopics.removeAll()
+                    }
+                    selectionHaptic()
+                }
+
+                if mode == "mock" {
+                    V3InlineMessage(text: "محاكاة: 30 سؤالًا أو المتاح حسب رصيدك، 45 دقيقة، وأسئلة متنوعة من كامل المادة. السنة والدور يظهران فقط عندما يكونان موثّقين في بيانات السؤال.", icon: "info.circle.fill", tone: .info)
+                }
 
                 MurshidCard {
                     VStack(alignment: .leading, spacing: 14) {
@@ -450,7 +483,7 @@ struct V40CustomExamBuilderView: View {
                         }
                         .onChange(of: subjectID) { _ in Task { await loadTopics() } }
 
-                        if !topics.isEmpty {
+                        if mode != "mock" && !topics.isEmpty {
                             Text("المواضيع — اتركها بدون تحديد لاستخدام كل المادة")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -471,9 +504,10 @@ struct V40CustomExamBuilderView: View {
                             }
                         }
 
-                        Stepper("عدد الأسئلة: \(count)", value: $count, in: 5...50, step: 5)
+                        if mode != "mock" {
+                            Stepper("عدد الأسئلة: \(count)", value: $count, in: 5...50, step: 5)
 
-                        Picker("نوع السؤال", selection: $type) {
+                            Picker("نوع السؤال", selection: $type) {
                             Text("الكل").tag("all")
                             Text("اختيارات").tag("mcq")
                             Text("صح / خطأ").tag("true_false")
@@ -482,7 +516,7 @@ struct V40CustomExamBuilderView: View {
                             Text("معاني").tag("meaning")
                         }
 
-                        Picker("حالة السؤال", selection: $state) {
+                            Picker("حالة السؤال", selection: $state) {
                             Text("الكل").tag("all")
                             Text("لم أجب").tag("unanswered")
                             Text("أخطأت سابقًا").tag("wrong")
@@ -490,14 +524,19 @@ struct V40CustomExamBuilderView: View {
                             Text("المفضلة").tag("favorite")
                         }
 
-                        Picker("المؤقت", selection: $minutes) {
+                            Picker("المؤقت", selection: $minutes) {
                             Text("بدون مؤقت").tag(0)
                             Text("15 د").tag(15)
                             Text("30 د").tag(30)
                             Text("45 د").tag(45)
                             Text("60 د").tag(60)
                         }
-                        .pickerStyle(.segmented)
+                            .pickerStyle(.segmented)
+                        } else {
+                            Label("45 دقيقة • حتى 30 سؤالًا • التصحيح بعد التسليم", systemImage: "timer")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(Color.murshidBlue)
+                        }
                     }
                 }
 
@@ -521,16 +560,14 @@ struct V40CustomExamBuilderView: View {
             .padding(.bottom, 28)
         }
         .background(Color.murshidBackground.ignoresSafeArea())
-        .navigationTitle("اختبار مخصص")
+        .navigationTitle(mode == "mock" ? "محاكاة الوزاري" : "اختبار مخصص")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            if subjectID == 0, let first = app.subjects.first {
-                subjectID = first.id
-                Task { await loadTopics() }
-            }
+            if subjectID == 0, let first = app.subjects.first { subjectID = first.id }
+            if subjectID > 0 { Task { await loadTopics() } }
         }
         .navigationDestination(isPresented: $goExam) {
-            V40CustomExamSessionView(sessionID: sessionID).environmentObject(app)
+            V40CustomExamSessionView(sessionID: sessionID, displayMode: mode).environmentObject(app)
         }
     }
 
@@ -558,11 +595,12 @@ struct V40CustomExamBuilderView: View {
                     "csrf": app.csrf,
                     "action": "create",
                     "subject_id": subjectID,
-                    "chapter_ids": Array(selectedTopics),
-                    "count": count,
-                    "type": type,
-                    "state": state,
-                    "minutes": minutes
+                    "chapter_ids": mode == "mock" ? [] : Array(selectedTopics),
+                    "count": mode == "mock" ? 30 : count,
+                    "type": mode == "mock" ? "all" : type,
+                    "state": mode == "mock" ? "all" : state,
+                    "minutes": mode == "mock" ? 45 : minutes,
+                    "mode": mode
                 ]
             )
             await MainActor.run {
@@ -600,6 +638,7 @@ private struct V40PracticeQuestion: Identifiable {
 struct V40CustomExamSessionView: View {
     @EnvironmentObject var app: AppSession
     let sessionID: Int
+    let displayMode: String
     @State private var title = "اختبار مخصص"
     @State private var questions: [V40PracticeQuestion] = []
     @State private var current = 0
@@ -610,7 +649,9 @@ struct V40CustomExamSessionView: View {
     @State private var result: JSON?
     @State private var remaining = 0
     @State private var timerEnabled = false
+    @State private var deadline: Date?
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    private var deadlineKey: String { "murshid-practice-deadline-\(app.user?.id ?? 0)-\(sessionID)" }
 
     var body: some View {
         Group {
@@ -630,9 +671,10 @@ struct V40CustomExamSessionView: View {
         .toolbar(.hidden, for: .tabBar)
         .task { await load() }
         .onReceive(timer) { _ in
-            guard timerEnabled, result == nil, !loading, remaining > 0 else { return }
-            remaining -= 1
-            if remaining == 0 { Task { await finish() } }
+            guard timerEnabled, result == nil, !loading, !submitting, let deadline else { return }
+            let seconds = max(0, Int(ceil(deadline.timeIntervalSinceNow)))
+            if seconds != remaining { remaining = seconds }
+            if seconds == 0, error.isEmpty { Task { await finish() } }
         }
     }
 
@@ -675,6 +717,10 @@ struct V40CustomExamSessionView: View {
 
                     if !error.isEmpty {
                         V3InlineMessage(text: error, icon: "exclamationmark.triangle.fill", tone: .warning)
+                        if timerEnabled && remaining == 0 {
+                            Button("إعادة محاولة تسليم الإجابات") { Task { await finish() } }
+                                .buttonStyle(PrimaryButtonStyle())
+                        }
                     }
                 }
                 .padding(16)
@@ -783,11 +829,16 @@ struct V40CustomExamSessionView: View {
             let session = d["session"] as? JSON ?? [:]
             let loaded = jArray(d["questions"]).map(V40PracticeQuestion.init)
             let duration = jInt(session["duration_seconds"])
+            let restoredDeadline = duration > 0
+                ? ((UserDefaults.standard.object(forKey: deadlineKey) as? Date) ?? Date().addingTimeInterval(TimeInterval(duration)))
+                : nil
+            if let restoredDeadline { UserDefaults.standard.set(restoredDeadline, forKey: deadlineKey) }
             await MainActor.run {
-                title = jString(session["title"], default: "اختبار مخصص")
+                title = displayMode == "mock" ? "محاكاة وزارية تدريبية" : jString(session["title"], default: "اختبار مخصص")
                 questions = loaded
-                remaining = duration
+                remaining = restoredDeadline.map { max(0, Int(ceil($0.timeIntervalSinceNow))) } ?? 0
                 timerEnabled = duration > 0
+                deadline = restoredDeadline
                 loading = false
                 error = ""
             }
@@ -815,6 +866,7 @@ struct V40CustomExamSessionView: View {
             await MainActor.run {
                 result = d
                 submitting = false
+                UserDefaults.standard.removeObject(forKey: deadlineKey)
                 app.freeUsed += jInt(d["answered"])
                 haptic(jDouble(d["score"]) >= 70 ? .success : .warning)
             }

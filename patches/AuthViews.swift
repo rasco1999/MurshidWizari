@@ -195,7 +195,6 @@ private func murshidQuotedTerm(_ text: String) -> String? {
 }
 
 func murshidExplanationText(question rawQuestion: String, correctAnswer rawAnswer: String, raw rawExplanation: String) -> String {
-    let question = murshidQuestionDisplayText(rawQuestion)
     let answer = rawAnswer.trimmingCharacters(in: .whitespacesAndNewlines)
     let explanation = murshidUsefulExplanation(rawExplanation)
     let eKey = murshidAnswerKey(explanation)
@@ -207,44 +206,9 @@ func murshidExplanationText(question rawQuestion: String, correctAnswer rawAnswe
         || (!aKey.isEmpty && eKey == murshidAnswerKey("الجواب الصحيح هو " + answer))
 
     if !trivial { return explanation }
-
-    let qKey = murshidAnswerKey(question)
-    let term = murshidQuotedTerm(question)
-
-    if qKey.contains("الميزانالصرفي") || qKey.contains("وزنكلمه") || qKey.contains("وزنكلمة") {
-        if let term, !answer.isEmpty {
-            return "في الميزان الصرفي نقابل الحروف الأصلية بفاء وعين ولام، ونُبقي الحروف الزائدة في مواضعها؛ لذلك وزن «\(term)» هو «\(answer)»."
-        }
-        if !answer.isEmpty {
-            return "في الميزان الصرفي نقابل الحروف الأصلية بفاء وعين ولام مع إبقاء الحروف الزائدة في مواضعها؛ لذلك تكون النتيجة «\(answer)»."
-        }
-    }
-    if qKey.contains("اسمفاعل") && !answer.isEmpty {
-        return "نطبّق قاعدة اسم الفاعل على الفعل المذكور في السؤال؛ ومن ثم تكون الصيغة الصحيحة «\(answer)»."
-    }
-    if qKey.contains("اسممفعول") && !answer.isEmpty {
-        return "نطبّق قاعدة اسم المفعول على الفعل المذكور في السؤال؛ ومن ثم تكون الصيغة الصحيحة «\(answer)»."
-    }
-    if (qKey.contains("معني") || qKey.contains("معنى") || qKey.contains("مرادف")) && !answer.isEmpty {
-        if let term { return "المعنى المقصود لكلمة «\(term)» في هذا السياق هو «\(answer)»." }
-        return "المعنى المعتمد في سياق السؤال هو «\(answer)»."
-    }
-    if qKey.contains("ضد") && !answer.isEmpty {
-        return "المطلوب هو الكلمة المقابلة في المعنى؛ لذلك يكون الضد الصحيح «\(answer)»."
-    }
-    if qKey.contains("جمع") && !answer.isEmpty {
-        return "نحدّد صيغة الجمع المناسبة للكلمة وفق القاعدة الواردة في الدرس؛ لذلك تكون الإجابة «\(answer)»."
-    }
-    if qKey.contains("مفرد") && !answer.isEmpty {
-        return "نردّ صيغة الجمع إلى مفردها الصحيح وفق الاستعمال اللغوي؛ لذلك تكون الإجابة «\(answer)»."
-    }
-    if (qKey.contains("ناتج") || question.contains("=") || question.contains("+") || question.contains("×") || question.contains("÷")) && !answer.isEmpty {
-        return "نطبّق العملية المطلوبة على المعطيات بالترتيب، فنحصل على الناتج «\(answer)»."
-    }
-    if !answer.isEmpty {
-        return "نطبّق القاعدة المطلوبة في نص السؤال على المعطى مباشرة؛ لذلك تكون الإجابة الصحيحة «\(answer)»."
-    }
-    return "تم تصحيح الإجابة وفق النموذج المعتمد لهذا السؤال."
+    // Never synthesize a subject-specific rationale from the answer alone:
+    // doing so can sound convincing while teaching an incorrect rule.
+    return "الجواب الصحيح ظاهر أعلاه. لم يضف فريق المحتوى شرحًا تفصيليًا موثّقًا لهذا السؤال بعد؛ يمكنك الإبلاغ عن نقص الشرح من زر البلاغ."
 }
 
 import Combine
@@ -3290,6 +3254,12 @@ struct V3ExamView: View {
                         .foregroundStyle(.secondary)
                         .lineSpacing(5)
                         .fixedSize(horizontal: false, vertical: true)
+                    NavigationLink(destination: V31StudySubjectView(subject: subject, focusedTopicID: topic.id)) {
+                        Label("افتح شرح هذا الموضوع في ادرس", systemImage: "play.rectangle.fill")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(Color.murshidBlue)
+                            .padding(.vertical, 6)
+                    }
                 }
             }
         }
@@ -3351,7 +3321,7 @@ struct V3ExamView: View {
                         Text("الخيارات ناقصة").tag("missing_options")
                         Text("السؤال مكرر").tag("duplicate")
                         Text("السؤال في موضوع غير صحيح").tag("wrong_topic")
-                        Text("الشرح غير صحيح").tag("wrong_explanation")
+                        Text("الشرح ناقص أو غير صحيح").tag("wrong_explanation")
                         Text("السؤال غير واضح").tag("unclear")
                         Text("مشكلة في المصدر").tag("source")
                         Text("سبب آخر").tag("other")
@@ -3780,6 +3750,20 @@ struct V3ExamResultView: View {
                         .background(Color.murshidBlue.opacity(0.10), in: RoundedRectangle(cornerRadius: 17, style: .continuous))
                 }
                 .buttonStyle(.plain)
+
+                NavigationLink(destination: V31StudySubjectView(subject: subject, focusedTopicID: topic.id)) {
+                    Label("شاهد شرح موضوعات \(subject.name) في ادرس", systemImage: "play.rectangle.fill")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .foregroundStyle(Color.murshidBlue)
+                        .background(Color.murshidGold.opacity(0.16), in: RoundedRectangle(cornerRadius: 17))
+                }
+                .buttonStyle(.plain)
+
+                Text("لا تُعرض روابط فيديو إلا إذا أضافتها الإدارة للموضوع نفسه.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 Button("العودة إلى المواضيع", action: onDone)
                     .font(.headline)

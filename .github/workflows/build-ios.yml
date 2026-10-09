@@ -1,4 +1,4 @@
-name: Build Murshid iOS Production v4.8.8 IPA
+name: Build Murshid iOS Production v4.8.9 IPA
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build:
-    name: Build Production v4.8.8 unsigned iPhone IPA
+    name: Build Production v4.8.9 unsigned iPhone IPA
     runs-on: macos-15
     timeout-minutes: 35
 
@@ -74,8 +74,8 @@ jobs:
               if line == '        PRODUCT_NAME: MurshidWizari':
                   out.extend([
                       '        TARGETED_DEVICE_FAMILY: "1"',
-                      '        MARKETING_VERSION: "4.8.8"',
-                      '        CURRENT_PROJECT_VERSION: "488"',
+                      '        MARKETING_VERSION: "4.8.9"',
+                      '        CURRENT_PROJECT_VERSION: "489"',
                       '        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon',
                       '        CODE_SIGN_ENTITLEMENTS: MurshidWizari/MurshidWizari.entitlements',
                   ])
@@ -156,7 +156,7 @@ jobs:
           s=p.read_text()
           s=s.replace('NavigationStack { V3HomeView() }','NavigationStack { V31HomeView() }',1)
           s=s.replace('NavigationStack { V3AccountView() }','NavigationStack { V31AccountView() }',1)
-          s=s.replace('نسخة iPhone 4.3 • Build 470','نسخة iPhone 4.8.8 • Build 488')
+          s=s.replace('نسخة iPhone 4.3 • Build 470','نسخة iPhone 4.8.9 • Build 489')
           p.write_text(s)
           p=Path('source/MurshidWizari/MurshidWizariApp.swift')
           s=p.read_text()
@@ -326,8 +326,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \
-            MARKETING_VERSION='4.8.8' \
-            CURRENT_PROJECT_VERSION='488' \
+            MARKETING_VERSION='4.8.9' \
+            CURRENT_PROJECT_VERSION='489' \
             clean build
 
       - name: Compile Apple asset catalog
@@ -357,8 +357,8 @@ jobs:
           info.update(partial)
           info['CFBundleDisplayName'] = 'المرشد الوزاري'
           info['CFBundleName'] = 'منصة المرشد الوزاري'
-          info['CFBundleShortVersionString'] = '4.8.8'
-          info['CFBundleVersion'] = '488'
+          info['CFBundleShortVersionString'] = '4.8.9'
+          info['CFBundleVersion'] = '489'
           info['NSFaceIDUsageDescription'] = 'يستخدم المرشد الوزاري Face ID لحماية حسابك عند العودة إلى التطبيق.'
           info['UISupportedInterfaceOrientations'] = ['UIInterfaceOrientationPortrait']
           info['UILaunchScreen'] = {'UIColorName': 'LaunchBackground'}
@@ -383,15 +383,15 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid'
           /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string المرشد الوزاري' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleName منصة المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleName string منصة المرشد الوزاري' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 4.8.8' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 488' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 4.8.9' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 489' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Delete :UIDeviceFamily' "$APP/Info.plist" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily array' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily:0 integer 1' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" | grep -Fx 'المرشد الوزاري'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$APP/Info.plist" | grep -Fx 'منصة المرشد الوزاري'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.8.8'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '488'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.8.9'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '489'
           /usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist" | grep -Fx '1'
           test -f "$APP/Assets.car"
           test -f "$APP/PrivacyInfo.xcprivacy"
@@ -491,14 +491,14 @@ jobs:
             echo 'ERROR: Web wrapper marker found unexpectedly.' >&2
             exit 1
           fi
-          rm -rf Payload Murshid_Wizari_iOS_Production_v4_8_8_BUILD488_unsigned.ipa
+          rm -rf Payload Murshid_Wizari_iOS_Production_v4_8_9_BUILD489_unsigned.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Murshid_Wizari_iOS_Production_v4_8_8_BUILD488_unsigned.ipa Payload
-          test -s Murshid_Wizari_iOS_Production_v4_8_8_BUILD488_unsigned.ipa
-          shasum -a 256 Murshid_Wizari_iOS_Production_v4_8_8_BUILD488_unsigned.ipa | tee Murshid_Wizari_iOS_Production_v4_8_8_BUILD488_unsigned.sha256
+          /usr/bin/zip -qry Murshid_Wizari_iOS_Production_v4_8_9_BUILD489_unsigned.ipa Payload
+          test -s Murshid_Wizari_iOS_Production_v4_8_9_BUILD489_unsigned.ipa
+          shasum -a 256 Murshid_Wizari_iOS_Production_v4_8_9_BUILD489_unsigned.ipa | tee Murshid_Wizari_iOS_Production_v4_8_9_BUILD489_unsigned.sha256
 
-      - name: Publish v4.8.8 unsigned IPA release
+      - name: Publish v4.8.9 unsigned IPA release
         if: github.ref == 'refs/heads/main'
         shell: bash
         env:
@@ -506,18 +506,18 @@ jobs:
         run: |
           set -euo pipefail
           cd source
-          TAG="v4.8.8-build488"
-          TITLE="Murshid Wizari iOS v4.8.8 Build 488"
-          NOTES="Unsigned IPA v4.8.8: Wi-Fi/4G/5G connection recovery, safe read retries, reliable session bootstrap and correctly positioned Arabic welcome text. Existing study, recovery, predictions and original gold school icon are preserved. The server files from v4.8.7 remain required for recovery and video links."
+          TAG="v4.8.9-build489"
+          TITLE="Murshid Wizari iOS v4.8.9 Build 489"
+          NOTES="Unsigned IPA v4.8.9: honest explanations, personal mistakes review with topic-specific study video routing, timed mock practice with timer recovery, weekly accuracy comparison, and a transparent subscription experience. Wi-Fi/4G/5G recovery and the user's exact original gold school icon remain unchanged. v4.8.7 server updates remain necessary; server_updates/v4_8_9 adds optional weekly comparison fields."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" \
-              Murshid_Wizari_iOS_Production_v4_8_8_BUILD488_unsigned.ipa \
-              Murshid_Wizari_iOS_Production_v4_8_8_BUILD488_unsigned.sha256 \
+              Murshid_Wizari_iOS_Production_v4_8_9_BUILD489_unsigned.ipa \
+              Murshid_Wizari_iOS_Production_v4_8_9_BUILD489_unsigned.sha256 \
               --clobber
           else
             gh release create "$TAG" \
-              Murshid_Wizari_iOS_Production_v4_8_8_BUILD488_unsigned.ipa \
-              Murshid_Wizari_iOS_Production_v4_8_8_BUILD488_unsigned.sha256 \
+              Murshid_Wizari_iOS_Production_v4_8_9_BUILD489_unsigned.ipa \
+              Murshid_Wizari_iOS_Production_v4_8_9_BUILD489_unsigned.sha256 \
               --title "$TITLE" \
               --notes "$NOTES"
           fi
@@ -525,16 +525,16 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Wizari-iOS-Production-v4.8.8-Build488-Unsigned
+          name: Murshid-Wizari-iOS-Production-v4.8.9-Build489-Unsigned
           path: |
-            source/Murshid_Wizari_iOS_Production_v4_8_8_BUILD488_unsigned.ipa
-            source/Murshid_Wizari_iOS_Production_v4_8_8_BUILD488_unsigned.sha256
+            source/Murshid_Wizari_iOS_Production_v4_8_9_BUILD489_unsigned.ipa
+            source/Murshid_Wizari_iOS_Production_v4_8_9_BUILD489_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
 
 
   diagnostics:
-    name: Publish v4.8.8 build diagnostics
+    name: Publish v4.8.9 build diagnostics
     needs: build
     if: github.ref == 'refs/heads/main' && always()
     runs-on: ubuntu-latest
@@ -550,8 +550,8 @@ jobs:
         run: |
           set -u
           mkdir -p .build-status
-          STATUS_FILE=".build-status/v4.8.8-build488-status.txt"
-          LOG_FILE=".build-status/v4.8.8-build488-failed.log"
+          STATUS_FILE=".build-status/v4.8.9-build489-status.txt"
+          LOG_FILE=".build-status/v4.8.9-build489-failed.log"
           {
             echo "run_id=$GITHUB_RUN_ID"
             echo "run_attempt=$GITHUB_RUN_ATTEMPT"
@@ -566,6 +566,6 @@ jobs:
           if git diff --cached --quiet; then
             exit 0
           fi
-          git commit -m "Record v4.8.8 build result [skip ci]"
+          git commit -m "Record v4.8.9 build result [skip ci]"
           git pull --rebase origin main || true
           git push origin HEAD:main
