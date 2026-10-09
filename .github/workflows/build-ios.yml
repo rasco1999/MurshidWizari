@@ -1,4 +1,4 @@
-name: Build Murshid iOS Production v4.8.13 IPA
+name: Build Murshid iOS Production v4.8.14 Rollback IPA
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build:
-    name: Build Production v4.8.13 unsigned iPhone IPA
+    name: Build Production v4.8.14 unsigned iPhone IPA (v4.8.11 features)
     runs-on: macos-15
     timeout-minutes: 35
 
@@ -74,8 +74,8 @@ jobs:
               if line == '        PRODUCT_NAME: MurshidWizari':
                   out.extend([
                       '        TARGETED_DEVICE_FAMILY: "1"',
-                      '        MARKETING_VERSION: "4.8.13"',
-                      '        CURRENT_PROJECT_VERSION: "493"',
+                      '        MARKETING_VERSION: "4.8.14"',
+                      '        CURRENT_PROJECT_VERSION: "494"',
                       '        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon',
                       '        CODE_SIGN_ENTITLEMENTS: MurshidWizari/MurshidWizari.entitlements',
                   ])
@@ -83,6 +83,7 @@ jobs:
           if not inserted:
               raise SystemExit('Expected target PRODUCT_NAME setting not found')
           p.write_text('\n'.join(out) + '\n')
+
           p = Path('source/MurshidWizari/APIClient.swift')
           s = p.read_text()
           s = s.replace('final class APIClient {', '@MainActor\nfinal class APIClient {')
@@ -145,25 +146,17 @@ jobs:
           cp patches/V43Enhancements.swift source/MurshidWizari/V43Enhancements.swift
           cp patches/V44StudentFeatures.swift source/MurshidWizari/V44StudentFeatures.swift
           cp patches/V45ContestWelcome.swift source/MurshidWizari/V45ContestWelcome.swift
-          cp patches/V46LearningExtras.swift source/MurshidWizari/V46LearningExtras.swift
           cp patches/ServicesV32.swift source/MurshidWizari/Services.swift
           cp patches/ThemeV34.swift source/MurshidWizari/Theme.swift
           cp patches/MainViewsV33.swift source/MurshidWizari/MainViews.swift
           cp patches/ExamViewV33.swift source/MurshidWizari/ExamView.swift
           python3 - <<'PY'
           from pathlib import Path
-          # New server questions can opt in to a verified source badge; older
-          # payloads remain unverified by default, never implicitly certified.
-          p=Path('source/MurshidWizari/Models.swift')
-          s=p.read_text()
-          s=s.replace('    let submitted: Bool\n', '    let verified: Bool\n    let sourceLabel: String\n    let submitted: Bool\n', 1)
-          s=s.replace('        submitted = jBool(json["submitted"])', '        verified = jBool(json["verified"])\n        sourceLabel = jString(json["source_label"])\n        submitted = jBool(json["submitted"])', 1)
-          p.write_text(s)
           p=Path('source/MurshidWizari/AuthViews.swift')
           s=p.read_text()
           s=s.replace('NavigationStack { V3HomeView() }','NavigationStack { V31HomeView() }',1)
           s=s.replace('NavigationStack { V3AccountView() }','NavigationStack { V31AccountView() }',1)
-          s=s.replace('نسخة iPhone 4.3 • Build 470','نسخة iPhone 4.8.13 • Build 493')
+          s=s.replace('نسخة iPhone 4.3 • Build 470','نسخة iPhone 4.8.14 • Build 494')
           p.write_text(s)
           p=Path('source/MurshidWizari/MurshidWizariApp.swift')
           s=p.read_text()
@@ -333,8 +326,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \
-            MARKETING_VERSION='4.8.13' \
-            CURRENT_PROJECT_VERSION='493' \
+            MARKETING_VERSION='4.8.14' \
+            CURRENT_PROJECT_VERSION='494' \
             clean build
 
       - name: Compile Apple asset catalog
@@ -355,19 +348,6 @@ jobs:
           test -f "$APP/Assets.car"
           cp MurshidWizari/PrivacyInfo.xcprivacy "$APP/PrivacyInfo.xcprivacy"
           test -f "$APP/PrivacyInfo.xcprivacy"
-          if find "$APP" -type d -name '*.appex' | grep -q .; then
-            echo 'ERROR: This IPA must not contain any app extension or widget.' >&2
-            exit 1
-          fi
-          grep -Fq 'AVSpeechSynthesizer()' MurshidWizari/V46LearningExtras.swift
-          grep -Fq 'V46LearningDeckView(mode: .traps)' MurshidWizari/V31Features.swift
-          grep -Fq 'V46LearningDeckView(mode: .golden)' MurshidWizari/V31Features.swift
-          grep -Fq 'تحدّي احذف خيارين' MurshidWizari/AuthViews.swift
-          grep -Fq 'خريطة الفصل' MurshidWizari/AuthViews.swift
-          grep -Fq 'تحليل المحاكاة' MurshidWizari/V40Features.swift
-          grep -Fq 'murshid://question' MurshidWizari/AuthViews.swift
-          grep -Fq 'سؤال مدقّق' MurshidWizari/AuthViews.swift
-          grep -Fq 'grade_notifications_enabled' MurshidWizari/V31Features.swift
           python3 - <<'PY'
           import plistlib, glob
           app = glob.glob('build/Build/Products/Release-iphoneos/*.app')[0]
@@ -377,10 +357,9 @@ jobs:
           info.update(partial)
           info['CFBundleDisplayName'] = 'المرشد الوزاري'
           info['CFBundleName'] = 'منصة المرشد الوزاري'
-          info['CFBundleShortVersionString'] = '4.8.13'
-          info['CFBundleVersion'] = '493'
+          info['CFBundleShortVersionString'] = '4.8.14'
+          info['CFBundleVersion'] = '494'
           info['NSFaceIDUsageDescription'] = 'يستخدم المرشد الوزاري Face ID لحماية حسابك عند العودة إلى التطبيق.'
-          info['CFBundleURLTypes'] = [{'CFBundleURLName': 'com.muriq.murshid', 'CFBundleURLSchemes': ['murshid']}]
           info['UISupportedInterfaceOrientations'] = ['UIInterfaceOrientationPortrait']
           info['UILaunchScreen'] = {'UIColorName': 'LaunchBackground'}
           info['UIDeviceFamily'] = [1]
@@ -404,20 +383,20 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid'
           /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string المرشد الوزاري' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleName منصة المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleName string منصة المرشد الوزاري' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 4.8.13' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 493' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 4.8.14' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 494' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Delete :UIDeviceFamily' "$APP/Info.plist" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily array' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily:0 integer 1' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" | grep -Fx 'المرشد الوزاري'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$APP/Info.plist" | grep -Fx 'منصة المرشد الوزاري'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.8.13'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '493'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.8.14'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '494'
           /usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist" | grep -Fx '1'
           test -f "$APP/Assets.car"
           test -f "$APP/PrivacyInfo.xcprivacy"
           if find "$APP" -type d -name '*.appex' | grep -q .; then
-            echo 'ERROR: An app extension is still embedded in the finished IPA.' >&2
+            echo 'ERROR: Rolled-back app must not contain any widget or extension.' >&2
             exit 1
           fi
           grep -Fq 'قفل حقيقي بـ Face ID' MurshidWizari/V31Features.swift
@@ -516,18 +495,18 @@ jobs:
             echo 'ERROR: Web wrapper marker found unexpectedly.' >&2
             exit 1
           fi
-          rm -rf Payload Murshid_Wizari_iOS_Production_v4_8_13_BUILD493_unsigned.ipa
+          rm -rf Payload Murshid_Wizari_iOS_Production_v4_8_14_BUILD494_unsigned.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Murshid_Wizari_iOS_Production_v4_8_13_BUILD493_unsigned.ipa Payload
-          test -s Murshid_Wizari_iOS_Production_v4_8_13_BUILD493_unsigned.ipa
-          if unzip -Z1 Murshid_Wizari_iOS_Production_v4_8_13_BUILD493_unsigned.ipa | grep -Eq '(^|/)(PlugIns/|[^/]+\.appex/)'; then
-            echo 'ERROR: A widget or app extension remains in the packaged IPA.' >&2
+          /usr/bin/zip -qry Murshid_Wizari_iOS_Production_v4_8_14_BUILD494_unsigned.ipa Payload
+          test -s Murshid_Wizari_iOS_Production_v4_8_14_BUILD494_unsigned.ipa
+          if unzip -Z1 Murshid_Wizari_iOS_Production_v4_8_14_BUILD494_unsigned.ipa | grep -Eq '(^|/)(PlugIns/|[^/]+\.appex/)'; then
+            echo 'ERROR: Rolled-back IPA contains an embedded app extension.' >&2
             exit 1
           fi
-          shasum -a 256 Murshid_Wizari_iOS_Production_v4_8_13_BUILD493_unsigned.ipa | tee Murshid_Wizari_iOS_Production_v4_8_13_BUILD493_unsigned.sha256
+          shasum -a 256 Murshid_Wizari_iOS_Production_v4_8_14_BUILD494_unsigned.ipa | tee Murshid_Wizari_iOS_Production_v4_8_14_BUILD494_unsigned.sha256
 
-      - name: Publish v4.8.13 unsigned IPA release
+      - name: Publish v4.8.14 unsigned IPA release
         if: github.ref == 'refs/heads/main'
         shell: bash
         env:
@@ -535,18 +514,18 @@ jobs:
         run: |
           set -euo pipefail
           cd source
-          TAG="v4.8.13-build493"
-          TITLE="Murshid Wizari iOS v4.8.13 Build 493"
-          NOTES="Unsigned IPA v4.8.13: removed the WidgetKit extension entirely to simplify signing and preserve single-app installation. Retains Arabic on-device question speech, eliminating distractors, ministerial trap drills, golden recall cards, visual chapter map, mock pacing and prior-score comparison, direct question deep links, and prominent error reporting. Grade-specific APNs and admin integrations remain staged for server integration in server_updates/v4_8_12."
+          TAG="v4.8.14-build494"
+          TITLE="Murshid Wizari iOS v4.8.14 Build 494 (rollback to 4.8.11 features)"
+          NOTES="Unsigned IPA v4.8.14: reverted all features and staged server updates introduced in v4.8.12 and v4.8.13. Behavior and features match the last v4.8.11 baseline, retaining its Arabic ticker, Baghdad greeting, cellular connectivity fixes and original gold school app icon. There is no widget or embedded app extension."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" \
-              Murshid_Wizari_iOS_Production_v4_8_13_BUILD493_unsigned.ipa \
-              Murshid_Wizari_iOS_Production_v4_8_13_BUILD493_unsigned.sha256 \
+              Murshid_Wizari_iOS_Production_v4_8_14_BUILD494_unsigned.ipa \
+              Murshid_Wizari_iOS_Production_v4_8_14_BUILD494_unsigned.sha256 \
               --clobber
           else
             gh release create "$TAG" \
-              Murshid_Wizari_iOS_Production_v4_8_13_BUILD493_unsigned.ipa \
-              Murshid_Wizari_iOS_Production_v4_8_13_BUILD493_unsigned.sha256 \
+              Murshid_Wizari_iOS_Production_v4_8_14_BUILD494_unsigned.ipa \
+              Murshid_Wizari_iOS_Production_v4_8_14_BUILD494_unsigned.sha256 \
               --title "$TITLE" \
               --notes "$NOTES"
           fi
@@ -554,16 +533,16 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Wizari-iOS-Production-v4.8.13-Build493-Unsigned
+          name: Murshid-Wizari-iOS-Production-v4.8.14-Build494-Unsigned
           path: |
-            source/Murshid_Wizari_iOS_Production_v4_8_13_BUILD493_unsigned.ipa
-            source/Murshid_Wizari_iOS_Production_v4_8_13_BUILD493_unsigned.sha256
+            source/Murshid_Wizari_iOS_Production_v4_8_14_BUILD494_unsigned.ipa
+            source/Murshid_Wizari_iOS_Production_v4_8_14_BUILD494_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
 
 
   diagnostics:
-    name: Publish v4.8.13 build diagnostics
+    name: Publish v4.8.14 build diagnostics
     needs: build
     if: github.ref == 'refs/heads/main' && always()
     runs-on: ubuntu-latest
@@ -579,8 +558,8 @@ jobs:
         run: |
           set -u
           mkdir -p .build-status
-          STATUS_FILE=".build-status/v4.8.13-build493-status.txt"
-          LOG_FILE=".build-status/v4.8.13-build493-failed.log"
+          STATUS_FILE=".build-status/v4.8.14-build494-status.txt"
+          LOG_FILE=".build-status/v4.8.14-build494-failed.log"
           {
             echo "run_id=$GITHUB_RUN_ID"
             echo "run_attempt=$GITHUB_RUN_ATTEMPT"
@@ -595,6 +574,6 @@ jobs:
           if git diff --cached --quiet; then
             exit 0
           fi
-          git commit -m "Record v4.8.13 build result [skip ci]"
+          git commit -m "Record v4.8.14 build result [skip ci]"
           git pull --rebase origin main || true
           git push origin HEAD:main

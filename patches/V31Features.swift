@@ -56,7 +56,6 @@ struct V31HomeView: View {
                 if app.featureEnabled("custom_exam") { mockExamStrip }
                 subjectsSection
                 nextStepsSection
-                smartTrainingSection
                 quickTools
                 if !error.isEmpty { V3InlineMessage(text: error, icon: "wifi.exclamationmark", tone: .warning) }
                 socialLinksFooter
@@ -468,21 +467,6 @@ struct V31HomeView: View {
             }
             .buttonStyle(.plain)
             learningImpactStrip
-        }
-    }
-
-    private var smartTrainingSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            V3SectionHeader(title: "تدريبات ذكية", subtitle: "تعلّم تمييز الخيارات وتذكّر الإجابات", icon: "brain.head.profile")
-            LazyVGrid(columns: columns, spacing: 12) {
-                NavigationLink(destination: V46LearningDeckView(mode: .traps)) {
-                    V3ToolCard(title: "فخاخ الوزاري", subtitle: "تجنب الخيارات المشتتة", icon: "eye.fill")
-                }
-                NavigationLink(destination: V46LearningDeckView(mode: .golden)) {
-                    V3ToolCard(title: "البطاقات الذهبية", subtitle: "تذكر ثم اقلب البطاقة", icon: "rectangle.on.rectangle.angled")
-                }
-            }
-            .buttonStyle(.plain)
         }
     }
 
@@ -1394,7 +1378,6 @@ struct V31AccountView: View {
     @AppStorage("study_reminder") private var studyReminder = false
     @AppStorage("study_reminder_hour") private var reminderHour = 19
     @AppStorage("study_reminder_minute") private var reminderMinute = 0
-    @AppStorage("grade_notifications_enabled") private var gradeNotificationsEnabled = false
 
     @State private var account: JSON = [:]
     @State private var loading = true
@@ -1572,14 +1555,6 @@ struct V31AccountView: View {
                             .onChange(of: reminderMinute) { _ in rescheduleReminder() }
                     }
                     Divider()
-                    Toggle(isOn: Binding(get: { gradeNotificationsEnabled }, set: { setGradeNotifications($0) })) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Label("إشعارات أسئلة صفّي", systemImage: "bell.and.waves.left.and.right.fill")
-                            Text("تنبيه عند نشر أسئلة أو فيديوهات تخص صفّك فقط")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    Divider()
                     NavigationLink(destination: V3PasswordRecoveryView()) {
                         HStack { Label("استعادة / تغيير كلمة المرور", systemImage: "key.fill"); Spacer(); Image(systemName: "chevron.left").font(.caption.bold()).foregroundStyle(.secondary) }.foregroundStyle(.primary)
                     }
@@ -1643,23 +1618,6 @@ struct V31AccountView: View {
     }
 
     private func rescheduleReminder() { guard studyReminder else { return }; Task { await device.requestStudyReminder(hour: reminderHour, minute: reminderMinute) } }
-
-    private func setGradeNotifications(_ enabled: Bool) {
-        if !enabled {
-            gradeNotificationsEnabled = false
-            Task { await V31PushRegistrar.syncIfPossible() }
-            return
-        }
-        Task {
-            let granted = (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])) ?? false
-            await MainActor.run {
-                gradeNotificationsEnabled = granted
-                if granted { UIApplication.shared.registerForRemoteNotifications() }
-                else { error = "لم يتم تفعيل الإشعارات. يمكنك السماح بها من إعدادات iPhone." }
-            }
-            if granted { await V31PushRegistrar.syncIfPossible() }
-        }
-    }
 
     private func load() async {
         do {
@@ -1843,11 +1801,11 @@ extension APIClient {
 final class MurshidAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
-        if UserDefaults.standard.bool(forKey: "grade_notifications_enabled") { Task {
+        Task {
             let center = UNUserNotificationCenter.current()
             let granted = (try? await center.requestAuthorization(options: [.alert, .badge, .sound])) ?? false
             if granted { await MainActor.run { UIApplication.shared.registerForRemoteNotifications() } }
-        } }
+        }
         return true
     }
 
@@ -1881,9 +1839,7 @@ enum V31PushRegistrar {
                 "csrf": csrf,
                 "token": token,
                 "bundle_id": "com.muriq.murshid",
-                "platform": "ios",
-                "grade_id": AppSession.shared.user?.gradeID ?? 0,
-                "enabled": UserDefaults.standard.bool(forKey: "grade_notifications_enabled")
+                "platform": "ios"
             ])
         } catch { }
     }
