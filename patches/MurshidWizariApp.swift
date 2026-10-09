@@ -13,6 +13,7 @@ struct MurshidWizariApp: App {
     @State private var pendingWelcomeAfterUnlock = false
     @State private var welcomePlaybackInProgress = false
     @State private var completedInitialWelcome = false
+    @State private var bootstrapNeedsNetworkRetry = false
 
     private var colorScheme: ColorScheme? {
         appearance == "dark" ? .dark : (appearance == "light" ? .light : nil)
@@ -62,6 +63,7 @@ struct MurshidWizariApp: App {
                     device.didEnterBackground()
                 case .active:
                     Task { @MainActor in
+                        if bootstrapNeedsNetworkRetry { await retryBootstrapAfterReconnect() }
                         await device.didBecomeActive()
                         if app.v3Authenticated { Task { try? await APIClient.shared.heartbeat() } }
                         // A brief system interruption should not replay the greeting.
@@ -78,6 +80,10 @@ struct MurshidWizariApp: App {
                     }
                 default: break
                 }
+            }
+            .onChange(of: device.isOnline) { online in
+                guard online, bootstrapNeedsNetworkRetry else { return }
+                Task { @MainActor in await retryBootstrapAfterReconnect() }
             }
             .onChange(of: device.isLocked) { locked in
                 guard !locked, pendingWelcomeAfterUnlock, scenePhase == .active else { return }
@@ -110,8 +116,25 @@ struct MurshidWizariApp: App {
     @MainActor
     private func restoreSession() async {
         defer { app.bootstrapping = false }
-        do { app.applyBootstrap(try await APIClient.shared.bootstrap()) }
-        catch { app.reset() }
+        do {
+            app.applyBootstrap(try await APIClient.shared.bootstrap())
+            bootstrapNeedsNetworkRetry = false
+        } catch let failure as APIError where failure.status == 0 {
+            // A dropped network connection is not an invalid login session.
+            // Keep cookies and retry when iOS reports connectivity again.
+            bootstrapNeedsNetworkRetry = true
+        } catch {
+            bootstrapNeedsNetworkRetry = false
+            app.reset()
+        }
+    }
+
+    @MainActor
+    private func retryBootstrapAfterReconnect() async {
+        guard bootstrapNeedsNetworkRetry, !app.bootstrapping else { return }
+        bootstrapNeedsNetworkRetry = false
+        app.bootstrapping = true
+        await restoreSession()
     }
 }
 

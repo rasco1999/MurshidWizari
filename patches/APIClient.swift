@@ -108,7 +108,8 @@ final class APIClient {
         config.allowsCellularAccess = true
         config.allowsExpensiveNetworkAccess = true
         config.allowsConstrainedNetworkAccess = true
-        config.waitsForConnectivity = false
+        // Allow an in-flight request to survive a Wi-Fi -> 4G/5G handover.
+        config.waitsForConnectivity = true
         config.httpMaximumConnectionsPerHost = 4
         config.timeoutIntervalForRequest = 25
         config.timeoutIntervalForResource = 45
@@ -129,21 +130,18 @@ final class APIClient {
         if !query.isEmpty { components.queryItems = query }
         guard let url = components.url else { throw APIError(message: "عنوان الطلب غير صالح.", status: 0, paymentRequired: false) }
 
-        if method == "GET",
-           let cacheKey,
-           !DeviceServices.shared.isOnline,
-           let cached = ResponseCache.shared.load(key: cacheKey) {
-            return cached
-        }
-
         var req = URLRequest(url: url)
         req.httpMethod = method
+        // A metered/Low Data Mode connection must never disable essential API calls.
+        req.allowsCellularAccess = true
+        req.allowsExpensiveNetworkAccess = true
+        req.allowsConstrainedNetworkAccess = true
         req.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         if let body { req.httpBody = try JSONSerialization.data(withJSONObject: body, options: []) }
 
         do {
-            let (data, response) = try await session.data(for: req)
+            let (data, response) = try await dataWithTransientRetry(for: req, idempotent: method == "GET")
             guard let http = response as? HTTPURLResponse else { throw APIError(message: "استجابة الخادم غير صالحة.", status: 0, paymentRequired: false) }
             guard let object = try? JSONSerialization.jsonObject(with: data), let json = object as? JSON else {
                 let raw = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -187,11 +185,40 @@ final class APIClient {
             let message: String
             if ns.domain == NSURLErrorDomain && ns.code == NSURLErrorTimedOut {
                 message = "الاتصال بطيء الآن. حاول مرة أخرى."
+            } else if ns.domain == NSURLErrorDomain && [NSURLErrorCannotFindHost, NSURLErrorCannotConnectToHost, NSURLErrorDNSLookupFailed].contains(ns.code) {
+                message = "تعذر الوصول إلى خادم المنصة عبر هذه الشبكة. تحقق من اتصال البيانات وحاول مجددًا."
             } else {
                 message = "تعذر الاتصال بالإنترنت. تحقق من الشبكة وحاول مجددًا."
             }
             throw APIError(message: message, status: 0, paymentRequired: false)
         }
+    }
+
+    /// Retry *only* safe reads after a transient connection failure. Never
+    /// replay login, exam submissions, payments or other POST requests.
+    private func dataWithTransientRetry(for request: URLRequest, idempotent: Bool) async throws -> (Data, URLResponse) {
+        let retryable: Set<Int> = [
+            URLError.Code.timedOut.rawValue,
+            URLError.Code.networkConnectionLost.rawValue,
+            URLError.Code.notConnectedToInternet.rawValue,
+            URLError.Code.cannotConnectToHost.rawValue,
+            URLError.Code.cannotFindHost.rawValue,
+            URLError.Code.dnsLookupFailed.rawValue
+        ]
+        let attempts = idempotent ? 2 : 1
+        for attempt in 0..<attempts {
+            do {
+                return try await session.data(for: request)
+            } catch {
+                let nsError = error as NSError
+                guard !Task.isCancelled,
+                      attempt + 1 < attempts,
+                      nsError.domain == NSURLErrorDomain,
+                      retryable.contains(nsError.code) else { throw error }
+                try await Task.sleep(nanoseconds: 650_000_000)
+            }
+        }
+        throw URLError(.unknown)
     }
 
     func formRequest(_ path: String, fields: [String: String]) async throws -> (Data, HTTPURLResponse) {
@@ -228,7 +255,9 @@ final class APIClient {
 
     func htmlCSRF(_ path: String, query: [URLQueryItem] = []) async throws -> String {
         let url = try makeURL(path: path, query: query)
-        let (data, response) = try await session.data(from: url)
+        var req = URLRequest(url: url)
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        let (data, response) = try await dataWithTransientRetry(for: req, idempotent: true)
         guard let http = response as? HTTPURLResponse, (200...399).contains(http.statusCode), let html = String(data: data, encoding: .utf8) else {
             throw APIError(message: "تعذر تهيئة التحقق.", status: 419, paymentRequired: false)
         }

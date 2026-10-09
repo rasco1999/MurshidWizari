@@ -236,18 +236,19 @@ struct V45WelcomeView: View {
 
                 VStack(spacing: 0) {
                     topIdentity
-                        .padding(.top, 35)
+                        .padding(.top, 18)
 
                     Spacer(minLength: 8)
 
                     emblem
-                        .frame(height: 232)
+                        .frame(height: min(232, geometry.size.height * 0.30))
 
                     VStack(spacing: 16) {
                         Text("منصة المرشد الوزاري")
                             .font(.system(size: 30, weight: .bold, design: .rounded))
                             .minimumScaleFactor(0.67)
                             .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                             .multilineTextAlignment(.center)
                             .foregroundStyle(ivory)
                             .shadow(color: .black.opacity(0.33), radius: 9, y: 3)
@@ -274,6 +275,9 @@ struct V45WelcomeView: View {
                         Text(welcomeText)
                             .font(.title3.weight(.semibold))
                             .foregroundStyle(paleGold)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.85)
+                            .fixedSize(horizontal: false, vertical: true)
                             .opacity(phase >= 3 ? 1 : 0)
                             .scaleEffect(phase >= 3 ? 1 : 0.82)
                             .padding(.top, 6)
@@ -309,16 +313,17 @@ struct V45WelcomeView: View {
                     }
                     .opacity(phase >= 2 ? 1 : 0)
                     .padding(.horizontal, 27)
-                    .padding(.bottom, 32)
+                    .padding(.bottom, 18)
                 }
-                .frame(maxWidth: 600)
-                .padding(.horizontal, 20)
+                // Bound the *content* width before expanding the outer frame.
+                // The previous unbounded HStack pushed the tricolour offscreen.
+                .frame(width: min(max(geometry.size.width - 32, 1), 560))
                 .frame(maxWidth: .infinity)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
-            .clipped()
         }
-        .ignoresSafeArea()
+        // Keep the artwork full-bleed but content inside iOS safe areas.
+        .background(midnight.ignoresSafeArea())
         .environment(\.layoutDirection, .rightToLeft)
         .task { await playThreeSecondSequence() }
         .accessibilityElement(children: .combine)
@@ -376,6 +381,8 @@ struct V45WelcomeView: View {
             Text("منصة تعليمية عراقية")
                 .font(.caption.weight(.semibold))
                 .tracking(0.5)
+                .lineLimit(1)
+                .minimumScaleFactor(0.80)
                 .foregroundStyle(ivory.opacity(0.86))
             Spacer()
             HStack(spacing: 2) {
