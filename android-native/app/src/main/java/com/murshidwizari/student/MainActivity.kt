@@ -466,7 +466,7 @@ class MainActivity : Activity() {
         caption("المستوى " + stats.optInt("level",1) + " • نقاط XP " + stats.optInt("xp",0) +
             " • الإجابات الصحيحة " + stats.optInt("correct_answers",0))
         button("المواد الدراسية والاختبارات") { subjectsScreen() }
-        button("تحدي اليوم • أجب واربح XP") { openCompetition("daily_challenge") }
+        button("تحدي اليوم • اختبار سريع") { openCompetition("daily_challenge") }
         button("تحدي المليون • الترتيب والمنافسة") { openCompetition("contest") }
         button("إنجازاتي • الشارات والمستوى") { openCompetition("achievements") }
         button("حسابي") { accountScreen() }
@@ -1188,8 +1188,10 @@ class MainActivity : Activity() {
     }
 
     private fun parseDailyQuestions(rows: JSONArray): List<CompetitionRules.Question> =
-        (0 until rows.length()).mapNotNull { i ->
-            val row = rows.optJSONObject(i) ?: return@mapNotNull null
+        (0 until rows.length()).map { i ->
+            // Never silently skip a malformed row: it could change the submitted set.
+            val row = rows.optJSONObject(i)
+                ?: return@map CompetitionRules.Question(0, "invalid", "", emptyList())
             val options = row.optJSONArray("options") ?: JSONArray()
             CompetitionRules.Question(
                 id = row.optInt("id"),
@@ -1227,7 +1229,7 @@ class MainActivity : Activity() {
     private fun renderDailyChallenge() {
         activeScreen = "daily_challenge"
         base("تحدي اليوم", true)
-        line(if (dailyDone) "أكملت تحدي اليوم!" else "خمسة دقائق تصنع فرقاً", true)
+        line(if (dailyDone) "أكملت تحدي اليوم!" else "خمس دقائق تصنع فرقاً", true)
         caption("أجب عن جميع أسئلة صفك ثم سلّم التحدي مرة واحدة. الخادم يحسب النتيجة والنقاط.")
         if (!dailyAvailable) {
             line("لا يوجد تحدٍ متاح الآن.")
