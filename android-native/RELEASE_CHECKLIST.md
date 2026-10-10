@@ -31,6 +31,7 @@ Use a dedicated **non-production student test account** and an administrator-app
 - [ ] Start, background, restore and finish 25/45/60-minute focus sessions; compare server activity/XP, check manual reconciliation after dropped responses, and inspect recorded custom-exam history.
 - [ ] Create custom exams with every subject/topic, 5–50 questions, all iOS type/state filters, timed and untimed sessions; verify server `session_id`, choice/text input, previous/next, expired timer, final scoring and detailed wrong-answer review.
 - [ ] Restart midway through custom practice: ensure the account-scoped draft, current question and deadline are restored without creating a second server session; finish on the server once and verify history.
+- [ ] Propose every supported question type with actual topic IDs, options, answer, source and explanation; confirm one submitted item and each moderation status/note on GET, including interrupted POSTs.
 - [ ] Exercise registration, recovery, notifications, favorites, support, privacy/deletion flow and every remaining native iOS action.
 
 ## Device, connection and visual tests

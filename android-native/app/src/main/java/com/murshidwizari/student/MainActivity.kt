@@ -699,6 +699,8 @@ class MainActivity : Activity() {
         button("سجل الاختبارات") { attemptHistoryScreen() }
         button("جلسة تركيز") { focusScreen() }
         button("اختبار مخصص") { practiceBuilderScreen() }
+        button("اقترح سؤالاً") { proposeQuestionScreen() }
+        button("طلباتي • مراجعة الأسئلة") { myQuestionSubmissionsScreen() }
         val pendingPractice = prefs.getInt("practice_session_${student.optInt("id", 0)}", 0)
         if (pendingPractice > 0) button("متابعة الاختبار المخصص", secondary = true) {
             loadPracticeSession(pendingPractice)
@@ -2305,6 +2307,147 @@ class MainActivity : Activity() {
         if (incorrect == 0) caption("لا توجد إجابات خاطئة ضمن التفاصيل التي أعادها الخادم.")
         button("سجل الاختبارات") { attemptHistoryScreen() }
         button("إنشاء اختبار آخر", secondary = true) { practiceBuilderScreen() }
+    }
+
+    private fun proposeQuestionScreen() {
+        activeScreen = "question_proposal"
+        base("اقترح سؤالاً", true)
+        line("ساهم في بنك الأسئلة", true)
+        caption("اكتب السؤال وإجابته ومصدره ليصل إلى فريق المحتوى للمراجعة قبل النشر.")
+        val subjects = homepage.optJSONArray("subjects") ?: JSONArray()
+        var subjectId = subjects.optJSONObject(0)?.optInt("id") ?: 0
+        var chapterId = 0
+        var topics = JSONArray()
+        var type = "text"
+        val subject = button("المادة: " + (subjects.optJSONObject(0)?.optString("name") ?: "اختر مادة"), secondary = true) {}
+        val topic = button("الموضوع: جارٍ التحميل…", secondary = true) {}
+        fun loadTopicsForSubject() {
+            val id = subjectId
+            chapterId = 0
+            topic.text = "الموضوع: جارٍ التحميل…"
+            if (id <= 0) { topic.text = "لا توجد مادة"; return }
+            fetch("mobile/topics.php?subject_id=$id", showError = false) { response ->
+                if (activeScreen != "question_proposal" || subjectId != id) return@fetch
+                topics = if (response.optBoolean("ok")) response.optJSONArray("topics") ?: JSONArray() else JSONArray()
+                chapterId = topics.optJSONObject(0)?.optInt("id") ?: 0
+                topic.text = "الموضوع: " + (topics.optJSONObject(0)?.optString("name") ?: "اختر موضوعاً")
+                if (!response.optBoolean("ok")) message("تعذر تحميل المواضيع. حاول مجدداً.")
+            }
+        }
+        subject.setOnClickListener {
+            val names = Array(subjects.length()) { i -> subjects.optJSONObject(i)?.optString("name").orEmpty() }
+            AlertDialog.Builder(this).setTitle("المادة").setItems(names) { _, i ->
+                val selected = subjects.optJSONObject(i) ?: return@setItems
+                subjectId = selected.optInt("id")
+                subject.text = "المادة: " + selected.optString("name")
+                loadTopicsForSubject()
+            }.show()
+        }
+        topic.setOnClickListener {
+            val names = Array(topics.length()) { i -> topics.optJSONObject(i)?.optString("name").orEmpty() }
+            AlertDialog.Builder(this).setTitle("الموضوع").setItems(names) { _, i ->
+                val selected = topics.optJSONObject(i) ?: return@setItems
+                chapterId = selected.optInt("id")
+                topic.text = "الموضوع: " + selected.optString("name")
+            }.show()
+        }
+        loadTopicsForSubject()
+        val typeButton = button("نوع السؤال: نصي", secondary = true) {}
+        val questionText = input("نص السؤال", multiline = true)
+        val optionFields = (1..4).map { index -> input("الخيار $index") }
+        val correctAnswer = input("الإجابة الصحيحة")
+        val trueFalse = button("اختر الإجابة: صح / خطأ", secondary = true) {}
+        trueFalse.setOnClickListener {
+            AlertDialog.Builder(this).setTitle("الإجابة الصحيحة").setItems(arrayOf("صح", "خطأ")) { _, index ->
+                correctAnswer.setText(if (index == 0) "صح" else "خطأ")
+            }.show()
+        }
+        fun updateType() {
+            optionFields.forEach { it.visibility = if (type == "mcq") View.VISIBLE else View.GONE }
+            trueFalse.visibility = if (type == "true_false") View.VISIBLE else View.GONE
+        }
+        typeButton.setOnClickListener {
+            val types = listOf("text" to "نصي", "mcq" to "اختيارات", "true_false" to "صح / خطأ",
+                "fill" to "أكمل", "meaning" to "معاني")
+            AlertDialog.Builder(this).setTitle("نوع السؤال")
+                .setSingleChoiceItems(types.map { it.second }.toTypedArray(), types.indexOfFirst { it.first == type }) { dialog, index ->
+                    dialog.dismiss()
+                    type = types[index].first
+                    typeButton.text = "نوع السؤال: " + types[index].second
+                    updateType()
+                }.setNegativeButton("إلغاء", null).show()
+        }
+        updateType()
+        val explanation = input("شرح مختصر (اختياري)", multiline = true)
+        val sourceText = input("المصدر / الملاحظة")
+        val year = input("السنة (اختياري)").apply { inputType = InputType.TYPE_CLASS_NUMBER }
+        val round = input("الدور (اختياري)")
+        val submit = button("إرسال للمراجعة") {}
+        submit.setOnClickListener {
+            val options = optionFields.map { it.text.toString().trim() }.filter(String::isNotEmpty)
+            val issue = ProposalRules.error(chapterId, type, questionText.text.toString(),
+                correctAnswer.text.toString(), options)
+            if (issue != null) { message(issue); return@setOnClickListener }
+            submit.isEnabled = false
+            submit.text = "جارٍ إرسال الاقتراح…"
+            val payload = JSONObject().put("csrf", csrf).put("chapter_id", chapterId)
+                .put("question_type", type).put("question_text", questionText.text.toString().trim())
+                .put("correct_answer", correctAnswer.text.toString().trim())
+                .put("explanation", explanation.text.toString().trim())
+                .put("source_text", sourceText.text.toString().trim())
+                .put("exam_year", year.text.toString().trim())
+                .put("exam_round", round.text.toString().trim())
+                .put("options", JSONArray(options))
+            fetch("mobile/question-submit.php", payload) { response ->
+                if (activeScreen != "question_proposal") return@fetch
+                if (response.optBoolean("ok")) {
+                    questionText.setText(""); correctAnswer.setText("")
+                    explanation.setText(""); sourceText.setText("")
+                    year.setText(""); round.setText("")
+                    optionFields.forEach { it.setText("") }
+                    submit.isEnabled = true
+                    submit.text = "إرسال اقتراح آخر"
+                    message("وصل اقتراحك إلى فريق المحتوى. تابعه في طلباتك.")
+                } else if (response.optBoolean("network_error")) {
+                    submit.text = "حالة الإرسال غير مؤكدة"
+                    message("تحقق من طلباتك قبل إرسال السؤال ثانية؛ فقد يكون وصل بالفعل.")
+                } else {
+                    submit.isEnabled = true
+                    submit.text = "إرسال للمراجعة"
+                }
+            }
+        }
+        button("عرض طلباتي", secondary = true) { myQuestionSubmissionsScreen() }
+    }
+
+    private fun myQuestionSubmissionsScreen() {
+        activeScreen = "question_submissions"
+        base("طلباتي", true)
+        line("جارٍ تحميل اقتراحات الأسئلة…")
+        fetch("mobile/question-submit.php") { response ->
+            if (activeScreen != "question_submissions") return@fetch
+            base("طلباتي", true)
+            if (!response.optBoolean("ok")) {
+                line("تعذر عرض طلبات الأسئلة.")
+                button("إعادة المحاولة") { myQuestionSubmissionsScreen() }
+                return@fetch
+            }
+            val rows = response.optJSONArray("submissions") ?: JSONArray()
+            if (rows.length() == 0) caption("لم ترسل أسئلة بعد. ستظهر هنا مع حالة مراجعتها.")
+            val status = mapOf("new" to "جديد", "reviewing" to "قيد المراجعة",
+                "accepted" to "مقبول", "published" to "تم النشر", "rejected" to "مرفوض")
+            for (i in 0 until rows.length()) {
+                val item = rows.optJSONObject(i) ?: continue
+                caption(status[item.optString("status")] ?: item.optString("status"))
+                line(item.optString("question_text"), true)
+                caption(item.optString("subject_name") + " • " + item.optString("chapter_name"))
+                caption(item.optString("created_at"))
+                if (item.optString("admin_note").isNotBlank())
+                    caption("ملاحظة المراجعة: " + item.optString("admin_note"))
+            }
+            button("اقترح سؤالاً آخر") { proposeQuestionScreen() }
+            button("تحديث الطلبات", secondary = true) { myQuestionSubmissionsScreen() }
+        }
     }
 
     private fun storiesScreen() {
