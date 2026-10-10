@@ -64,7 +64,13 @@ fun DashboardScreen(vm: MurshidViewModel) {
                         contentDescription = "تغيير الوضع")
                 }
                 IconButton(onClick = { vm.openFeature(Feature.NOTIFICATIONS) }) {
-                    Icon(Icons.Default.Notifications, contentDescription = "الإشعارات")
+                    BadgedBox(badge = {
+                        if (vm.noticeInbox.unread > 0) {
+                            Badge { Text(vm.noticeInbox.unread.coerceAtMost(99).toString()) }
+                        }
+                    }) {
+                        Icon(Icons.Default.Notifications, contentDescription = "الإشعارات")
+                    }
                 }
             }
         }

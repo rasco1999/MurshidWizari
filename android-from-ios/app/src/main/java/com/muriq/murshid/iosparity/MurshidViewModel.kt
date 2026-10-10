@@ -10,6 +10,8 @@ import com.muriq.murshid.iosparity.data.*
 import com.muriq.murshid.iosparity.net.ApiProblem
 import com.muriq.murshid.iosparity.net.MurshidApi
 import com.muriq.murshid.iosparity.net.PasswordRecovery
+import com.muriq.murshid.iosparity.notifications.NoticeDelivery
+import com.muriq.murshid.iosparity.notifications.NoticeInbox
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -40,6 +42,19 @@ enum class Feature(val title: String, val endpoint: String) {
 class MurshidViewModel(app: Application) : AndroidViewModel(app) {
     val api = MurshidApi(app.applicationContext)
     private val recovery = PasswordRecovery()
+    private val noticeDelivery = NoticeDelivery(app.applicationContext)
+    private var noticeBoundStudentId = 0
+    var noticeInbox by mutableStateOf(NoticeInbox(0, emptyList()))
+        private set
+    var noticeLoading by mutableStateOf(false)
+        private set
+    var noticeSaving by mutableStateOf(false)
+        private set
+    var noticeError by mutableStateOf("")
+        private set
+    var highlightedNoticeId by mutableStateOf(0)
+        private set
+
     var recoveryToken by mutableStateOf("")
         private set
     var recoveryFeedback by mutableStateOf("")
@@ -144,6 +159,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
             loading = true
             try {
                 val success = recovery.finish(token, code, password, confirm)
+                clearNotices()
                 api.clearSession()
                 dashboard = null
                 recoveryToken = ""
@@ -159,6 +175,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun fail(error: Throwable) {
         if (error is ApiProblem && error.sessionExpired) {
+            clearNotices()
             api.clearSession()
             dashboard = null
             screen = Screen.LOGIN
@@ -196,6 +213,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
                     api.setRemember(remember)
                     val bootstrap = api.get("mobile/bootstrap.php")
                     dashboard = StudentDashboard.from(bootstrap)
+                    bindNoticesToStudent()
                     loadAccount()
                     tab = 0; screen = Screen.MAIN
                 }
@@ -245,6 +263,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
             loading = true
             try {
                 dashboard = StudentDashboard.from(api.get("mobile/bootstrap.php"))
+                bindNoticesToStudent()
                 loadAccount()
                 tab = 0; screen = Screen.MAIN; clearMessage()
             } catch (error: Exception) {
@@ -373,18 +392,103 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
     fun openFeature(item: Feature) {
         feature = item; screen = Screen.FEATURE; featureData = JSONObject(); clearMessage()
         if (item == Feature.ACCOUNT) { loadAccount(); return }
+        if (item == Feature.NOTIFICATIONS) { syncNotices(silent = false); return }
         if (item == Feature.PREDICTIONS || item == Feature.ADS ||
             item == Feature.SUBSCRIPTION || item == Feature.QUESTION_REQUEST) return
         loadFeature()
     }
 
     fun loadFeature() {
+        if (feature == Feature.NOTIFICATIONS) { syncNotices(silent = false); return }
         if (feature.endpoint.isBlank()) return
         viewModelScope.launch {
             loading = true; clearMessage()
             try { featureData = api.get(feature.endpoint) }
             catch (error: Exception) { fail(error) }
             finally { loading = false }
+        }
+    }
+
+
+    private fun bindNoticesToStudent() {
+        val id = dashboard?.user?.id ?: return
+        if (id <= 0) return
+        if (noticeBoundStudentId != id) {
+            noticeBoundStudentId = id
+            noticeInbox = NoticeInbox(0, emptyList())
+            highlightedNoticeId = 0
+            noticeError = ""
+        }
+        noticeDelivery.bind(id, api.hasSavedSession())
+        syncNotices(silent = true)
+    }
+
+    private fun clearNotices() {
+        noticeDelivery.clear()
+        noticeBoundStudentId = 0
+        noticeInbox = NoticeInbox(0, emptyList())
+        noticeError = ""
+        highlightedNoticeId = 0
+    }
+
+    fun syncNotices(silent: Boolean = false) {
+        val id = dashboard?.user?.id ?: return
+        if (id <= 0 || noticeLoading || noticeSaving) return
+        viewModelScope.launch {
+            noticeLoading = true
+            if (!silent) noticeError = ""
+            try {
+                val data = api.get("mobile/notifications.php")
+                if (dashboard?.user?.id == id && noticeBoundStudentId == id) {
+                    val inbox = NoticeInbox.from(data)
+                    noticeInbox = inbox
+                    noticeDelivery.deliver(id, inbox)
+                    if (highlightedNoticeId > 0 && inbox.items.any { it.id == highlightedNoticeId && !it.read }) {
+                        markNoticeRead(highlightedNoticeId)
+                    }
+                }
+            } catch (error: Exception) {
+                if (error is ApiProblem && error.sessionExpired) {
+                    clearNotices()
+                    fail(error)
+                } else if (!silent) {
+                    noticeError = error.message ?: "تعذر تحديث الإشعارات."
+                }
+            } finally { noticeLoading = false }
+        }
+    }
+
+    fun openNoticeFromSystem(studentId: Int, noticeId: Int) {
+        if (studentId <= 0 || dashboard?.user?.id != studentId) return
+        highlightedNoticeId = noticeId.coerceAtLeast(0)
+        openFeature(Feature.NOTIFICATIONS)
+    }
+
+    fun markNoticeRead(noticeId: Int) = updateNoticeRead(noticeId, false)
+    fun markAllNoticesRead() = updateNoticeRead(0, true)
+
+    private fun updateNoticeRead(noticeId: Int, all: Boolean) {
+        val student = dashboard ?: return
+        if (student.user.id <= 0 || student.csrf.isBlank() || noticeSaving) return
+        if (!all && (noticeId <= 0 || noticeInbox.items.none { it.id == noticeId })) return
+        viewModelScope.launch {
+            noticeSaving = true
+            noticeError = ""
+            try {
+                val body = JSONObject().put("csrf", student.csrf)
+                if (all) body.put("read_all", true) else body.put("read_id", noticeId)
+                val data = api.post("mobile/notifications.php", body)
+                if (dashboard?.user?.id == student.user.id) {
+                    noticeInbox = NoticeInbox.from(data)
+                }
+            } catch (error: Exception) {
+                if (error is ApiProblem && error.sessionExpired) {
+                    clearNotices()
+                    fail(error)
+                } else {
+                    noticeError = error.message ?: "تعذر تحديث حالة الإشعار."
+                }
+            } finally { noticeSaving = false }
         }
     }
 
@@ -418,6 +522,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
                     JSONObject().put("csrf", dashboard?.csrf).put("code", code.trim()))
                 message = "تم تفعيل الرمز."
                 dashboard = StudentDashboard.from(api.get("mobile/bootstrap.php"))
+                bindNoticesToStudent()
             } catch (error: Exception) { fail(error) }
             finally { loading = false }
         }
@@ -433,6 +538,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
                 api.post("mobile/account.php", JSONObject().put("csrf", dashboard?.csrf)
                     .put("action", "change_name").put("name", name.trim()))
                 dashboard = StudentDashboard.from(api.get("mobile/bootstrap.php"))
+                bindNoticesToStudent()
                 accountData = api.get("mobile/account.php"); featureData = accountData
                 message = "تم تحديث الاسم."
             } catch (error: Exception) { fail(error) }
@@ -460,6 +566,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
             loading = true
             try {
                 dashboard = StudentDashboard.from(api.get("mobile/bootstrap.php"))
+                bindNoticesToStudent()
                 message = "تم تحديث الإعلانات."
             } catch (error: Exception) { fail(error) }
             finally { loading = false }
@@ -484,6 +591,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
                     .put("customer_phone", phone))
                 if (result.optBoolean("subscribed")) {
                     dashboard = StudentDashboard.from(api.get("mobile/bootstrap.php"))
+                bindNoticesToStudent()
                     message = "اشتراكك فعّال بالفعل."
                 } else {
                     val url = result.text("redirect")
@@ -509,6 +617,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
                     .put("order_id", orderId))
                 if (result.optBoolean("subscribed")) {
                     dashboard = StudentDashboard.from(api.get("mobile/bootstrap.php"))
+                bindNoticesToStudent()
                     prefs.edit().remove("last_payment_order").apply()
                 }
                 message = result.text("message", "تم تحديث حالة الدفع.")
@@ -650,7 +759,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
             } catch (_: Exception) {
                 // Always let the student explicitly clear their own local credentials.
             } finally {
-                api.clearSession(); dashboard = null; featureData = JSONObject()
+                clearNotices(); api.clearSession(); dashboard = null; featureData = JSONObject()
                 screen = Screen.GUEST; tab = 0; clearMessage()
             }
         }

@@ -38,14 +38,54 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import com.muriq.murshid.iosparity.notifications.NoticeDelivery
+import kotlinx.coroutines.isActive
 import com.muriq.murshid.iosparity.ui.*
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
+    private val noticeOpenRequest = mutableStateOf<Pair<Int, Int>?>(null)
+
+    private fun captureNotificationIntent(intent: Intent?) {
+        if (intent?.action != NoticeDelivery.ACTION_OPEN_NOTICES) return
+        val studentId = intent.getIntExtra(NoticeDelivery.EXTRA_STUDENT_ID, 0)
+        val noticeId = intent.getIntExtra(NoticeDelivery.EXTRA_NOTICE_ID, 0)
+        if (studentId > 0) noticeOpenRequest.value = studentId to noticeId
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        captureNotificationIntent(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        captureNotificationIntent(intent)
         setContent {
             val vm: MurshidViewModel = viewModel()
+            val request by noticeOpenRequest
+            val authenticatedStudent = vm.dashboard?.user?.id ?: 0
+            val lifecycleOwner = LocalLifecycleOwner.current
+            LaunchedEffect(authenticatedStudent, lifecycleOwner) {
+                if (authenticatedStudent <= 0) return@LaunchedEffect
+                lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    while (isActive) {
+                        vm.syncNotices(silent = true)
+                        delay(75_000)
+                    }
+                }
+            }
+            LaunchedEffect(request, authenticatedStudent) {
+                val target = request ?: return@LaunchedEffect
+                if (target.first == authenticatedStudent && authenticatedStudent > 0) {
+                    vm.openNoticeFromSystem(target.first, target.second)
+                    noticeOpenRequest.value = null
+                }
+            }
             val systemDark = isSystemInDarkTheme()
             val dark = when (vm.appearance) {
                 "dark" -> true

@@ -27,6 +27,7 @@ fun FeatureScreen(vm: MurshidViewModel) {
         Feature.SUBSCRIPTION -> SubscriptionScreen(vm)
         Feature.ACCOUNT -> AccountDetailsScreen(vm)
         Feature.SUPPORT -> SupportScreen(vm)
+        Feature.NOTIFICATIONS -> NotificationsScreen(vm)
         Feature.STORIES -> StoriesScreen(vm)
         Feature.PREDICTIONS -> PredictionDetailsScreen(vm)
         Feature.ADS -> AdvertisementsTab(vm)
