@@ -135,7 +135,20 @@ fun AppShell(vm: MurshidViewModel) {
         Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
             Box(Modifier.fillMaxSize().widthIn(max = 780.dp)) {
                 when (vm.screen) {
-                Screen.GUEST -> GuestLandingScreen(onLogin = vm::showLogin, onRegister = vm::showRegister)
+                Screen.GUEST -> Column {
+                    if (vm.api.hasSavedSession()) {
+                        TextButton(
+                            onClick = { vm.refreshDashboard() },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !vm.loading
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("إعادة الاتصال بحسابي المحفوظ")
+                        }
+                    }
+                    GuestLandingScreen(onLogin = vm::showLogin, onRegister = vm::showRegister)
+                }
                 Screen.LOGIN -> LoginScreen(vm)
                 Screen.REGISTER -> RegisterScreen(vm)
                 Screen.RECOVER -> RecoveryScreen()

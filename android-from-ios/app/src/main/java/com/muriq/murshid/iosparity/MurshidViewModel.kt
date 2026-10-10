@@ -188,8 +188,14 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
                 loadAccount()
                 tab = 0; screen = Screen.MAIN; clearMessage()
             } catch (error: Exception) {
-                if (firstLoad) {
+                if (firstLoad && error !is ApiProblem) {
+                    // A weak connection is not evidence that a remembered session expired.
+                    // Keep the encrypted cookie and let the student retry manually.
                     screen = Screen.GUEST
+                    message = "تعذر الاتصال بالخادم. يمكنك إعادة المحاولة دون فقدان جلستك."
+                } else if (firstLoad && error is ApiProblem && !error.sessionExpired) {
+                    screen = Screen.GUEST
+                    message = error.message ?: "تعذر الاتصال بالخادم. حاول مجدداً."
                 } else fail(error)
             } finally { loading = false }
         }
