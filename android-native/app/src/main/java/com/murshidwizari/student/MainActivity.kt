@@ -214,38 +214,150 @@ class MainActivity : Activity() {
 
     private fun loginScreen() {
         activeScreen = "login"
-        base("منصة المرشد الوزاري")
-        line("رحلتك نحو التفوق تبدأ هنا")
-        caption("تسجيل الدخول إلى حساب الطالب")
+        window.statusBarColor = if (night) Color.rgb(13, 29, 54) else navy
+        window.navigationBarColor = appColor
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            setBackgroundColor(appColor)
+            clipToPadding = false
+        }
+        root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(dp(24), dp(18), dp(24), dp(26))
+        }
+        scroll.addView(root)
+        setContentView(scroll)
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(16), dp(27), dp(16), dp(27))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.rgb(15, 40, 79), Color.rgb(39, 91, 165))
+            ).apply { cornerRadius = dp(28).toFloat() }
+        }
+        val emblem = TextView(this).apply {
+            text = "✦"
+            textSize = 42f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(244, 203, 116))
+            background = GradientDrawable().apply {
+                setColor(Color.argb(38, 255, 255, 255))
+                cornerRadius = dp(24).toFloat()
+            }
+        }
+        header.addView(emblem, LinearLayout.LayoutParams(dp(76), dp(76)).apply {
+            bottomMargin = dp(14)
+        })
+        header.addView(TextView(this).apply {
+            text = "منصة المرشد الوزاري"
+            textSize = 25f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+        })
+        header.addView(TextView(this).apply {
+            text = "خطوتك الواثقة نحو التفوق الوزاري"
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(218, 230, 249))
+            setPadding(0, dp(9), 0, 0)
+        })
+        root.addView(header, LinearLayout.LayoutParams(-1, -2).apply {
+            bottomMargin = dp(24)
+        })
+
+        val welcome = TextView(this).apply {
+            text = "أهلاً بعودتك!"
+            textSize = 23f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(textColor)
+            setPadding(0, 0, 0, dp(6))
+        }
+        root.addView(welcome)
+        caption("سجّل دخولك وأكمل رحلتك التعليمية.")
+        gap(10)
         val identifier = input("البريد الإلكتروني أو رقم الهاتف")
+        identifier.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
         val password = input("كلمة المرور", password = true)
-        val preview = CheckBox(this).apply { text = "إظهار كلمة المرور"; setTextColor(textColor) }
+        val settingsRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val preview = CheckBox(this).apply {
+            text = "إظهار كلمة المرور"
+            textSize = 13f
+            setTextColor(textColor)
+            buttonTintList = android.content.res.ColorStateList.valueOf(accent)
+        }
         preview.setOnCheckedChangeListener { _, checked ->
-            password.transformationMethod = if (checked) HideReturnsTransformationMethod.getInstance() else PasswordTransformationMethod.getInstance()
+            password.transformationMethod = if (checked)
+                HideReturnsTransformationMethod.getInstance()
+            else PasswordTransformationMethod.getInstance()
             password.setSelection(password.text.length)
         }
-        root.addView(preview)
-        val remember = CheckBox(this).apply { text = "تذكرني على هذا الجهاز"; setTextColor(textColor) }
-        root.addView(remember)
-        button("تسجيل الدخول") {
+        val remember = CheckBox(this).apply {
+            text = "تذكرني"
+            textSize = 13f
+            setTextColor(textColor)
+            buttonTintList = android.content.res.ColorStateList.valueOf(accent)
+            isChecked = api.hasRememberedSession()
+        }
+        settingsRow.addView(preview, LinearLayout.LayoutParams(0, -2, 1f))
+        settingsRow.addView(remember, LinearLayout.LayoutParams(0, -2, 1f))
+        root.addView(settingsRow)
+        gap(14)
+
+        val submit = button("تسجيل الدخول") {}
+        submit.setOnClickListener {
             val id = identifier.text.toString().trim()
             val pass = password.text.toString()
-            if (id.isEmpty() || pass.isEmpty()) { message("أدخل البريد أو الهاتف وكلمة المرور."); return@button }
-            val data = JSONObject().put("identifier", id).put("password", pass).put("remember_me", remember.isChecked)
-            fetch("api/login.php", data) { response ->
-                if (response.optBoolean("ok")) {
-                    if (response.optBoolean("email_verification_required") || response.optBoolean("phone_verification_required")) {
-                        verifyPrompt(response)
-                    } else {
-                        api.setRemember(remember.isChecked)
-                        fetch("mobile/bootstrap.php") { b -> if (b.optBoolean("ok")) showHome(b) }
+            if (id.isEmpty() || pass.isEmpty()) {
+                message("أدخل البريد أو الهاتف وكلمة المرور.")
+            } else {
+                submit.isEnabled = false
+                submit.text = "جارٍ تسجيل الدخول..."
+                val data = JSONObject().put("identifier", id).put("password", pass)
+                    .put("remember_me", remember.isChecked)
+                fetch("api/login.php", data) { response ->
+                    submit.isEnabled = true
+                    submit.text = "تسجيل الدخول"
+                    if (response.optBoolean("ok")) {
+                        if (response.optBoolean("email_verification_required") ||
+                            response.optBoolean("phone_verification_required")) {
+                            verifyPrompt(response)
+                        } else {
+                            api.setRemember(remember.isChecked)
+                            fetch("mobile/bootstrap.php") { b ->
+                                if (b.optBoolean("ok")) showHome(b)
+                            }
+                        }
                     }
                 }
             }
         }
-        button("إنشاء حساب طالب", secondary = true) { registerScreen() }
+        gap(6)
+        button("إنشاء حساب طالب جديد", secondary = true) { registerScreen() }
         button("نسيت كلمة المرور؟", secondary = true) { recoverScreen() }
-        button("سياسة الخصوصية", secondary = true) { external("https://mur-iq.com/privacy.php") }
+        gap(12)
+        root.addView(TextView(this).apply {
+            text = "mur-iq.com  •  منصة تعليمية عراقية"
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setTextColor(if (night) Color.LTGRAY else Color.GRAY)
+            setPadding(0, dp(10), 0, dp(8))
+        })
+        val privacy = TextView(this).apply {
+            text = "سياسة الخصوصية"
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setTextColor(accent)
+            setPadding(0, dp(8), 0, dp(8))
+            setOnClickListener { external("https://mur-iq.com/privacy.php") }
+        }
+        root.addView(privacy)
     }
 
     private fun verifyPrompt(response: JSONObject) {
