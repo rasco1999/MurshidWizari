@@ -713,7 +713,7 @@ class MainActivity : Activity() {
             } catch (_: Exception) { null }
             val response = if (bytes == null)
                 JSONObject().put("ok", false).put("message", "تعذر قراءة الصورة أو حجمها أكبر من 3 ميغابايت.")
-            else try { api.uploadAvatar(csrf, if (mime == "image/png") "avatar.png" else "avatar.jpg", mime, bytes) }
+            else try { api.uploadAvatar(csrf, if (mime == "image/png") "avatar.png" else "avatar.jpg", mime ?: "image/jpeg", bytes) }
             catch (_: Exception) { JSONObject().put("ok", false).put("message", "تعذر رفع الصورة. حاول مجدداً.") }
             main.post {
                 if (response.optBoolean("ok")) {
