@@ -59,12 +59,12 @@ fun MurshidCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.
 @Composable
 fun PrimaryAction(
     title: String,
-    onClick: () -> Unit,
+    action: () -> Unit,
     enabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     Button(
-        onClick = onClick,
+        onClick = action,
         enabled = enabled,
         contentPadding = PaddingValues(horizontal = 16.dp),
         modifier = modifier.fillMaxWidth().heightIn(min = 52.dp)
@@ -85,12 +85,12 @@ fun PrimaryAction(
 @Composable
 fun SecondaryAction(
     title: String,
-    onClick: () -> Unit,
+    action: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
     OutlinedButton(
-        onClick = onClick,
+        onClick = action,
         enabled = enabled,
         modifier = modifier.fillMaxWidth().heightIn(min = 50.dp),
         shape = RoundedCornerShape(16.dp),
@@ -101,6 +101,26 @@ fun SecondaryAction(
     ) {
         Text(title, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
     }
+}
+
+@Composable
+fun PrimaryAction(
+    title: String,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    PrimaryAction(title, action = onClick, enabled = enabled, modifier = modifier)
+}
+
+@Composable
+fun SecondaryAction(
+    title: String,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    SecondaryAction(title, action = onClick, enabled = enabled, modifier = modifier)
 }
 
 @Composable

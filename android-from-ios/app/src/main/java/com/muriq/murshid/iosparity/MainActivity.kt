@@ -23,6 +23,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -170,8 +173,10 @@ private fun NativeWelcomeScreen(name: String) {
                     .background(Color.White.copy(alpha = 0.07f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.School, contentDescription = null,
-                    modifier = Modifier.size(78.dp), tint = MurshidGold)
+                Image(painter = painterResource(R.drawable.murshid_original),
+                    contentDescription = "شعار المرشد الوزاري",
+                    modifier = Modifier.size(120.dp).clip(RoundedCornerShape(26.dp)),
+                    contentScale = ContentScale.Crop)
             }
             Spacer(Modifier.height(24.dp))
             Text("منصة المرشد الوزاري", color = Color.White, fontSize = 29.sp,

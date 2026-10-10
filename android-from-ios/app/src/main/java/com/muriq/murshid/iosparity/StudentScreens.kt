@@ -245,7 +245,7 @@ fun TopicsScreen(vm: MurshidViewModel) {
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Icon(if (topic.count > 0) Icons.Default.ChevronLeft else Icons.Default.LockOutline,
+                    Icon(if (topic.count > 0) Icons.Default.ChevronLeft else Icons.Default.Lock,
                         null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }

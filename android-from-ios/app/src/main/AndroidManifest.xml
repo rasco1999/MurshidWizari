@@ -2,8 +2,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="منصة المرشد الوزاري"
-        android:icon="@drawable/ic_launcher"
-        android:roundIcon="@drawable/ic_launcher"
+        android:icon="@drawable/murshid_original"
+        android:roundIcon="@drawable/murshid_original"
         android:allowBackup="false"
         android:usesCleartextTraffic="false"
         android:supportsRtl="true"

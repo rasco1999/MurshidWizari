@@ -76,7 +76,6 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var paymentUrl by mutableStateOf("")
         private set
-        private set
     var verification by mutableStateOf(JSONObject())
         private set
     var textFeedback by mutableStateOf("")

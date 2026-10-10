@@ -38,6 +38,15 @@ fun FeatureScreen(vm: MurshidViewModel) {
 @Composable
 private fun SubscriptionScreen(vm: MurshidViewModel) {
     val dash = vm.dashboard ?: return
+    val context = LocalContext.current
+    val redirect = vm.paymentUrl
+    LaunchedEffect(redirect) {
+        if (redirect.startsWith("https://")) {
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(redirect)))
+            } finally { vm.clearPaymentUrl() }
+        }
+    }
     var code by remember { mutableStateOf("") }
     var plan by remember(dash.plans) { mutableStateOf(dash.plans.firstOrNull()?.id.orEmpty()) }
     var customerPhone by remember { mutableStateOf("") }
