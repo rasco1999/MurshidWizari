@@ -92,6 +92,7 @@ class MainActivity : Activity() {
     private var checkoutReturnPending = false
     private var recoveryBusy = false
     private var recoverReturnScreen = "login"
+    private var pendingVerificationRemember = false
     private var focusMinutes = 25
     private var focusBusy = false
     private var focusDeadline = 0L
@@ -481,6 +482,7 @@ class MainActivity : Activity() {
                     if (response.optBoolean("ok")) {
                         if (response.optBoolean("email_verification_required") ||
                             response.optBoolean("phone_verification_required")) {
+                            pendingVerificationRemember = remember.isChecked
                             verifyPrompt(response)
                         } else {
                             api.setRemember(remember.isChecked)
@@ -522,12 +524,51 @@ class MainActivity : Activity() {
     }
 
     private fun verifyPrompt(response: JSONObject) {
-        val email = response.optBoolean("email_verification_required")
-        AlertDialog.Builder(this).setTitle("تأكيد الحساب")
-            .setMessage(response.optString("message", "أكمل تأكيد الحساب."))
-            .setPositiveButton("فتح صفحة التحقق") { _, _ ->
-                external(if (email) "https://www.mur-iq.com/verify-email.php" else "https://www.mur-iq.com/verify-phone.php")
-            }.setNegativeButton("إلغاء", null).show()
+        val kind = if (response.optBoolean("phone_verification_required")) "phone" else "email"
+        val destination = if (kind == "phone") response.optString("masked_phone") else response.optString("masked_email")
+        verificationScreen(kind, destination, response.optString("message"))
+    }
+
+    private fun verificationScreen(kind: String, destination: String, note: String) {
+        activeScreen = "verification"
+        base(if (kind == "phone") "تأكيد رقم الهاتف" else "تأكيد البريد الإلكتروني", true)
+        line("رمز التحقق", true)
+        caption(note.ifBlank { "أدخل الرمز الذي أُرسل إلى $destination" })
+        val code = input("رمز التحقق من 6 أرقام").apply {
+            inputType = InputType.TYPE_CLASS_NUMBER
+            filters = arrayOf(InputFilter.LengthFilter(6))
+        }
+        val verify = button("تأكيد الحساب") {}
+        verify.setOnClickListener {
+            val value = RecoveryRules.normalizedDigits(code.text.toString())
+            if (!value.matches(Regex("[0-9]{6}"))) { message("أدخل الرمز كاملاً من 6 أرقام."); return@setOnClickListener }
+            if (recoveryBusy) return@setOnClickListener
+            recoveryBusy = true
+            verify.isEnabled = false
+            recoveryRequest(mayHaveSubmitted = true, action = { api.verifyPending(kind, value) }) { result ->
+                recoveryBusy = false
+                if (activeScreen != "verification") return@recoveryRequest
+                verify.isEnabled = true
+                if (result.optBoolean("ok")) {
+                    api.setRemember(pendingVerificationRemember)
+                    showHome(result)
+                } else message(result.optString("message", "تعذر تأكيد الرمز. تحقق منه وأعد المحاولة."))
+            }
+        }
+        val resend = button("إعادة إرسال الرمز", secondary = true) {}
+        resend.setOnClickListener {
+            if (recoveryBusy) return@setOnClickListener
+            recoveryBusy = true
+            resend.isEnabled = false
+            recoveryRequest(mayHaveSubmitted = true, action = { api.resendPending(kind) }) { result ->
+                recoveryBusy = false
+                if (activeScreen == "verification") {
+                    resend.isEnabled = true
+                    message(result.optString("message", "تعذر إعادة إرسال الرمز."))
+                }
+            }
+        }
+        button("العودة لتسجيل الدخول", secondary = true) { loginScreen() }
     }
 
     private fun recoverScreen() {
@@ -617,9 +658,21 @@ class MainActivity : Activity() {
 
     private fun registerScreen() {
         activeScreen = "register"
-        base("إنشاء حساب جديد")
+        base("إنشاء حساب جديد", true)
         val name = input("الاسم الثلاثي الكامل")
-        val email = input("البريد الإلكتروني")
+        caption("طريقة التسجيل")
+        val contact = Spinner(this)
+        contact.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("البريد الإلكتروني", "رقم هاتف عراقي"))
+        root.addView(contact)
+        val identifier = input("البريد الإلكتروني أو 07XXXXXXXXX")
+        contact.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
+            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+                identifier.hint = if (position == 1) "07XXXXXXXXX" else "البريد الإلكتروني"
+                identifier.inputType = if (position == 1) InputType.TYPE_CLASS_PHONE else
+                    InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+            }
+        }
         val pass = input("كلمة المرور (8 أحرف على الأقل)", true)
         val confirm = input("تأكيد كلمة المرور", true)
         caption("الصف الدراسي")
@@ -630,7 +683,9 @@ class MainActivity : Activity() {
         caption("الجنس")
         val gender = Spinner(this)
         gender.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("ذكر", "أنثى"))
+        root.addView(gender)
         fetch("api/grades.php") { result ->
+            if (activeScreen != "register") return@fetch
             val array = result.optJSONArray("grades") ?: JSONArray()
             for (i in 0 until array.length()) {
                 val item = array.optJSONObject(i) ?: continue
@@ -640,23 +695,45 @@ class MainActivity : Activity() {
             gradeSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, gradeNames)
         }
         gap()
-        button("إنشاء الحساب") {
-            if (gradeSpinner.selectedItemPosition !in grades.indices) { message("اختر صفك الدراسي."); return@button }
-            if (pass.text.toString() != confirm.text.toString()) { message("كلمتا المرور غير متطابقتين."); return@button }
+        val create = button("إنشاء الحساب") {}
+        create.setOnClickListener {
+            val fullName = AccountRules.normalizeName(name.text.toString())
+            if (!AccountRules.validFullName(fullName)) { message("أدخل الاسم الثلاثي الكامل بشكل صحيح."); return@setOnClickListener }
+            if (gradeSpinner.selectedItemPosition !in grades.indices) { message("اختر صفك الدراسي."); return@setOnClickListener }
+            val contactType = if (contact.selectedItemPosition == 1) "phone" else "email"
+            val value = if (contactType == "phone") RecoveryRules.normalizedDigits(identifier.text.toString().trim())
+                else identifier.text.toString().trim()
+            if (contactType == "phone" && !AccountRules.validIraqiPhone(value)) {
+                message("أدخل رقم هاتف عراقي صحيحاً من 11 رقماً يبدأ بـ 07.")
+                return@setOnClickListener
+            }
+            if (contactType == "email" && !android.util.Patterns.EMAIL_ADDRESS.matcher(value).matches()) {
+                message("أدخل بريداً إلكترونياً صحيحاً.")
+                return@setOnClickListener
+            }
+            if (pass.text.toString().length < 8) { message("كلمة المرور يجب أن تكون 8 أحرف على الأقل."); return@setOnClickListener }
+            if (pass.text.toString() != confirm.text.toString()) { message("كلمتا المرور غير متطابقتين."); return@setOnClickListener }
+            create.isEnabled = false
+            create.text = "جارٍ إنشاء الحساب…"
             val data = JSONObject()
-                .put("full_name", name.text.toString().trim())
-                .put("identifier", email.text.toString().trim())
-                .put("contact_type", "email")
+                .put("full_name", fullName).put("name", fullName).put("fullName", fullName)
+                .put("identifier", value)
+                .put("contact_type", contactType)
                 .put("grade_id", grades[gradeSpinner.selectedItemPosition])
                 .put("gender", if (gender.selectedItemPosition == 0) "male" else "female")
                 .put("password", pass.text.toString())
                 .put("password_confirmation", confirm.text.toString())
+                .put("company_website", "")
             fetch("api/register.php", data) { result ->
+                if (activeScreen != "register") return@fetch
                 if (result.optBoolean("ok")) {
                     message(result.optString("message", "تم إنشاء الحساب."))
-                    if (result.optBoolean("email_verification_required")) verifyPrompt(result)
-                    loginScreen()
-                }
+                    pendingVerificationRemember = false
+                    verifyPrompt(result)
+                } else if (result.optBoolean("network_error")) {
+                    create.text = "حالة التسجيل غير مؤكدة"
+                    message("قد يكون الحساب أُنشئ. حاول تسجيل الدخول أو استعادة كلمة المرور قبل إعادة التسجيل.")
+                } else { create.isEnabled = true; create.text = "إنشاء الحساب" }
             }
         }
         button("لديك حساب بالفعل؟", secondary = true) { loginScreen() }

@@ -275,6 +275,40 @@ class ApiClient(context: Context) {
             .put("message", status.text.ifBlank { "تم طلب رمز WhatsApp جديد." })
     }
 
+    /** iOS registration/login verification uses these legacy same-origin HTML forms. */
+    fun verifyPending(kind: String, code: String): JSONObject {
+        if (kind !in setOf("phone", "email") || !RecoveryRules.normalizedDigits(code).matches(Regex("[0-9]{6}")))
+            return JSONObject().put("ok", false).put("message", "أدخل رمز تحقق صحيحاً مكوّناً من 6 أرقام.")
+        val path = if (kind == "phone") "verify-phone.php" else "verify-email.php"
+        val csrf = RecoveryRules.csrf(htmlRequest(path).body)
+            ?: return JSONObject().put("ok", false).put("message", "تعذر تهيئة التحقق. أعد المحاولة.")
+        val result = readRecoveryRedirect(htmlRequest(path, mapOf(
+            "csrf" to csrf, "action" to "verify", "code" to RecoveryRules.normalizedDigits(code))))
+        val parsed = RecoveryRules.formMessage(result.body)
+        if (result.status !in 200..299 || parsed.isError)
+            return JSONObject().put("ok", false)
+                .put("message", parsed.text.ifBlank { "رمز التحقق غير صالح أو انتهت صلاحيته." })
+        val bootstrap = call("mobile/bootstrap.php")
+        if (!bootstrap.optBoolean("ok") && !bootstrap.has("message"))
+            bootstrap.put("message", "تحقق من الرمز ثم سجّل الدخول لإكمال تفعيل الحساب.")
+        return bootstrap
+    }
+
+    fun resendPending(kind: String): JSONObject {
+        if (kind !in setOf("phone", "email"))
+            return JSONObject().put("ok", false).put("message", "نوع التحقق غير صالح.")
+        val path = if (kind == "phone") "verify-phone.php" else "verify-email.php"
+        val csrf = RecoveryRules.csrf(htmlRequest(path).body)
+            ?: return JSONObject().put("ok", false).put("message", "تعذر تهيئة إعادة إرسال الرمز.")
+        val result = readRecoveryRedirect(htmlRequest(path, mapOf("csrf" to csrf, "action" to "resend")))
+        val parsed = RecoveryRules.formMessage(result.body)
+        if (result.status !in 200..299 || parsed.isError)
+            return JSONObject().put("ok", false)
+                .put("message", parsed.text.ifBlank { "تعذر إعادة إرسال رمز التحقق." })
+        return JSONObject().put("ok", true)
+            .put("message", parsed.text.ifBlank { "تم طلب رمز تحقق جديد." })
+    }
+
     private fun saveCookies() {
         try {
             val cookies = JSONArray()

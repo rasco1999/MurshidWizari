@@ -17,6 +17,7 @@ Target: feature parity with iOS **4.8.18**. Branch: **`android-native`**. Do not
 Use a dedicated **non-production student test account** and an administrator-approved test payment path. Never put credentials, CSRF, bearer tokens, photos, student identifiers or payment details in screenshots/logs/commits.
 
 - [ ] Login, verification, encrypted remembered session and fresh app process re-open; logout and HTTP 401 reset.
+- [ ] Register via email and via Iraqi mobile, including both genders/grades, test duplicate identifiers, enter a real 6-digit verification code and resend it once; verify bootstrap and remembered session only after server acceptance.
 - [ ] Edit a three-part name; confirm the returned account name and `bootstrap.user.name` agree immediately, and the one-time edit option disappears. Confirm normalisation of spaces/direction marks.
 - [ ] Upload JPEG, PNG and device-supported HEIC photos; check compression, EXIF orientation, immediate preview, server `avatar_revision` and unchanged image URL cache invalidation; remove photo and verify across devices.
 - [ ] Confirm free-remaining counts versus real server quotas, and subscribed access immediately after a voucher redemption.
