@@ -63,7 +63,7 @@ class MainActivity : Activity() {
     private fun base(title: String, showBack: Boolean = false) {
         window.statusBarColor = if (night) Color.rgb(28,35,48) else navy
         window.navigationBarColor = appColor
-        val scroll = ScrollView(this).apply { fillViewport = true; setBackgroundColor(appColor) }
+        val scroll = ScrollView(this).apply { isFillViewport = true; setBackgroundColor(appColor) }
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(24), dp(20), dp(35))
