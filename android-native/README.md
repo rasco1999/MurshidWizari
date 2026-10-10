@@ -14,8 +14,11 @@
 - Brand tokens aligned with the SwiftUI navy `#0B1F33`, blue `#2D6CDF`, gold `#F5B83D`; 17dp gradient/ripple buttons with press animation, profile gradient card and constrained centered width plus a two-column tablet home menu. Android 15 system-bar/display-cutout safe insets are applied.
 - Android validated connectivity callbacks, differentiated timeout/offline/security messages, explicit retry/restore remembered session and stale-session callback suppression. A rotated exam keeps the active in-memory answers.
 - Native password recovery based on the iOS HTML form contract: fetches same-origin CSRF safely, starts email/phone recovery, accepts the 64-character WhatsApp reset token, supports six-digit OTP + password confirmation, allows resend and clears login cookies on confirmed password change. No WebView or automatic re-submission after a timeout.
+- Interactive study plans (`mobile/study-plan.php`): list saved plans and create a server-backed plan with native day/target steppers matching iOS bounds; network-ambiguous creation is not automatically repeated.
+- Native school-advertisement request: school name, full ad text, 1–90-day stepper, confirmation, then an internal support message sent to `mobile/support.php`, with no repeated POST on ambiguous failure.
+- Favorite-question list now includes correct answers and explanations and allows removing an item through the existing question-tools endpoint.
 - Live unauthenticated read-only server checks: `mobile/bootstrap.php` and `mobile/account.php` returned HTTP 401 as expected; `api/grades.php` returned HTTP 200 with grade JSON. These are **not** authenticated integration tests.
-- JVM regression tests for question quality, answer progression and daily challenge payload/completion rules. GitHub Actions runs them before building the APK.
+- JVM regression tests for question quality, answer progression, challenge rules, account/network/recovery validation and study-plan/ad-request boundaries. GitHub Actions runs them before building the APK.
 - Correct Android back navigation and both object/string multiple-choice formats.
 - Debug APK build and artifact upload via GitHub Actions.
 

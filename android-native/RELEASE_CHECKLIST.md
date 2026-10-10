@@ -24,6 +24,9 @@ Use a dedicated **non-production student test account** and an administrator-app
 - [ ] Verify a successful administrator-approved test payment updates `bootstrap.subscribed`, remaining days and prediction access. Pending/failed/timeout must never locally unlock content.
 - [ ] Confirm all types of exams, correct-answer and explanation rendering, next/back navigation and prevention of duplicate deductions after a timed-out POST.
 - [ ] Challenge once per day (score/XP/quota), contest and seasonal rank, earned/locked achievements, and actual server changes on subsequent GET.
+- [ ] Create a 1-day/5-question and a 365-day/500-question study plan; confirm correct POST schema, persisted list and safe recovery after POST timeout (no duplicate creation).
+- [ ] Send a school-advertisement request (school/text/duration), check that the internal support inbox contains exactly one structured message and that uncertain submissions are not repeated.
+- [ ] Verify correct answers/explanations and server-side unfavorite removal in saved questions, including after returning to the screen.
 - [ ] Exercise registration, recovery, notifications, favorites, support, privacy/deletion flow and every remaining native iOS action.
 
 ## Device, connection and visual tests

@@ -217,6 +217,41 @@ class MainActivity : Activity() {
         return b
     }
 
+    /** Native stepper with the same ranges and increments as the SwiftUI controls. */
+    private fun stepper(label: String, initial: Int, min: Int, max: Int, step: Int,
+                        changed: (Int) -> Unit) {
+        var value = initial
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            background = shape(surface)
+        }
+        row.addView(TextView(this).apply {
+            text = label; textSize = 16f; setTextColor(textColor)
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        lateinit var valueText: TextView
+        val subtract = makeButton("−", secondary = true) {
+            value = (value - step).coerceAtLeast(min)
+            valueText.text = value.toString()
+            changed(value)
+        }
+        row.addView(subtract, LinearLayout.LayoutParams(dp(48), dp(44)))
+        valueText = TextView(this).apply {
+            text = value.toString(); textSize = 18f; typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER; setTextColor(textColor)
+        }
+        row.addView(valueText, LinearLayout.LayoutParams(dp(53), dp(46)))
+        val add = makeButton("+", secondary = true) {
+            value = (value + step).coerceAtMost(max)
+            valueText.text = value.toString()
+            changed(value)
+        }
+        row.addView(add, LinearLayout.LayoutParams(dp(48), dp(44)))
+        root.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+    }
+
     private fun homeActionGrid(vararg items: Pair<String, () -> Unit>) {
         val columns = if (resources.configuration.screenWidthDp >= 600) 2 else 1
         if (columns == 1) {
@@ -639,8 +674,10 @@ class MainActivity : Activity() {
         button("الإشعارات") { notificationsScreen() }
         button("المفضلة") { favoritesScreen() }
         button("راجع أخطاءك") { reviewScreen() }
+        button("خطة الدراسة") { studyPlanScreen() }
         button("غيّر جو • قصص") { storiesScreen() }
         button("الدعم والمراسلات") { supportScreen() }
+        button("إعلان مدرسة", secondary = true) { schoolAdScreen() }
         button("تفعيل رمز الاشتراك") { redeemScreen() }
         button("الباقات والأسعار") { plansScreen() }
         button("المرشحات", secondary = !subscribed) {
@@ -1451,6 +1488,8 @@ class MainActivity : Activity() {
                 button("تغيير الاسم الثلاثي (مرة واحدة)", secondary = true) { promptRename(profile.optString("name")) }
             }
             button("استعادة / تغيير كلمة المرور", secondary = true) { recoverScreen() }
+            button("خطة الدراسة", secondary = true) { studyPlanScreen() }
+            button("طلب إعلان مدرسة", secondary = true) { schoolAdScreen() }
             button("إدارة خصوصية الحساب", secondary = true) { deletionScreen(response) }
             button("سياسة الخصوصية", secondary = true) { external("https://mur-iq.com/privacy.php") }
         }
@@ -1516,15 +1555,130 @@ class MainActivity : Activity() {
     private fun favoritesScreen() {
         fetch("mobile/favorites.php") { response ->
             if (!response.optBoolean("ok")) return@fetch
+            activeScreen = "favorites"
             base("أسئلتي المفضلة", true)
             val items = response.optJSONArray("items") ?: JSONArray()
             for (i in 0 until items.length()) {
                 val item = items.optJSONObject(i) ?: continue
-                line(item.optString("question_text"))
+                line(item.optString("question_text"), true)
+                if (item.optString("correct_answer").isNotBlank())
+                    caption("الإجابة الصحيحة: " + item.optString("correct_answer"))
+                if (item.optString("explanation").isNotBlank())
+                    caption("الشرح: " + item.optString("explanation"))
                 caption(item.optString("subject_name") + " • " + item.optString("chapter_name"))
+                val id = item.optInt("id", item.optInt("question_id"))
+                if (id > 0) {
+                    val remove = button("إزالة من المفضلة", secondary = true) {}
+                    remove.setOnClickListener {
+                        remove.isEnabled = false
+                        fetch("api/question-tools.php", JSONObject().put("csrf", csrf)
+                            .put("question_id", id).put("action", "unfavorite")) { result ->
+                            if (result.optBoolean("ok")) favoritesScreen() else remove.isEnabled = true
+                        }
+                    }
+                }
             }
             if (items.length() == 0) caption("لا توجد أسئلة محفوظة.")
         }
+    }
+
+    private fun studyPlanScreen() {
+        activeScreen = "study_plan"
+        base("خطة الدراسة", true)
+        line("جارٍ تحميل خططك الدراسية…")
+        fetch("mobile/study-plan.php") { response ->
+            if (activeScreen != "study_plan") return@fetch
+            if (response.optBoolean("ok")) renderStudyPlans(response.optJSONArray("plans") ?: JSONArray())
+            else {
+                base("خطة الدراسة", true)
+                line("تعذر عرض خططك حالياً.")
+                button("إعادة المحاولة") { studyPlanScreen() }
+            }
+        }
+    }
+
+    private fun renderStudyPlans(plans: JSONArray, notice: String = "") {
+        activeScreen = "study_plan"
+        base("خطة الدراسة", true)
+        line("خطة جديدة", true)
+        val planName = input("اسم الخطة").apply { setText("خطتي الوزارية") }
+        var days = 30
+        var target = 20
+        stepper("المدة (يوم)", days, 1, 365, 1) { days = it }
+        stepper("الهدف اليومي (سؤال)", target, 5, 500, 5) { target = it }
+        val create = button("إنشاء الخطة") {}
+        create.setOnClickListener {
+            val title = planName.text.toString().trim()
+            val issue = StudyRules.planError(title, days, target)
+            if (issue != null) { message(issue); return@setOnClickListener }
+            create.isEnabled = false
+            create.text = "جارٍ إنشاء الخطة…"
+            fetch("mobile/study-plan.php", JSONObject().put("csrf", csrf).put("title", title)
+                .put("days", days).put("target", target)) { result ->
+                if (activeScreen != "study_plan") return@fetch
+                if (result.optBoolean("ok")) {
+                    val updated = result.optJSONArray("plans")
+                    if (updated != null) renderStudyPlans(updated, "تم إنشاء الخطة.")
+                    else studyPlanScreen()
+                } else if (result.optBoolean("network_error")) {
+                    create.text = "حالة الإنشاء غير مؤكدة"
+                    message("قد يكون الخادم أنشأ الخطة. افحص خططك قبل محاولة إنشائها مجدداً.")
+                } else {
+                    create.isEnabled = true
+                    create.text = "إنشاء الخطة"
+                }
+            }
+        }
+        if (notice.isNotBlank()) line(notice)
+        gap(12)
+        line("خططي", true)
+        if (plans.length() == 0) caption("لم تُنشأ أي خطة دراسية بعد.")
+        for (i in 0 until plans.length()) {
+            val plan = plans.optJSONObject(i) ?: continue
+            line(plan.optString("title"), true)
+            caption(plan.optString("start_date") + " ← " + plan.optString("end_date") +
+                " • " + plan.optInt("daily_target") + " سؤال/يوم")
+        }
+        button("تحديث الخطط", secondary = true) { studyPlanScreen() }
+    }
+
+    private fun schoolAdScreen() {
+        activeScreen = "school_ad"
+        base("طلب إعلان مدرسة", true)
+        caption("يرسل طلبك إلى إدارة المنصة، ويشمل اسم المدرسة والإعلان ومدة عرضه.")
+        val school = input("اسم المدرسة")
+        val advertisement = input("الإعلان الكامل", multiline = true)
+        var days = 1
+        stepper("مدة الإعلان (يوم)", days, 1, 90, 1) { days = it }
+        val send = button("إرسال الطلب إلى الإدارة") {}
+        send.setOnClickListener {
+            val schoolName = school.text.toString().trim()
+            val text = advertisement.text.toString().trim()
+            val issue = StudyRules.schoolAdError(schoolName, text, days)
+            if (issue != null) { message(issue); return@setOnClickListener }
+            val content = StudyRules.schoolAdMessage(schoolName, text, days, student.optString("name"))
+            AlertDialog.Builder(this).setTitle("تأكيد طلب الإعلان")
+                .setMessage("إرسال طلب إعلان مدرسة $schoolName لمدة $days يوم إلى الإدارة؟")
+                .setPositiveButton("إرسال") { _, _ ->
+                    send.isEnabled = false
+                    send.text = "جارٍ إرسال الطلب…"
+                    fetch("mobile/support.php", JSONObject().put("csrf", csrf).put("message", content)) { result ->
+                        if (activeScreen != "school_ad") return@fetch
+                        if (result.optBoolean("ok")) {
+                            advertisement.setText("")
+                            send.text = "تم إرسال الطلب"
+                            message("تم إرسال طلب الإعلان إلى الإدارة بنجاح.")
+                        } else if (result.optBoolean("network_error")) {
+                            send.text = "حالة الإرسال غير مؤكدة"
+                            message("قد يكون الطلب وصل. تحقق من مراسلات الدعم قبل إرساله ثانية.")
+                        } else {
+                            send.isEnabled = true
+                            send.text = "إرسال الطلب إلى الإدارة"
+                        }
+                    }
+                }.setNegativeButton("إلغاء", null).show()
+        }
+        button("مراجعة مراسلات الدعم", secondary = true) { supportScreen() }
     }
 
     private fun reviewScreen() {
