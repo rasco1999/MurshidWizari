@@ -49,6 +49,8 @@ class ApiClient(context: Context) {
         }
     }
 
+    fun hasRememberedSession(): Boolean = remember && cookieManager.cookieStore.get(origin).isNotEmpty()
+
     fun setRemember(enabled: Boolean) {
         remember = enabled
         if (enabled) saveCookies() else prefs.edit().remove("cookies").apply()
