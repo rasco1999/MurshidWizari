@@ -12,6 +12,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.text.InputType
+import android.text.Editable
+import android.text.TextWatcher
 import android.text.method.HideReturnsTransformationMethod
 import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
@@ -43,6 +45,25 @@ class MainActivity : Activity() {
     private var submissionUncertain = false
     private var activeScreen = "login"
     private var subscribed = false
+    private val competitionHistory = ArrayDeque<String>()
+    private var dailyQuestions = emptyList<CompetitionRules.Question>()
+    private val dailyAnswers = LinkedHashMap<Int, String>()
+    private var dailyAvailable = true
+    private var dailyDone = false
+    private var dailyBusy = false
+    private var dailyUncertain = false
+    private var dailyQuotaBlocked = false
+    private var dailyScore = 0
+    private var dailyTotal = 0
+    private var dailyReward = 0
+    private var dailyStatusMessage = ""
+    private var contest = JSONObject()
+    private var season = JSONObject()
+    private var contestMode = "contest"
+    private var contestShowAll = false
+    private var achievements = JSONArray()
+    private var achievementStats = JSONObject()
+    private var achievementFilter = "all"
     private var night = false
     private val prefs by lazy { getSharedPreferences("native_preferences", MODE_PRIVATE) }
     private val gold = Color.rgb(205,151,40)
@@ -147,7 +168,8 @@ class MainActivity : Activity() {
             main.post {
                 if (showError && !result.optBoolean("ok")) {
                     if (result.optBoolean("session_expired")) {
-                        api.clear(); csrf = ""; busyAnswer = false; submissionUncertain = false; loginScreen()
+                        api.clear(); csrf = ""; busyAnswer = false; submissionUncertain = false
+                        dailyBusy = false; dailyUncertain = false; loginScreen()
                         message("انتهت جلسة الدخول. سجّل الدخول مجدداً.")
                         return@post
                     }
@@ -427,6 +449,7 @@ class MainActivity : Activity() {
 
     private fun showHome(response: JSONObject) {
         if (!response.optBoolean("ok")) { loginScreen(); return }
+        competitionHistory.clear()
         homepage = response; csrf = response.optString("csrf", csrf)
         student = response.optJSONObject("user") ?: JSONObject()
         subscribed = response.optBoolean("subscribed")
@@ -443,6 +466,9 @@ class MainActivity : Activity() {
         caption("المستوى " + stats.optInt("level",1) + " • نقاط XP " + stats.optInt("xp",0) +
             " • الإجابات الصحيحة " + stats.optInt("correct_answers",0))
         button("المواد الدراسية والاختبارات") { subjectsScreen() }
+        button("تحدي اليوم • أجب واربح XP") { openCompetition("daily_challenge") }
+        button("تحدي المليون • الترتيب والمنافسة") { openCompetition("contest") }
+        button("إنجازاتي • الشارات والمستوى") { openCompetition("achievements") }
         button("حسابي") { accountScreen() }
         button("الإشعارات") { notificationsScreen() }
         button("المفضلة") { favoritesScreen() }
@@ -1150,8 +1176,337 @@ class MainActivity : Activity() {
         }
     }
 
+    // The native equivalents of iOS Daily Challenge, Million Contest and Achievements.
+    // The server alone grades challenge answers and awards XP/badges.
+    private fun openCompetition(screen: String) {
+        if (activeScreen != screen) competitionHistory.addLast(activeScreen)
+        when (screen) {
+            "daily_challenge" -> loadDailyChallenge()
+            "contest" -> loadContest()
+            "achievements" -> loadAchievements()
+        }
+    }
+
+    private fun parseDailyQuestions(rows: JSONArray): List<CompetitionRules.Question> =
+        (0 until rows.length()).mapNotNull { i ->
+            val row = rows.optJSONObject(i) ?: return@mapNotNull null
+            val options = row.optJSONArray("options") ?: JSONArray()
+            CompetitionRules.Question(
+                id = row.optInt("id"),
+                type = row.optString("type", "text"),
+                text = row.optString("question_text").ifBlank { row.optString("text") },
+                options = (0 until options.length()).map { j ->
+                    val option = options.optJSONObject(j)
+                    if (option != null) option.optString("answer_text").ifBlank { option.optString("text") }
+                    else options.optString(j)
+                }
+            )
+        }
+
+    private fun loadDailyChallenge() {
+        activeScreen = "daily_challenge"
+        base("تحدي اليوم", true)
+        caption("جارٍ تحميل أسئلة التحدي ونتيجتك من الخادم…")
+        fetch("mobile/challenge.php") { response ->
+            if (activeScreen != "daily_challenge" || !response.optBoolean("ok")) return@fetch
+            csrf = response.optString("csrf", csrf)
+            dailyAvailable = ExamRules.knownBoolean(response.opt("available")) ?: true
+            dailyDone = ExamRules.knownBoolean(response.opt("done")) == true
+            dailyQuotaBlocked = response.optBoolean("quota_blocked") || response.optBoolean("payment_required")
+            dailyScore = response.optInt("score")
+            dailyTotal = response.optInt("total")
+            dailyReward = response.optInt("reward")
+            dailyQuestions = parseDailyQuestions(response.optJSONArray("questions") ?: JSONArray())
+            dailyAnswers.keys.retainAll(dailyQuestions.map { it.id }.toSet())
+            dailyUncertain = false // A successful GET reconciles any uncertain POST.
+            dailyStatusMessage = ""
+            renderDailyChallenge()
+        }
+    }
+
+    private fun renderDailyChallenge() {
+        activeScreen = "daily_challenge"
+        base("تحدي اليوم", true)
+        line(if (dailyDone) "أكملت تحدي اليوم!" else "خمسة دقائق تصنع فرقاً", true)
+        caption("أجب عن جميع أسئلة صفك ثم سلّم التحدي مرة واحدة. الخادم يحسب النتيجة والنقاط.")
+        if (!dailyAvailable) {
+            line("لا يوجد تحدٍ متاح الآن.")
+            button("تحديث التحدي", secondary = true) { loadDailyChallenge() }
+            return
+        }
+        if (dailyDone) {
+            line("نتيجتك: $dailyScore / $dailyTotal", true)
+            if (dailyReward > 0) line("المكافأة الممنوحة: +$dailyReward XP")
+            caption("تظهر مكافأتك وإنجازاتك بعد تحديث البيانات من الخادم.")
+            button("عرض ترتيبي في تحدي المليون") { openCompetition("contest") }
+            button("متابعة إنجازاتي") { openCompetition("achievements") }
+            button("تحديث النتيجة", secondary = true) { loadDailyChallenge() }
+            return
+        }
+        if (dailyQuotaBlocked) {
+            line("انتهى رصيدك المجاني للتحدي. لن يُعاد إرسال أي إجابة قبل تفعيل الاشتراك.")
+            button("تفعيل رمز اشتراك") { redeemScreen() }
+            button("إعادة التحقق من الرصيد", secondary = true) { loadDailyChallenge() }
+            return
+        }
+        val issue = CompetitionRules.issue(dailyQuestions)
+        if (issue != null) {
+            line("لا يمكن تقديم تحدٍ غير مكتمل: $issue")
+            button("إعادة تحميل الأسئلة") { loadDailyChallenge() }
+            button("مراسلة الدعم", secondary = true) { supportScreen() }
+            return
+        }
+        if (dailyUncertain) {
+            line("تعذر التأكد من حفظ التحدي. قد تكون الإجابات وصلت رغم انقطاع الاتصال.")
+            caption("تحقق من الخادم أولاً؛ لن تُرسل إجاباتك مرة ثانية تلقائياً.")
+            button("التحقق من حالة التحدي") { loadDailyChallenge() }
+            return
+        }
+        for ((index, question) in dailyQuestions.withIndex()) {
+            caption("السؤال ${index + 1} من ${dailyQuestions.size}")
+            line(question.text, true)
+            val choices = question.choices()
+            if (choices.isNotEmpty()) {
+                val group = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
+                val ids = HashMap<Int, String>()
+                for (choice in choices) {
+                    val radio = RadioButton(this).apply {
+                        id = View.generateViewId()
+                        text = choice
+                        textSize = 16f
+                        setTextColor(textColor)
+                        isChecked = dailyAnswers[question.id] == choice
+                        setPadding(dp(4), dp(5), dp(4), dp(5))
+                    }
+                    ids[radio.id] = choice
+                    group.addView(radio)
+                }
+                group.setOnCheckedChangeListener { _, selected ->
+                    ids[selected]?.let { dailyAnswers[question.id] = it }
+                }
+                root.addView(group)
+            } else {
+                val field = input("اكتب إجابتك هنا", multiline = true)
+                field.setText(dailyAnswers[question.id].orEmpty())
+                field.addTextChangedListener(object : TextWatcher {
+                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                        dailyAnswers[question.id] = s?.toString().orEmpty()
+                    }
+                    override fun afterTextChanged(s: Editable?) = Unit
+                })
+            }
+            gap(8)
+        }
+        val submit = button(if (dailyBusy) "جارٍ التصحيح…" else "إنهاء تحدي اليوم") {
+            if (!CompetitionRules.canSubmit(dailyQuestions, dailyAnswers, dailyAvailable, dailyDone,
+                    dailyBusy, dailyUncertain)) {
+                message("أكمل كل أسئلة التحدي قبل التسليم.")
+            } else {
+                AlertDialog.Builder(this).setTitle("تسليم تحدي اليوم")
+                    .setMessage("سيتم إرسال إجابات جميع الأسئلة دفعة واحدة للتصحيح. هل أنت مستعد؟")
+                    .setPositiveButton("إرسال وتصحيح") { _, _ -> submitDailyChallenge() }
+                    .setNegativeButton("إلغاء", null).show()
+            }
+        }
+        submit.isEnabled = !dailyBusy
+        if (dailyStatusMessage.isNotBlank()) caption(dailyStatusMessage)
+        button("تحديث التحدي", secondary = true) { if (!dailyBusy) loadDailyChallenge() }
+    }
+
+    private fun submitDailyChallenge() {
+        if (dailyQuotaBlocked) return
+        if (!CompetitionRules.canSubmit(dailyQuestions, dailyAnswers, dailyAvailable, dailyDone,
+                dailyBusy, dailyUncertain)) return
+        if (csrf.isBlank()) { message("انتهت الجلسة. حدّث التحدي أولاً."); return }
+        dailyBusy = true
+        val answerObject = JSONObject()
+        CompetitionRules.submission(dailyQuestions, dailyAnswers).forEach { (id, answer) ->
+            answerObject.put(id, answer)
+        }
+        val payload = JSONObject().put("csrf", csrf).put("answers", answerObject)
+        renderDailyChallenge()
+        fetch("mobile/challenge.php", payload, showError = true) { response ->
+            dailyBusy = false
+            if (response.optBoolean("quota_blocked") || response.optBoolean("payment_required")) {
+                dailyStatusMessage = "انتهى رصيدك المجاني أثناء التحدي. يمكنك تفعيل الاشتراك والمتابعة."
+                dailyUncertain = false
+                dailyQuotaBlocked = true
+                if (activeScreen == "daily_challenge") renderDailyChallenge()
+                return@fetch
+            }
+            if (!response.optBoolean("ok")) {
+                dailyUncertain = true
+                if (activeScreen == "daily_challenge") renderDailyChallenge()
+                return@fetch
+            }
+            dailyDone = ExamRules.knownBoolean(response.opt("done")) == true
+            dailyScore = response.optInt("score", dailyScore)
+            dailyTotal = response.optInt("total", dailyTotal)
+            dailyReward = response.optInt("reward", dailyReward)
+            if (!dailyDone) {
+                // An accepted POST without a completion receipt must be reconciled.
+                dailyUncertain = true
+                dailyStatusMessage = "استجاب الخادم دون تأكيد إنهاء التحدي. تحقق من حالته."
+            } else {
+                dailyStatusMessage = ""
+                fetch("mobile/challenge.php", showError = false) { latest ->
+                    if (latest.optBoolean("ok") && ExamRules.knownBoolean(latest.opt("done")) == true) {
+                        dailyScore = latest.optInt("score", dailyScore)
+                        dailyTotal = latest.optInt("total", dailyTotal)
+                        dailyReward = latest.optInt("reward", dailyReward)
+                        if (activeScreen == "daily_challenge") renderDailyChallenge()
+                    }
+                }
+                fetch("mobile/bootstrap.php", showError = false) { updated ->
+                    if (updated.optBoolean("ok")) {
+                        homepage = updated
+                        student = updated.optJSONObject("user") ?: student
+                        csrf = updated.optString("csrf", csrf)
+                        subscribed = updated.optBoolean("subscribed", subscribed)
+                    }
+                }
+            }
+            if (activeScreen == "daily_challenge") renderDailyChallenge()
+        }
+    }
+
+    private fun loadContest() {
+        activeScreen = "contest"
+        base("تحدي المليون", true)
+        caption("جارٍ تحميل ترتيبك والمتصدرين…")
+        fetch("mobile/contest.php") { first ->
+            if (activeScreen != "contest" || !first.optBoolean("ok")) return@fetch
+            contest = first
+            fetch("mobile/season.php", showError = false) { second ->
+                if (activeScreen != "contest") return@fetch
+                season = if (second.optBoolean("ok")) second else JSONObject()
+                renderContest()
+            }
+        }
+    }
+
+    private fun renderContest() {
+        activeScreen = "contest"
+        base("تحدي المليون", true)
+        caption("الترتيب يُحتسب في الخادم من نقاط XP والإجابات الصحيحة ضمن فترة التحدي.")
+        val mine = contest.optJSONObject("mine")
+        val active = ExamRules.knownBoolean(contest.optJSONObject("config")?.opt("active"))
+        line(when (active) { true -> "حالة المنافسة: نشطة"; false -> "حالة المنافسة: غير نشطة حالياً"; null -> "حالة المنافسة: غير محددة" })
+        if (mine == null) line("أجب عن أسئلة المنصة لتدخل الترتيب.") else {
+            line("مركزك: #${mine.optInt("rank")}", true)
+            caption("${mine.optInt("xp")} XP • ${mine.optInt("correct")} إجابة صحيحة")
+        }
+        button(if (contestMode == "contest") "● تحدي المليون" else "تحدي المليون") {
+            contestMode = "contest"; contestShowAll = false; renderContest()
+        }
+        button(if (contestMode == "season") "● ترتيب الموسم" else "ترتيب الموسم", secondary = true) {
+            contestMode = "season"; contestShowAll = false; renderContest()
+        }
+        val data = if (contestMode == "contest") contest else season
+        val ranking = data.optJSONArray("leaderboard") ?: JSONArray()
+        line(if (contestMode == "contest") "متصدرو تحدي المليون" else "متصدرو الموسم", true)
+        if (contestMode == "season" && season.length() == 0)
+            caption("تعذر تحميل ترتيب الموسم الآن. حدّث الصفحة لاحقاً.")
+        if (ranking.length() == 0) caption("لم تُنشر مراكز لهذا الترتيب حتى الآن.")
+        val limit = if (contestShowAll) ranking.length() else minOf(ranking.length(), 10)
+        for (i in 0 until limit) {
+            val row = ranking.optJSONObject(i) ?: continue
+            val rank = row.optInt("rank")
+            val name = row.optString("name", "طالب")
+            val xp = row.optInt("xp")
+            button("#$rank • $name • $xp XP", secondary = true) {
+                AlertDialog.Builder(this).setTitle("المركز #$rank — $name")
+                    .setMessage(buildString {
+                        if (row.optString("grade").isNotBlank()) append("الصف: ${row.optString("grade")}\n")
+                        append("النقاط: $xp XP")
+                        if (row.has("correct")) append("\nالإجابات الصحيحة: ${row.optInt("correct")}")
+                    })
+                    .setPositiveButton("حسناً", null).show()
+            }
+        }
+        if (ranking.length() > 10) button(if (contestShowAll) "عرض أول 10 مراكز" else "عرض جميع المراكز", secondary = true) {
+            contestShowAll = !contestShowAll; renderContest()
+        }
+        button("شارك في تحدي اليوم") { openCompetition("daily_challenge") }
+        button("اجمع نقاطاً بحل الأسئلة") { subjectsScreen() }
+        button("تابع إنجازاتك") { openCompetition("achievements") }
+        button("تحديث الترتيب", secondary = true) { loadContest() }
+    }
+
+    private fun loadAchievements() {
+        activeScreen = "achievements"
+        base("الإنجازات", true)
+        caption("جارٍ تحميل المستوى والشارات من حسابك…")
+        fetch("mobile/achievements.php") { response ->
+            if (activeScreen != "achievements" || !response.optBoolean("ok")) return@fetch
+            achievements = response.optJSONArray("achievements") ?: JSONArray()
+            achievementStats = response.optJSONObject("stats") ?: JSONObject()
+            renderAchievements()
+        }
+    }
+
+    private fun isEarned(item: JSONObject): Boolean =
+        !item.isNull("earned_at") && item.optString("earned_at").isNotBlank()
+
+    private fun renderAchievements() {
+        activeScreen = "achievements"
+        base("إنجازاتي", true)
+        val earned = (0 until achievements.length()).count { i ->
+            achievements.optJSONObject(i)?.let(::isEarned) == true
+        }
+        line("المستوى ${achievementStats.optInt("level", 1)} • ${achievementStats.optInt("xp")} XP", true)
+        caption("الشارات المكتسبة: $earned من ${achievements.length()}")
+        button(if (achievementFilter == "all") "● جميع الشارات" else "جميع الشارات", secondary = true) {
+            achievementFilter = "all"; renderAchievements()
+        }
+        button(if (achievementFilter == "earned") "● المكتسبة" else "المكتسبة", secondary = true) {
+            achievementFilter = "earned"; renderAchievements()
+        }
+        button(if (achievementFilter == "locked") "● غير المكتسبة" else "غير المكتسبة", secondary = true) {
+            achievementFilter = "locked"; renderAchievements()
+        }
+        var shown = 0
+        for (i in 0 until achievements.length()) {
+            val item = achievements.optJSONObject(i) ?: continue
+            val unlocked = isEarned(item)
+            if (achievementFilter == "earned" && !unlocked || achievementFilter == "locked" && unlocked) continue
+            shown++
+            val name = item.optString("title", "إنجاز")
+            val description = item.optString("description")
+            button((if (unlocked) "🏆 " else "🔒 ") + name, secondary = !unlocked) {
+                AlertDialog.Builder(this).setTitle(name)
+                    .setMessage(buildString {
+                        append(description.ifBlank { "لم تُضف تفاصيل لهذا الإنجاز." })
+                        append("\n\n")
+                        append(if (unlocked) "مكتسب في: ${item.optString("earned_at")}" else "لم تحصل عليه بعد.")
+                        if (item.has("target") && item.optInt("target") > 0 && item.has("progress"))
+                            append("\nالتقدم: ${item.optInt("progress")} / ${item.optInt("target")}")
+                    })
+                    .setPositiveButton("إغلاق", null)
+                    .setNeutralButton(if (unlocked) "عرض الترتيب" else "ابدأ التحدي") { _, _ ->
+                        openCompetition(if (unlocked) "contest" else "daily_challenge")
+                    }.show()
+            }
+            if (description.isNotBlank()) caption(description)
+        }
+        if (shown == 0) caption(if (achievements.length() == 0) "لم يرسل الخادم إنجازات بعد." else "لا توجد شارات ضمن هذا التصنيف.")
+        button("تحدي اليوم • حقق إنجازاً جديداً") { openCompetition("daily_challenge") }
+        button("أكمل اختباراتك") { subjectsScreen() }
+        button("تحديث الإنجازات", secondary = true) { loadAchievements() }
+    }
+
     private fun navigateBack() {
         when (activeScreen) {
+            "daily_challenge", "contest", "achievements" -> {
+                val previous = if (competitionHistory.isEmpty()) "home" else competitionHistory.removeLast()
+                when (previous) {
+                    "daily_challenge" -> loadDailyChallenge()
+                    "contest" -> loadContest()
+                    "achievements" -> loadAchievements()
+                    else -> showHome(homepage)
+                }
+            }
             "exam" -> topicsScreen(topicsSubjectId, topicsSubjectName)
             "topics" -> subjectsScreen()
             "subjects" -> showHome(homepage)
