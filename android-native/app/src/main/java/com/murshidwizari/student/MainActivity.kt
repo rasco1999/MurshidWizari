@@ -147,6 +147,8 @@ class MainActivity : Activity() {
                 if (showError && !result.optBoolean("ok")) {
                     if (result.optBoolean("session_expired")) {
                         api.clear(); csrf = ""; loginScreen()
+                        message("انتهت جلسة الدخول. سجّل الدخول مجدداً.")
+                        return@post
                     }
                     message(result.optString("message", "تعذر تنفيذ الطلب."))
                 }
