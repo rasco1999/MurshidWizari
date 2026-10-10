@@ -71,7 +71,7 @@ private fun SubscriptionScreen(vm: MurshidViewModel) {
             items(plans) { p ->
                 MurshidCard(Modifier.clickable { plan = p.id }) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(selected = plan == p.id, onClick = { plan = p.label })
+                        RadioButton(selected = plan == p.id, onClick = { plan = p.id })
                         Column(Modifier.weight(1f)) {
                             Text(p.label, fontWeight = FontWeight.Bold)
                             Text("${p.amount} دينار عراقي", color = MaterialTheme.colorScheme.onSurfaceVariant)
