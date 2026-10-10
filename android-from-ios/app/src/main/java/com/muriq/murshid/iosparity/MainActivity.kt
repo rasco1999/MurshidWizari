@@ -154,7 +154,7 @@ fun AppShell(vm: MurshidViewModel) {
                 }
                 Screen.LOGIN -> LoginScreen(vm)
                 Screen.REGISTER -> RegisterScreen(vm)
-                Screen.RECOVER -> RecoveryScreen()
+                Screen.RECOVER -> RecoveryScreen(vm)
                 Screen.VERIFY -> VerificationScreen(vm)
                 Screen.MAIN -> when (vm.tab) {
                     0 -> DashboardScreen(vm)
@@ -448,16 +448,47 @@ private fun VerificationScreen(vm: MurshidViewModel) {
 }
 
 @Composable
-private fun RecoveryScreen() {
-    val ctx = LocalContext.current
-    Column(
-        Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
-    ) {
-        SectionTitle("الحساب", "استعادة كلمة المرور",
-            "استخدم إجراء استعادة الحساب الرسمي للتحقق من ملكية البريد أو الهاتف.")
-        PrimaryAction("فتح استعادة الحساب") {
-            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.mur-iq.com/forgot-password.php")))
+private fun RecoveryScreen(vm: MurshidViewModel) {
+    var identifier by rememberSaveable { mutableStateOf("") }
+    var code by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var confirm by rememberSaveable { mutableStateOf("") }
+    var showPassword by rememberSaveable { mutableStateOf(false) }
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        item { SectionTitle("الحساب", "استعادة كلمة المرور", "الاستعادة الآمنة بالبريد أو WhatsApp.") }
+        if (vm.recoveryToken.isBlank() && !vm.recoveryEmailSent) item {
+            MurshidCard {
+                OutlinedTextField(identifier, { identifier = it }, label = { Text("البريد أو رقم الهاتف المسجل") },
+                    singleLine = true, modifier = Modifier.fillMaxWidth())
+                PrimaryAction("طلب الاستعادة", { vm.beginRecovery(identifier) },
+                    enabled = identifier.isNotBlank() && !vm.loading)
+            }
         }
+        if (vm.recoveryToken.isNotBlank()) item {
+            MurshidCard {
+                Text("التحقق عبر WhatsApp", fontWeight = FontWeight.Bold)
+                OutlinedTextField(code, { code = it.filter(Char::isDigit).take(6) },
+                    label = { Text("رمز التحقق (6 أرقام)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(password, { password = it }, label = { Text("كلمة المرور الجديدة") },
+                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(confirm, { confirm = it }, label = { Text("تأكيد كلمة المرور") },
+                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth())
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("إظهار كلمة المرور", modifier = Modifier.weight(1f))
+                    Switch(showPassword, onCheckedChange = { showPassword = it })
+                }
+                PrimaryAction("تغيير كلمة المرور", { vm.finishRecovery(code, password, confirm) },
+                    enabled = !vm.loading && code.length == 6 && password.length >= 8 && password == confirm)
+                SecondaryAction("إعادة إرسال الرمز", vm::resendRecovery)
+            }
+        }
+        if (vm.recoveryFeedback.isNotBlank()) item { MurshidCard { Text(vm.recoveryFeedback) } }
+        if (vm.recoveryEmailSent) item { Text("افتح رابط الاستعادة من بريدك، ثم سجّل الدخول.") }
+        item { SecondaryAction("العودة لتسجيل الدخول", vm::showLogin) }
     }
 }

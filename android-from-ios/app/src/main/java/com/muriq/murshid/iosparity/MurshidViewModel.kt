@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.muriq.murshid.iosparity.data.*
 import com.muriq.murshid.iosparity.net.ApiProblem
 import com.muriq.murshid.iosparity.net.MurshidApi
+import com.muriq.murshid.iosparity.net.PasswordRecovery
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -38,6 +39,13 @@ enum class Feature(val title: String, val endpoint: String) {
  */
 class MurshidViewModel(app: Application) : AndroidViewModel(app) {
     val api = MurshidApi(app.applicationContext)
+    private val recovery = PasswordRecovery()
+    var recoveryToken by mutableStateOf("")
+        private set
+    var recoveryFeedback by mutableStateOf("")
+        private set
+    var recoveryEmailSent by mutableStateOf(false)
+        private set
     private val prefs = app.getSharedPreferences("murshid_compose_preferences", 0)
     var appearance by mutableStateOf(prefs.getString("appearance", "system") ?: "system")
         private set
@@ -95,7 +103,59 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
     fun showGuest() { screen = Screen.GUEST }
     fun showLogin() { screen = Screen.LOGIN; clearMessage() }
     fun showRegister() { screen = Screen.REGISTER; clearMessage(); loadGrades() }
-    fun showRecovery() { screen = Screen.RECOVER; clearMessage() }
+    fun showRecovery() {
+        recoveryToken = ""
+        recoveryFeedback = ""
+        recoveryEmailSent = false
+        screen = Screen.RECOVER
+        clearMessage()
+    }
+
+    fun beginRecovery(identifier: String) {
+        if (loading || identifier.isBlank()) return
+        viewModelScope.launch {
+            loading = true
+            try {
+                val result = recovery.begin(identifier)
+                recoveryToken = result.phoneToken.orEmpty()
+                recoveryEmailSent = result.phoneToken == null
+                recoveryFeedback = result.message
+            } catch (error: Exception) {
+                recoveryFeedback = error.message ?: "تعذر الاتصال بخدمة الاستعادة."
+            } finally { loading = false }
+        }
+    }
+
+    fun resendRecovery() {
+        val token = recoveryToken
+        if (loading || token.isBlank()) return
+        viewModelScope.launch {
+            loading = true
+            try { recoveryFeedback = recovery.resend(token) }
+            catch (error: Exception) { recoveryFeedback = error.message ?: "تعذر إعادة الإرسال." }
+            finally { loading = false }
+        }
+    }
+
+    fun finishRecovery(code: String, password: String, confirm: String) {
+        val token = recoveryToken
+        if (loading || token.isBlank()) return
+        viewModelScope.launch {
+            loading = true
+            try {
+                val success = recovery.finish(token, code, password, confirm)
+                api.clearSession()
+                dashboard = null
+                recoveryToken = ""
+                recoveryFeedback = ""
+                recoveryEmailSent = false
+                screen = Screen.LOGIN
+                message = success
+            } catch (error: Exception) {
+                recoveryFeedback = error.message ?: "تعذر تغيير كلمة المرور."
+            } finally { loading = false }
+        }
+    }
 
     private fun fail(error: Throwable) {
         if (error is ApiProblem && error.sessionExpired) {
