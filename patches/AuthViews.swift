@@ -990,7 +990,7 @@ struct RegisterView: View {
                         .disabled(loading || gradesLoading)
                         .opacity((loading || gradesLoading) ? 0.62 : 1)
 
-                        Text("نسخة iPhone 4.2 • Build 420")
+                        Text("نسخة iPhone 4.2.1 • Build 421")
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.tertiary)
                             .frame(maxWidth: .infinity, alignment: .center)
@@ -1726,7 +1726,10 @@ struct MainV3TabView: View {
                 .tag(2)
 
             NavigationStack { V3AccountView() }
-                .tabItem { Label("حسابي", systemImage: "person.crop.circle.fill") }
+                .tabItem {
+                    if let image = app.avatarTabImage { Image(uiImage: image); Text("حسابي") }
+                    else { Label("حسابي", systemImage: "person.crop.circle.fill") }
+                }
                 .tag(3)
         }
         .tint(.murshidBlue)
@@ -2521,7 +2524,7 @@ struct V3ContestView: View {
     private var myRankCard: some View {
         MurshidCard {
             HStack(spacing: 14) {
-                Image(systemName: "person.crop.circle.badge.checkmark").font(.largeTitle).foregroundStyle(Color.murshidBlue)
+                V3RankingAvatar(url: jString((contest["mine"] as? JSON)?["avatar_url"], default: appAvatarURL), size: 54)
                 VStack(alignment: .leading, spacing: 5) {
                     Text("مركزك الحالي").font(.subheadline).foregroundStyle(.secondary)
                     if let mine = contest["mine"] as? JSON {
@@ -2539,6 +2542,8 @@ struct V3ContestView: View {
         }
     }
 
+    private var appAvatarURL: String { AppSession.shared.avatarURL }
+
     private func leaderboard(title: String, rows: [JSON], rankKey: String, xpKey: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             V3SectionHeader(title: title, subtitle: rows.isEmpty ? "لا توجد بيانات بعد" : "أعلى المراكز", icon: "list.number")
@@ -2549,6 +2554,7 @@ struct V3ContestView: View {
                     MurshidCard {
                         HStack(spacing: 12) {
                             Text("#\(jInt(row[rankKey]))").font(.headline.monospacedDigit()).foregroundStyle(Color.murshidBlue).frame(width: 42)
+                            V3RankingAvatar(url: jString(row["avatar_url"]), size: 40)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(jString(row["name"])).font(.headline)
                                 if !jString(row["grade"]).isEmpty { Text(jString(row["grade"])).font(.caption).foregroundStyle(.secondary) }
@@ -2571,6 +2577,25 @@ struct V3ContestView: View {
         } catch {
             await MainActor.run { loading = false; self.error = error.localizedDescription }
         }
+    }
+}
+
+private struct V3RankingAvatar: View {
+    let url: String
+    let size: CGFloat
+    var body: some View {
+        Group {
+            if let parsed = URL(string: url), parsed.scheme == "https" {
+                AsyncImage(url: parsed) { phase in
+                    if case .success(let image) = phase { image.resizable().scaledToFill() }
+                    else { Image(systemName: "person.crop.circle.fill").resizable().foregroundStyle(.secondary) }
+                }
+            } else {
+                Image(systemName: "person.crop.circle.fill").resizable().foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
     }
 }
 
@@ -2657,7 +2682,7 @@ struct V3SubjectRow: View {
         if name.contains("فيزياء") { return "atom" }
         if name.contains("كيمي") { return "flask.fill" }
         if name.contains("أحياء") { return "leaf.fill" }
-        if name.contains("إنك") || name.contains("انك") || name.contains("فرنسي") { return "globe" }
+        if name.contains("إنك") || name.contains("انك") { return "globe" }
         if name.contains("إسلام") || name.contains("اسلام") { return "book.closed.fill" }
         if name.contains("تاريخ") || name.contains("اجتماع") || name.contains("جغراف") { return "map.fill" }
         return "book.closed.fill"
@@ -3991,7 +4016,7 @@ struct V3AccountView: View {
     private func load() async {
         do {
             let d = try await APIClient.shared.request("mobile/account.php")
-            await MainActor.run { account = d; loading = false; error = "" }
+            await MainActor.run { account = d; app.setAvatarURL(jString(d["avatar_url"])); loading = false; error = "" }
         } catch {
             await MainActor.run { loading = false; self.error = error.localizedDescription }
         }
@@ -4364,7 +4389,7 @@ struct RegisterV3View: View {
 
                             navigationButtons(proxy: proxy)
 
-                            Text("نسخة iPhone 4.2 • Build 420")
+                            Text("نسخة iPhone 4.2.1 • Build 421")
                                 .font(.caption2.monospacedDigit())
                                 .foregroundStyle(.tertiary)
                                 .frame(maxWidth: .infinity, alignment: .center)

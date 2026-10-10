@@ -1,19 +1,19 @@
-name: Build Murshid iOS Production v4.2 IPA
+name: Build Murshid iOS v4.2.1 IPA (review branch)
 
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ main, codex/french-removal-contest-avatar-20261009 ]
     paths:
       - '.github/workflows/build-ios.yml'
       - 'patches/**'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
-    name: Build Production v4.2 unsigned iPhone IPA
+    name: Build v4.2.1 Build 421 unsigned iPhone IPA
     runs-on: macos-15
     timeout-minutes: 35
 
@@ -74,8 +74,8 @@ jobs:
               if line == '        PRODUCT_NAME: MurshidWizari':
                   out.extend([
                       '        TARGETED_DEVICE_FAMILY: "1"',
-                      '        MARKETING_VERSION: "4.2.0"',
-                      '        CURRENT_PROJECT_VERSION: "420"',
+                      '        MARKETING_VERSION: "4.2.1"',
+                      '        CURRENT_PROJECT_VERSION: "421"',
                       '        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon',
                       '        CODE_SIGN_ENTITLEMENTS: MurshidWizari/MurshidWizari.entitlements',
                   ])
@@ -269,24 +269,6 @@ jobs:
           SWIFT
           swift /tmp/namecheck.swift
 
-      - name: Probe live registration name validation without creating account
-        shell: bash
-        run: |
-          set -euo pipefail
-          RESP="$(curl -sS --max-redirs 0 --max-time 20 'https://www.mur-iq.com/api/register.php'             -H 'Content-Type: application/json; charset=utf-8'             -H 'Accept: application/json'             --data '{"full_name":"يونس محمد عباس","grade_id":0,"gender":"male","contact_type":"email","identifier":"name-probe-do-not-create@example.invalid","password":"12345678","password_confirmation":"12345678","company_website":""}')"
-          echo "$RESP"
-          python3 - "$RESP" <<'PY'
-          import json, sys
-          data=json.loads(sys.argv[1])
-          msg=str(data.get("message",""))
-          # Correct outcome: the live server accepted the name and advanced to grade validation.
-          if "الاسم الثلاثي" in msg:
-              raise SystemExit("LIVE SERVER STILL REJECTS THE ARABIC NAME")
-          if "اختر الصف الدراسي" not in msg:
-              raise SystemExit("Unexpected live registration probe response: "+msg)
-          print("Live server accepted Arabic name; probe stopped safely at grade validation.")
-          PY
-
       - name: Install XcodeGen
         run: |
           brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
@@ -315,8 +297,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \
-            MARKETING_VERSION='4.2.0' \
-            CURRENT_PROJECT_VERSION='420' \
+            MARKETING_VERSION='4.2.1' \
+            CURRENT_PROJECT_VERSION='421' \
             clean build
 
       - name: Compile Apple asset catalog
@@ -346,8 +328,8 @@ jobs:
           info.update(partial)
           info['CFBundleDisplayName'] = 'المرشد الوزاري'
           info['CFBundleName'] = 'منصة المرشد الوزاري'
-          info['CFBundleShortVersionString'] = '4.2.0'
-          info['CFBundleVersion'] = '420'
+          info['CFBundleShortVersionString'] = '4.2.1'
+          info['CFBundleVersion'] = '421'
           info['NSFaceIDUsageDescription'] = 'يستخدم المرشد الوزاري Face ID لحماية حسابك عند العودة إلى التطبيق.'
           info['UISupportedInterfaceOrientations'] = ['UIInterfaceOrientationPortrait']
           info['UILaunchScreen'] = {'UIColorName': 'LaunchBackground'}
@@ -372,15 +354,15 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid'
           /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string المرشد الوزاري' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleName منصة المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleName string منصة المرشد الوزاري' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 4.2.0' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 420' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 4.2.1' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 421' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Delete :UIDeviceFamily' "$APP/Info.plist" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily array' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily:0 integer 1' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" | grep -Fx 'المرشد الوزاري'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$APP/Info.plist" | grep -Fx 'منصة المرشد الوزاري'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.2.0'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '420'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.2.1'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '421'
           /usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist" | grep -Fx '1'
           test -f "$APP/Assets.car"
           test -f "$APP/PrivacyInfo.xcprivacy"
@@ -454,80 +436,19 @@ jobs:
             echo 'ERROR: Web wrapper marker found unexpectedly.' >&2
             exit 1
           fi
-          rm -rf Payload Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.ipa
+          rm -rf Payload Murshid_Wizari_iOS_v4_2_1_BUILD421_unsigned.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.ipa Payload
-          test -s Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.ipa
-          shasum -a 256 Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.ipa | tee Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.sha256
-
-      - name: Publish v4.2 unsigned IPA release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          cd source
-          TAG="v4.2-build420"
-          TITLE="Murshid Wizari iOS v4.2 Build 420"
-          NOTES="Unsigned iPhone IPA v4.2 with advanced filters, custom exams, daily challenge, question search, question submissions, request-more flow, private notes, attempt history, stronger question integrity, sharing and instant avatar updates without external moderation."
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" \
-              Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.ipa \
-              Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.sha256 \
-              --clobber
-          else
-            gh release create "$TAG" \
-              Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.ipa \
-              Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.sha256 \
-              --title "$TITLE" \
-              --notes "$NOTES"
-          fi
+          /usr/bin/zip -qry Murshid_Wizari_iOS_v4_2_1_BUILD421_unsigned.ipa Payload
+          test -s Murshid_Wizari_iOS_v4_2_1_BUILD421_unsigned.ipa
+          shasum -a 256 Murshid_Wizari_iOS_v4_2_1_BUILD421_unsigned.ipa | tee Murshid_Wizari_iOS_v4_2_1_BUILD421_unsigned.sha256
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Wizari-iOS-Production-v4.2-Build420-Unsigned
+          name: Murshid-Wizari-iOS-v4.2.1-Build421-Unsigned
           path: |
-            source/Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.ipa
-            source/Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.sha256
+            source/Murshid_Wizari_iOS_v4_2_1_BUILD421_unsigned.ipa
+            source/Murshid_Wizari_iOS_v4_2_1_BUILD421_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
-
-
-  diagnostics:
-    name: Publish v4.2 build diagnostics
-    needs: build
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Save build result and failed logs
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BUILD_RESULT: ${{ needs.build.result }}
-        run: |
-          set -u
-          mkdir -p .build-status
-          STATUS_FILE=".build-status/v4.2-build420-status.txt"
-          LOG_FILE=".build-status/v4.2-build420-failed.log"
-          {
-            echo "run_id=$GITHUB_RUN_ID"
-            echo "run_attempt=$GITHUB_RUN_ATTEMPT"
-            echo "commit=$GITHUB_SHA"
-            echo "result=$BUILD_RESULT"
-            echo "workflow=$GITHUB_WORKFLOW"
-          } > "$STATUS_FILE"
-          gh run view "$GITHUB_RUN_ID" --log-failed > "$LOG_FILE" 2>&1 || true
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$STATUS_FILE" "$LOG_FILE"
-          if git diff --cached --quiet; then
-            exit 0
-          fi
-          git commit -m "Record v4.2 build result [skip ci]"
-          git pull --rebase origin main || true
-          git push origin HEAD:main

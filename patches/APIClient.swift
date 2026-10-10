@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 struct APIError: LocalizedError {
     let message: String
@@ -23,6 +24,8 @@ final class AppSession: ObservableObject {
     @Published var bootstrapping = true
     @Published var user: UserSummary?
     @Published var subjects: [Subject] = []
+    @Published var avatarURL = ""
+    @Published var avatarTabImage: UIImage?
     @Published var plans: [SubscriptionPlan] = []
     @Published var subscribed = false
     @Published var freeLimit = 15
@@ -49,6 +52,8 @@ final class AppSession: ObservableObject {
         v3Authenticated = false
         user = nil
         subjects = []
+        avatarURL = ""
+        avatarTabImage = nil
         plans = []
         subscribed = false
         freeUsed = 0
@@ -64,7 +69,17 @@ final class AppSession: ObservableObject {
     func applyBootstrap(_ json: JSON) {
         let u = json["user"] as? JSON ?? [:]
         user = UserSummary(id: jInt(u["id"]), name: jString(u["name"]), grade: jString(u["grade"]), gradeID: jInt(u["grade_id"]))
-        subjects = jArray(json["subjects"]).map(Subject.init)
+        let available = jArray(json["subjects"]).map(Subject.init).filter { !$0.name.contains("فرنس") && !$0.name.localizedCaseInsensitiveContains("french") }
+        var ordered = available
+        if let arabic = ordered.firstIndex(where: { $0.name == "اللغة العربية" }),
+           let literature = ordered.firstIndex(where: { $0.name == "الأدب والنصوص" }),
+           literature != arabic + 1 {
+            let subject = ordered.remove(at: literature)
+            let newArabic = ordered.firstIndex(where: { $0.name == "اللغة العربية" }) ?? arabic
+            ordered.insert(subject, at: min(newArabic + 1, ordered.count))
+        }
+        subjects = ordered
+        setAvatarURL(jString(u["avatar_url"]))
         plans = jArray(json["plans"]).map(SubscriptionPlan.init)
         subscribed = jBool(json["subscribed"])
         freeLimit = jInt(json["free_limit"], default: 15)
@@ -82,6 +97,30 @@ final class AppSession: ObservableObject {
     func applyAppConfig(_ json: JSON) {
         featureFlags = json["features"] as? JSON ?? [:]
         releaseInfo = json["release"] as? JSON ?? [:]
+    }
+
+    func setAvatarURL(_ value: String) {
+        let clean = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard clean != avatarURL else { return }
+        avatarURL = clean
+        avatarTabImage = nil
+        guard let url = URL(string: clean), url.scheme == "https" else { return }
+        Task {
+            guard let (data, _) = try? await URLSession.shared.data(from: url),
+                  let original = UIImage(data: data), avatarURL == clean else { return }
+            let size = CGSize(width: 64, height: 64)
+            let renderer = UIGraphicsImageRenderer(size: size)
+            let thumbnail = renderer.image { _ in
+                UIBezierPath(ovalIn: CGRect(origin: .zero, size: size)).addClip()
+                let side = min(original.size.width, original.size.height)
+                let scale = size.width / side
+                let rect = CGRect(x: (size.width - original.size.width * scale) / 2,
+                                  y: (size.height - original.size.height * scale) / 2,
+                                  width: original.size.width * scale, height: original.size.height * scale)
+                original.draw(in: rect)
+            }
+            if avatarURL == clean { avatarTabImage = thumbnail.withRenderingMode(.alwaysOriginal) }
+        }
     }
 
     func featureEnabled(_ key: String, default defaultValue: Bool = true) -> Bool {

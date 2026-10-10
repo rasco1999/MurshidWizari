@@ -795,7 +795,7 @@ struct V31AccountView: View {
     private var appInfo: some View {
         MurshidCard {
             VStack(alignment: .leading, spacing: 8) {
-                HStack { Label("منصة المرشد الوزاري", systemImage: "graduationcap.fill").font(.headline); Spacer(); Text("4.2 • 420").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
+                HStack { Label("منصة المرشد الوزاري", systemImage: "graduationcap.fill").font(.headline); Spacer(); Text("4.2.1 • 421").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
                 Text("تطبيق iPhone أصلي مرتبط مباشرة بحسابك في المنصة.").font(.footnote).foregroundStyle(.secondary)
                 HStack(spacing: 14) {
                     Link("الخصوصية", destination: URL(string: "https://www.mur-iq.com/privacy.php")!)
@@ -844,6 +844,7 @@ struct V31AccountView: View {
             let d = try await APIClient.shared.request("mobile/account.php")
             await MainActor.run {
                 account = d
+                app.setAvatarURL(jString(d["avatar_url"]))
                 loading = false
                 error = ""
                 let status = jString(d["avatar_status"])
