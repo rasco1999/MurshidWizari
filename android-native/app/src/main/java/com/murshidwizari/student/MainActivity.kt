@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -19,6 +20,7 @@ import android.widget.*
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
+import java.net.URL
 import java.util.concurrent.Executors
 
 /** 100% Android native UI: no WebView, no embedded website, no hardcoded secrets. */
@@ -168,6 +170,46 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun loadAvatar(url: String) {
+        if (url.isBlank()) return
+        val uri = try { java.net.URI(url) } catch (_: Exception) { return }
+        if (uri.scheme != "https" || uri.host !in setOf("www.mur-iq.com", "mur-iq.com")) return
+        val view = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            contentDescription = "الصورة الشخصية"
+        }
+        root.addView(view, LinearLayout.LayoutParams(dp(88), dp(88)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            bottomMargin = dp(12)
+        })
+        jobs.execute {
+            val bitmap = try {
+                val connection = URL(url).openConnection() as java.net.HttpURLConnection
+                connection.connectTimeout = 10000
+                connection.readTimeout = 12000
+                connection.instanceFollowRedirects = false
+                val length = connection.contentLength
+                if (length > 3_000_000) null else connection.inputStream.use { input ->
+                    val output = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    var total = 0
+                    while (true) {
+                        val n = input.read(buffer)
+                        if (n < 0) break
+                        total += n
+                        if (total > 3_000_000) break
+                        output.write(buffer, 0, n)
+                    }
+                    if (total > 3_000_000) null else {
+                        val bytes = output.toByteArray()
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    }
+                }.also { connection.disconnect() }
+            } catch (_: Exception) { null }
+            main.post { if (bitmap != null && view.parent != null) view.setImageBitmap(bitmap) }
+        }
+    }
+
     private fun loginScreen() {
         activeScreen = "login"
         base("منصة المرشد الوزاري")
@@ -275,6 +317,7 @@ class MainActivity : Activity() {
         subscribed = response.optBoolean("subscribed")
         activeScreen = "home"
         base("المرشد الوزاري")
+        loadAvatar(student.optString("avatar_url"))
         line("مرحباً، " + student.optString("name", "الطالب"), true)
         caption("الصف الدراسي: " + student.optString("grade"))
         val remaining = response.optInt("free_remaining", 0)
@@ -647,9 +690,19 @@ class MainActivity : Activity() {
             if (!response.optBoolean("ok")) return@fetch
             base("حسابي", true)
             val profile = response.optJSONObject("user") ?: JSONObject()
+            loadAvatar(response.optString("avatar_url"))
             line("الاسم: " + profile.optString("name"), true)
             line("معرّف الطالب: " + profile.optInt("id"))
-            caption("الصورة: " + response.optString("avatar_status", "غير محددة"))
+            caption("حالة الصورة: " + response.optString("avatar_status", "غير محددة"))
+            button("حذف الصورة الشخصية", secondary = true) {
+                AlertDialog.Builder(this).setTitle("حذف الصورة")
+                    .setMessage("هل تريد إزالة صورتك الشخصية؟")
+                    .setPositiveButton("نعم") { _, _ ->
+                        fetchForm("mobile/avatar.php", mapOf("csrf" to csrf, "remove" to "1")) { result ->
+                            if (result.optBoolean("ok")) accountScreen()
+                        }
+                    }.setNegativeButton("إلغاء", null).show()
+            }
             val days = response.optInt("subscription_days_remaining", -1)
             if (days >= 0) line("الأيام المتبقية من الاشتراك: " + days)
             if (response.optBoolean("can_change_name")) {
