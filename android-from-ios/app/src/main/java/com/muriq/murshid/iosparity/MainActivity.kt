@@ -132,8 +132,9 @@ fun AppShell(vm: MurshidViewModel) {
             }
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            when (vm.screen) {
+        Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
+            Box(Modifier.fillMaxSize().widthIn(max = 780.dp)) {
+                when (vm.screen) {
                 Screen.GUEST -> GuestLandingScreen(onLogin = vm::showLogin, onRegister = vm::showRegister)
                 Screen.LOGIN -> LoginScreen(vm)
                 Screen.REGISTER -> RegisterScreen(vm)
@@ -149,6 +150,7 @@ fun AppShell(vm: MurshidViewModel) {
                 Screen.TOPICS -> TopicsScreen(vm)
                 Screen.EXAM -> ExamScreen(vm)
                 Screen.FEATURE -> FeatureScreen(vm)
+                }
             }
             if (vm.loading) {
                 LinearProgressIndicator(
