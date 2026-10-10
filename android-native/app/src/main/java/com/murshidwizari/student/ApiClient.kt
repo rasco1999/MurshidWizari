@@ -139,6 +139,48 @@ class ApiClient(context: Context) {
         } finally { conn.disconnect() }
     }
 
+    /** Upload a bounded JPEG/PNG avatar using the server's real multipart contract. */
+    fun uploadAvatar(csrf: String, filename: String, mime: String, bytes: ByteArray): JSONObject {
+        if (bytes.isEmpty() || bytes.size > 3_000_000 || mime !in setOf("image/jpeg", "image/png"))
+            return JSONObject().put("ok", false).put("message", "اختر صورة JPG أو PNG لا تتجاوز 3 ميغابايت.")
+        val boundary = "MurshidNative" + java.util.UUID.randomUUID().toString().replace("-", "")
+        val conn = URL(origin.toString() + "mobile/avatar.php").openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 15000
+            conn.readTimeout = 30000
+            conn.instanceFollowRedirects = false
+            conn.doOutput = true
+            conn.setRequestProperty("Accept", "application/json")
+            conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary)
+            conn.setRequestProperty("Cache-Control", "no-store")
+            val cookies = cookieManager.cookieStore.get(origin)
+            if (cookies.isNotEmpty())
+                conn.setRequestProperty("Cookie", cookies.joinToString("; ") { it.name + "=" + it.value })
+            val safeName = filename.replace(Regex("[^A-Za-z0-9_.-]"), "_").take(80)
+            conn.outputStream.use { out ->
+                fun write(value: String) { out.write(value.toByteArray(StandardCharsets.UTF_8)) }
+                write("--" + boundary + "\r\nContent-Disposition: form-data; name=\"csrf\"\r\n\r\n" + csrf + "\r\n")
+                write("--" + boundary + "\r\nContent-Disposition: form-data; name=\"avatar\"; filename=\"" + safeName + "\"\r\n")
+                write("Content-Type: " + mime + "\r\n\r\n")
+                out.write(bytes)
+                write("\r\n--" + boundary + "--\r\n")
+            }
+            val status = conn.responseCode
+            cookieManager.put(origin, conn.headerFields)
+            if (remember) saveCookies()
+            if (status in 300..399)
+                return JSONObject().put("ok", false).put("message", "أعاد الخادم توجيه الطلب.")
+            val stream = if (status >= 400) conn.errorStream else conn.inputStream
+            val raw = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText().take(1_000_000) } ?: ""
+            val result = try { JSONObject(raw) } catch (_: Exception) {
+                JSONObject().put("ok", false).put("message", "استجابة غير متوقعة من الخادم (" + status + ").")
+            }
+            if (status == 401) result.put("session_expired", true)
+            return result
+        } finally { conn.disconnect() }
+    }
+
     private fun saveCookies() {
         try {
             val cookies = JSONArray()
