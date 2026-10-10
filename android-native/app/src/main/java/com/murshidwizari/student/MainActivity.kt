@@ -22,7 +22,7 @@ import java.util.concurrent.Executors
 class MainActivity : Activity() {
     private val executor = Executors.newSingleThreadExecutor()
     private val ui = Handler(Looper.getMainLooper())
-    private val cookies = CookieManager()
+    private val api by lazy { ApiClient(this) }
     private lateinit var root: LinearLayout
     private val burgundy = Color.rgb(84,21,28)
     private var csrf = ""
@@ -70,32 +70,12 @@ class MainActivity : Activity() {
     }
     private fun request(path: String, payload: JSONObject? = null, done: (JSONObject) -> Unit) {
         executor.execute {
-            val result = try {
-                val connection = (URL("https://www.mur-iq.com/" + path).openConnection() as HttpURLConnection).apply {
-                    requestMethod = if (payload == null) "GET" else "POST"
-                    connectTimeout = 15000; readTimeout = 20000
-                    setRequestProperty("Accept","application/json")
-                    setRequestProperty("X-Murshid-Client","AndroidNative")
-                    cookies.getCookieStore().cookies.joinToString("; ") { it.name + "=" + it.value }.takeIf { it.isNotBlank() }?.let { setRequestProperty("Cookie",it) }
-                    if (payload != null) {
-                        doOutput = true
-                        setRequestProperty("Content-Type","application/json; charset=utf-8")
-                        outputStream.use { it.write(payload.toString().toByteArray(Charsets.UTF_8)) }
-                    }
-                }
-                connection.headerFields["Set-Cookie"]?.forEach { header ->
-                    try { cookies.put(java.net.URI("https://www.mur-iq.com"),mapOf("Set-Cookie" to listOf(header))) } catch (_: Exception) {}
-                }
-                val body = (if (connection.responseCode < 400) connection.inputStream else connection.errorStream)
-                    ?.bufferedReader()?.use { it.readText() } ?: "{}"
-                connection.disconnect()
-                JSONObject(body)
-            } catch (e: Exception) {
-                JSONObject().put("ok",false).put("message","تعذر الاتصال بالخادم: " + (e.localizedMessage ?: ""))
-            }
+            val result = try { api.call(path, payload) }
+                catch (e: Exception) { JSONObject().put("ok",false).put("message","تعذر الاتصال بالخادم: " + (e.localizedMessage ?: "")) }
             ui.post { done(result) }
         }
     }
+
     private fun failed(o: JSONObject): Boolean {
         if (o.optBoolean("ok",false)) return false
         Toast.makeText(this,o.optString("message","تعذر تنفيذ الطلب"),Toast.LENGTH_LONG).show()
@@ -109,6 +89,7 @@ class MainActivity : Activity() {
         val remember = CheckBox(this).apply { text = "تذكرني على هذا الجهاز" }
         root.addView(remember)
         button("تسجيل الدخول") {
+            api.setRemember(remember.isChecked)
             val data = JSONObject().put("identifier",identifier.text.toString().trim())
                 .put("password",password.text.toString()).put("remember_me",remember.isChecked)
             request("api/login.php",data) { response ->
@@ -136,7 +117,7 @@ class MainActivity : Activity() {
                 button(s.optString("name")) { topics(s.optInt("id"),s.optString("name")) }
             }
             button("تحديث") { bootstrap() }
-            button("تسجيل الخروج") { request("mobile/logout.php") { cookies.cookieStore.removeAll(); csrf=""; loginScreen() } }
+            button("تسجيل الخروج") { request("mobile/logout.php") { api.clear(); csrf=""; loginScreen() } }
         }
     }
     private fun topics(id: Int, subject: String) {
@@ -181,9 +162,43 @@ class MainActivity : Activity() {
             label("سبق الإجابة عن هذا السؤال.")
             label(q.optString("explanation"))
         } else {
-            label("إرسال الإجابات غير مفعّل في هذه النسخة الأولية حتى نتحقق من واجهة التصحيح ونضمن عدم خصم إجابات الطالب بالخطأ.")
+            val selected = arrayOf("")
+            if (q.optString("answer_mode") == "choice" || q.optString("type") == "mcq" || q.optString("type") == "true_false") {
+                val group = RadioGroup(this)
+                for (i in 0 until options.length()) {
+                    val option = options.optJSONObject(i)
+                    val value = option?.optString("text") ?: options.optString(i)
+                    group.addView(RadioButton(this).apply { text = value; setOnClickListener { selected[0] = value } })
+                }
+                root.addView(group)
+            } else {
+                val answer = field("اكتب إجابتك")
+                answer.addTextChangedListener(object : android.text.TextWatcher {
+                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { selected[0] = s?.toString() ?: "" }
+                    override fun afterTextChanged(s: android.text.Editable?) {}
+                })
+            }
+            button("إرسال الإجابة") {
+                if (selected[0].isBlank()) Toast.makeText(this,"اختر إجابة أولاً",Toast.LENGTH_SHORT).show()
+                else {
+                    val id = q.optInt("id")
+                    val answers = JSONObject().put(id.toString(),JSONObject().put("submitted",true).put("text",selected[0]))
+                    val payload = JSONObject().put("csrf",csrf).put("chapter_id",currentChapter)
+                        .put("question_index",questionIndex).put("answers",answers)
+                        .put("completed",questionIndex == questions.length()-1)
+                    request("api/progress.php",payload) { response ->
+                        if (!failed(response)) {
+                            val grade = response.optJSONObject("grades")?.optJSONObject(id.toString())
+                            q.put("submitted",true)
+                            q.put("explanation",grade?.optString("explanation",q.optString("explanation")) ?: q.optString("explanation"))
+                            renderQuestion()
+                        }
+                    }
+                }
+            }
         }
-        button("السؤال التالي") { questionIndex++; renderQuestion() }
+        if (q.optBoolean("submitted")) button("السؤال التالي") { questionIndex++; renderQuestion() }
         button("رجوع للمواد") { bootstrap() }
     }
     override fun onDestroy() { executor.shutdownNow(); super.onDestroy() }
