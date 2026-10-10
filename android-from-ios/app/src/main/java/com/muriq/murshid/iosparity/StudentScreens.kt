@@ -128,6 +128,7 @@ fun DashboardScreen(vm: MurshidViewModel) {
                 }
             }
         }
+        item { HomeSlider(vm) }
         item {
             SectionTitle("ابدأ المراجعة", "اختبر فهمك اليوم",
                 "انتقل مباشرة إلى أسئلة الصف الدراسي.")
@@ -161,6 +162,7 @@ fun DashboardScreen(vm: MurshidViewModel) {
         items(dash.subjects, key = { "dashboard-${it.id}" }) { subject ->
             SubjectListCard(subject) { vm.openTopics(subject) }
         }
+        item { OfficialSocialLinks() }
         item { Spacer(Modifier.height(12.dp)) }
     }
 }
