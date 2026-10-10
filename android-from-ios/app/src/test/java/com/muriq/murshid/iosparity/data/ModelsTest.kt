@@ -18,9 +18,9 @@ class ModelsTest {
         assertEquals("الأدب والنصوص", visible[2].name)
     }
 
-    @Test fun topicDefaultsToZeroCount() {
+    @Test fun topicWithoutCountRemainsOpenable() {
         val topic = Topic.from(org.json.JSONObject().put("id", 5).put("name", "الموضوع"))
-        assertEquals(0, topic.count)
+        assertEquals(-1, topic.count)
     }
 
     @Test fun planKeyMatchesRealServerCheckoutContract() {

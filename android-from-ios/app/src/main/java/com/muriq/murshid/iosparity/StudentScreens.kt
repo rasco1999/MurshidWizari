@@ -254,17 +254,17 @@ fun TopicsScreen(vm: MurshidViewModel) {
         }
         if (items.isEmpty()) item { EmptyPanel("لا توجد مواضيع متاحة") }
         items(items, key = { it.id }) { topic ->
-            MurshidCard(Modifier.clickable(enabled = topic.count > 0) { vm.openExam(topic) }) {
+            MurshidCard(Modifier.clickable { vm.openExam(topic) }) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.FactCheck, null, tint = MurshidBlue)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(topic.name, fontWeight = FontWeight.Bold)
-                        Text(if (topic.count > 0) "${topic.count} سؤال" else "لا توجد أسئلة منشورة",
+                        Text(if (topic.count > 0) "${topic.count} سؤال" else if (topic.count == 0) "لا توجد أسئلة منشورة" else "اضغط لعرض الأسئلة",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Icon(if (topic.count > 0) Icons.Default.ChevronLeft else Icons.Default.Lock,
+                    Icon(Icons.Default.ChevronLeft,
                         null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }

@@ -49,7 +49,7 @@ data class Topic(val id: Int, val name: String, val count: Int) {
     companion object {
         fun from(json: JSONObject) = Topic(
             json.num("id"), json.text("name"),
-            json.num("count", json.num("question_count", json.num("questions_count")))
+            json.num("count", json.num("question_count", json.num("questions_count", -1)))
         )
     }
 }
