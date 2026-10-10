@@ -96,6 +96,22 @@ class MainActivity : Activity() {
     private var focusBusy = false
     private var focusDeadline = 0L
     private var focusTicker: Runnable? = null
+    private var practiceSubjectId = 0
+    private var practiceSubjectName = ""
+    private var practiceTopics = JSONArray()
+    private val practiceSelectedTopics = linkedSetOf<Int>()
+    private var practiceCount = 20
+    private var practiceType = "all"
+    private var practiceState = "all"
+    private var practiceMinutes = 0
+    private var practiceSessionId = 0
+    private var practiceQuestions = JSONArray()
+    private val practiceAnswers = linkedMapOf<Int, String>()
+    private var practiceCurrent = 0
+    private var practiceDeadline = 0L
+    private var practiceBusy = false
+    private var practiceUncertain = false
+    private var practiceTicker: Runnable? = null
     private val prefs by lazy { getSharedPreferences("native_preferences", MODE_PRIVATE) }
     // Identical brand palette to the SwiftUI ThemeV34 definitions.
     private val gold = Color.rgb(245,184,61)
@@ -682,6 +698,11 @@ class MainActivity : Activity() {
         button("ابحث عن سؤال") { questionSearchScreen() }
         button("سجل الاختبارات") { attemptHistoryScreen() }
         button("جلسة تركيز") { focusScreen() }
+        button("اختبار مخصص") { practiceBuilderScreen() }
+        val pendingPractice = prefs.getInt("practice_session_${student.optInt("id", 0)}", 0)
+        if (pendingPractice > 0) button("متابعة الاختبار المخصص", secondary = true) {
+            loadPracticeSession(pendingPractice)
+        }
         button("غيّر جو • قصص") { storiesScreen() }
         button("الدعم والمراسلات") { supportScreen() }
         button("إعلان مدرسة", secondary = true) { schoolAdScreen() }
@@ -1923,6 +1944,369 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun practiceKey(suffix: String): String = "practice_${suffix}_${student.optInt("id", 0)}"
+
+    private fun practiceBuilderScreen() {
+        activeScreen = "practice_builder"
+        val subjects = homepage.optJSONArray("subjects") ?: JSONArray()
+        if (practiceSubjectId <= 0 && subjects.length() > 0) {
+            val first = subjects.optJSONObject(0)
+            practiceSubjectId = first?.optInt("id") ?: 0
+            practiceSubjectName = first?.optString("name").orEmpty()
+        }
+        if (practiceSubjectId <= 0) {
+            base("اختبار مخصص", true)
+            line("لم تصل المواد الدراسية من الخادم.")
+            button("تحديث المواد") { refreshHome() }
+            return
+        }
+        base("اختبار مخصص", true)
+        caption("جارٍ جلب مواضيع المادة…")
+        val selectedSubject = practiceSubjectId
+        fetch("mobile/topics.php?subject_id=$selectedSubject", showError = false) { response ->
+            if (activeScreen != "practice_builder" || selectedSubject != practiceSubjectId) return@fetch
+            practiceTopics = if (response.optBoolean("ok")) response.optJSONArray("topics") ?: JSONArray() else JSONArray()
+            renderPracticeBuilder(if (response.optBoolean("ok")) "" else "تعذر تحميل المواضيع؛ يمكنك اختيار كل المادة.")
+        }
+    }
+
+    private fun practicePicker(title: String, values: List<Pair<String, String>>,
+                               selected: String, changed: (String) -> Unit) {
+        val label = values.firstOrNull { it.first == selected }?.second ?: selected
+        button("$title: $label", secondary = true) {
+            AlertDialog.Builder(this).setTitle(title).setSingleChoiceItems(
+                values.map { it.second }.toTypedArray(), values.indexOfFirst { it.first == selected }) { dialog, index ->
+                dialog.dismiss()
+                changed(values[index].first)
+                renderPracticeBuilder()
+            }.setNegativeButton("إلغاء", null).show()
+        }
+    }
+
+    private fun renderPracticeBuilder(status: String = "") {
+        activeScreen = "practice_builder"
+        base("اختبار مخصص", true)
+        line("أنشئ اختباراً مخصصاً", true)
+        caption("حدد المادة والمواضيع وعدد الأسئلة والنوع والحالة والمؤقت. التصحيح بعد إنهاء الاختبار.")
+        val subjects = homepage.optJSONArray("subjects") ?: JSONArray()
+        button("المادة: $practiceSubjectName", secondary = true) {
+            val names = Array(subjects.length()) { index -> subjects.optJSONObject(index)?.optString("name").orEmpty() }
+            AlertDialog.Builder(this).setTitle("اختر المادة").setItems(names) { _, index ->
+                val selected = subjects.optJSONObject(index) ?: return@setItems
+                practiceSubjectId = selected.optInt("id")
+                practiceSubjectName = selected.optString("name")
+                practiceSelectedTopics.clear()
+                practiceBuilderScreen()
+            }.show()
+        }
+        caption("المواضيع: اتركها دون تحديد لاستخدام جميع أسئلة المادة.")
+        for (index in 0 until practiceTopics.length()) {
+            val topic = practiceTopics.optJSONObject(index) ?: continue
+            val id = topic.optInt("id")
+            if (id <= 0) continue
+            val name = topic.optString("name") + " • " + topic.optInt("count") + " سؤال"
+            lateinit var choice: Button
+            choice = button((if (id in practiceSelectedTopics) "☑ " else "☐ ") + name, secondary = true) {
+                if (!practiceSelectedTopics.add(id)) practiceSelectedTopics.remove(id)
+                choice.text = (if (id in practiceSelectedTopics) "☑ " else "☐ ") + name
+            }
+        }
+        stepper("عدد الأسئلة", practiceCount, 5, 50, 5) { practiceCount = it }
+        practicePicker("نوع السؤال", listOf("all" to "الكل", "mcq" to "اختيارات",
+            "true_false" to "صح / خطأ", "text" to "نصي", "fill" to "أكمل", "meaning" to "معاني"),
+            practiceType) { practiceType = it }
+        practicePicker("حالة السؤال", listOf("all" to "الكل", "unanswered" to "لم أجب",
+            "wrong" to "أخطأت سابقاً", "correct" to "أجبت صحيحاً", "favorite" to "المفضلة"),
+            practiceState) { practiceState = it }
+        practicePicker("المؤقت", listOf("0" to "بدون مؤقت", "15" to "15 دقيقة",
+            "30" to "30 دقيقة", "45" to "45 دقيقة", "60" to "60 دقيقة"),
+            practiceMinutes.toString()) { practiceMinutes = it.toInt() }
+        if (status.isNotBlank()) line(status)
+        val pending = prefs.getInt(practiceKey("session"), 0)
+        if (pending > 0) button("متابعة الاختبار الحالي", secondary = true) { loadPracticeSession(pending) }
+        val create = button("ابدأ الاختبار") {}
+        create.isEnabled = !practiceBusy
+        create.setOnClickListener {
+            val issue = PracticeRules.configurationError(practiceSubjectId, practiceCount,
+                practiceType, practiceState, practiceMinutes)
+            if (issue != null) { message(issue); return@setOnClickListener }
+            val proceed = {
+                practiceBusy = true
+                create.isEnabled = false
+                create.text = "جارٍ إنشاء الاختبار…"
+                val topicIds = JSONArray()
+                practiceSelectedTopics.forEach { topicIds.put(it) }
+                val payload = JSONObject().put("csrf", csrf).put("action", "create")
+                    .put("subject_id", practiceSubjectId).put("chapter_ids", topicIds)
+                    .put("count", practiceCount).put("type", practiceType)
+                    .put("state", practiceState).put("minutes", practiceMinutes)
+                fetch("mobile/practice.php", payload) { result ->
+                    practiceBusy = false
+                    if (result.optBoolean("ok") && result.optInt("session_id") > 0) {
+                        val id = result.optInt("session_id")
+                        prefs.edit().putInt(practiceKey("session"), id)
+                            .remove(practiceKey("uncertain_create"))
+                            .remove(practiceKey("answers")).remove(practiceKey("index"))
+                            .remove(practiceKey("deadline")).remove(practiceKey("uncertain_finish")).apply()
+                        practiceSessionId = 0
+                        if (activeScreen == "practice_builder") loadPracticeSession(id)
+                    } else if (activeScreen == "practice_builder") {
+                        val ambiguous = result.optBoolean("network_error") ||
+                            (result.optBoolean("ok") && result.optInt("session_id") <= 0)
+                        if (ambiguous) prefs.edit().putBoolean(practiceKey("uncertain_create"), true).apply()
+                        renderPracticeBuilder(if (ambiguous)
+                            "حالة الإنشاء غير مؤكدة. تحقق من المحاولات أو الدعم قبل تكراره." else
+                            result.optString("message", "تعذر إنشاء الاختبار."))
+                    }
+                }
+            }
+            if (prefs.getBoolean(practiceKey("uncertain_create"), false)) {
+                AlertDialog.Builder(this).setTitle("إعادة إنشاء اختبار؟")
+                    .setMessage("طلب الإنشاء السابق غير مؤكد. تأكد من المحاولات أو مع الإدارة أولاً، فقد يكون الخادم أنشأ جلسة.")
+                    .setPositiveButton("تحققت، إنشاء جديد") { _, _ -> proceed() }
+                    .setNegativeButton("إلغاء", null).show()
+            } else if (pending > 0) {
+                AlertDialog.Builder(this).setTitle("اختبار لم يكتمل")
+                    .setMessage("يوجد اختبار مخصص سابق. هل تريد إنشاء آخر دون حذف إجابات السابق؟")
+                    .setPositiveButton("إنشاء آخر") { _, _ -> proceed() }
+                    .setNegativeButton("إلغاء", null).show()
+            } else proceed()
+        }
+    }
+
+    private fun stopPracticeTicker() {
+        practiceTicker?.let(main::removeCallbacks)
+        practiceTicker = null
+    }
+
+    private fun persistPracticeAnswers() {
+        val values = JSONObject()
+        practiceAnswers.forEach { (id, value) -> values.put(id.toString(), value) }
+        prefs.edit().putString(practiceKey("answers"), values.toString())
+            .putInt(practiceKey("index"), practiceCurrent).apply()
+    }
+
+    private fun loadPracticeSession(id: Int) {
+        if (id <= 0) { message("معرّف الاختبار غير صالح."); return }
+        stopPracticeTicker()
+        activeScreen = "practice_exam"
+        base("اختبار مخصص", true)
+        caption("جارٍ تحميل أسئلة الاختبار…")
+        fetch("mobile/practice.php?session_id=$id") { response ->
+            if (activeScreen != "practice_exam") return@fetch
+            if (!response.optBoolean("ok")) {
+                base("اختبار مخصص", true)
+                line("تعذر استعادة جلسة الاختبار.")
+                button("إعادة تحميل الجلسة") { loadPracticeSession(id) }
+                return@fetch
+            }
+            val questions = response.optJSONArray("questions") ?: JSONArray()
+            val shapes = (0 until questions.length()).mapNotNull { i ->
+                val q = questions.optJSONObject(i) ?: return@mapNotNull null
+                val options = q.optJSONArray("options") ?: JSONArray()
+                PracticeRules.Question(q.optInt("id"), q.optString("text"),
+                    (0 until options.length()).map { j ->
+                        options.optJSONObject(j)?.optString("text") ?: options.optString(j)
+                    })
+            }
+            val issue = if (shapes.size != questions.length()) "بعض الأسئلة غير قابلة للقراءة."
+                else PracticeRules.questionsError(shapes)
+            if (issue != null) {
+                base("اختبار مخصص", true)
+                line(issue)
+                button("إعداد اختبار آخر", secondary = true) { practiceBuilderScreen() }
+                return@fetch
+            }
+            if (practiceSessionId != id) {
+                practiceAnswers.clear()
+                val stored = try { JSONObject(prefs.getString(practiceKey("answers"), "{}") ?: "{}") }
+                    catch (_: Exception) { JSONObject() }
+                for (key in stored.keys()) {
+                    val parsed = key.toIntOrNull() ?: continue
+                    practiceAnswers[parsed] = stored.optString(key)
+                }
+                practiceCurrent = prefs.getInt(practiceKey("index"), 0)
+            }
+            practiceSessionId = id
+            practiceQuestions = questions
+            practiceCurrent = practiceCurrent.coerceIn(0, questions.length() - 1)
+            prefs.edit().putInt(practiceKey("session"), id).apply()
+            val duration = response.optJSONObject("session")?.optInt("duration_seconds") ?: 0
+            practiceDeadline = prefs.getLong(practiceKey("deadline"), 0L)
+            if (duration > 0 && practiceDeadline <= 0L) {
+                practiceDeadline = System.currentTimeMillis() + duration * 1000L
+                prefs.edit().putLong(practiceKey("deadline"), practiceDeadline).apply()
+            }
+            practiceUncertain = prefs.getBoolean(practiceKey("uncertain_finish"), false)
+            renderPracticeQuestion()
+        }
+    }
+
+    private fun renderPracticeQuestion() {
+        stopPracticeTicker()
+        activeScreen = "practice_exam"
+        base("اختبار مخصص", true)
+        val question = practiceQuestions.optJSONObject(practiceCurrent)
+        if (question == null) {
+            line("السؤال غير متاح. حدّث جلسة الاختبار.")
+            button("تحديث") { loadPracticeSession(practiceSessionId) }
+            return
+        }
+        val id = question.optInt("id")
+        caption("السؤال ${practiceCurrent + 1} من ${practiceQuestions.length()}")
+        val timerLabel = TextView(this).apply {
+            textSize = 20f; typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER; setTextColor(accent)
+        }
+        if (practiceDeadline > 0L) {
+            root.addView(timerLabel)
+            fun updateTime() {
+                val seconds = StudyRules.remainingFocusSeconds(practiceDeadline, System.currentTimeMillis())
+                timerLabel.text = "⏱ %02d:%02d".format(java.util.Locale.US, seconds / 60, seconds % 60)
+            }
+            updateTime()
+            val timer = object : Runnable {
+                override fun run() {
+                    if (activeScreen != "practice_exam" || isFinishing || isDestroyed) return
+                    updateTime()
+                    if (StudyRules.remainingFocusSeconds(practiceDeadline, System.currentTimeMillis()) == 0 &&
+                        !practiceBusy && !practiceUncertain) {
+                        stopPracticeTicker()
+                        finishPracticeSession()
+                    } else if (!practiceUncertain) main.postDelayed(this, 1000L)
+                }
+            }
+            practiceTicker = timer
+            main.postDelayed(timer, 1000L)
+        }
+        line(question.optString("text"), true)
+        val details = listOf(question.optString("exam_year"), question.optString("exam_round"))
+            .filter(String::isNotBlank)
+        if (details.isNotEmpty()) caption(details.joinToString(" • "))
+        caption("إجابتك")
+        val options = question.optJSONArray("options") ?: JSONArray()
+        if (options.length() > 0) {
+            for (i in 0 until options.length()) {
+                val option = options.optJSONObject(i)?.optString("text") ?: options.optString(i)
+                val selected = practiceAnswers[id] == option
+                button((if (selected) "✓ " else "○ ") + option, secondary = !selected) {
+                    if (practiceBusy || practiceUncertain) return@button
+                    practiceAnswers[id] = option
+                    persistPracticeAnswers()
+                    renderPracticeQuestion()
+                }
+            }
+        } else {
+            val answer = input("اكتب إجابتك هنا", multiline = true).apply {
+                setText(practiceAnswers[id].orEmpty())
+            }
+            answer.addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                override fun afterTextChanged(s: Editable?) {
+                    practiceAnswers[id] = s?.toString().orEmpty()
+                    persistPracticeAnswers()
+                }
+            })
+        }
+        if (practiceUncertain) line("حالة إنهاء الاختبار غير مؤكدة. راجع سجل الاختبارات أولاً.")
+        gap(8)
+        if (practiceCurrent > 0) button("السابق", secondary = true) {
+            if (!practiceBusy) { practiceCurrent--; persistPracticeAnswers(); renderPracticeQuestion() }
+        }
+        if (practiceCurrent < practiceQuestions.length() - 1) button("التالي") {
+            if (!PracticeRules.answered(practiceAnswers[id])) message("أجب عن السؤال الحالي أولاً.")
+            else if (!practiceBusy) {
+                practiceCurrent++; persistPracticeAnswers(); renderPracticeQuestion()
+            }
+        } else button("إنهاء الاختبار والتصحيح") {
+            if (!PracticeRules.answered(practiceAnswers[id])) { message("أجب عن السؤال الأخير أولاً."); return@button }
+            AlertDialog.Builder(this).setTitle("إنهاء الاختبار")
+                .setMessage("هل تريد إرسال جميع إجاباتك للتصحيح وعرض النتيجة؟")
+                .setPositiveButton("إنهاء") { _, _ -> finishPracticeSession() }
+                .setNegativeButton("إلغاء", null).show()
+        }
+        button("العودة لإعدادات الاختبار", secondary = true) { practiceBuilderScreen() }
+    }
+
+    private fun finishPracticeSession() {
+        if (practiceBusy || practiceSessionId <= 0 || practiceQuestions.length() == 0) return
+        if (practiceUncertain) {
+            AlertDialog.Builder(this).setTitle("حالة التصحيح غير مؤكدة")
+                .setMessage("قد يكون الخادم استلم الإجابات بالفعل. افحص سجل الاختبارات أولاً. هل تأكدت وتريد إعادة الإرسال يدوياً؟")
+                .setPositiveButton("تحققت، أعد الإرسال") { _, _ ->
+                    practiceUncertain = false
+                    sendPracticeFinish()
+                }.setNegativeButton("إلغاء", null).show()
+            return
+        }
+        sendPracticeFinish()
+    }
+
+    private fun sendPracticeFinish() {
+        if (practiceBusy || practiceSessionId <= 0) return
+        stopPracticeTicker()
+        practiceBusy = true
+        val session = practiceSessionId
+        val answers = JSONObject()
+        practiceAnswers.forEach { (id, answer) ->
+            if (id > 0 && answer.isNotBlank()) answers.put(id.toString(), answer.trim())
+        }
+        if (activeScreen == "practice_exam") {
+            base("تصحيح الاختبار", true)
+            line("جارٍ إرسال إجاباتك للتصحيح…")
+        }
+        fetch("mobile/practice.php", JSONObject().put("csrf", csrf).put("action", "finish")
+            .put("session_id", session).put("answers", answers)) { response ->
+            practiceBusy = false
+            if (response.optBoolean("ok") && response.has("score") && response.has("total")) {
+                prefs.edit().remove(practiceKey("session")).remove(practiceKey("answers"))
+                    .remove(practiceKey("index")).remove(practiceKey("deadline"))
+                    .remove(practiceKey("uncertain_finish")).apply()
+                practiceSessionId = 0
+                practiceDeadline = 0L
+                practiceUncertain = false
+                practiceAnswers.clear()
+                refreshFocusStats()
+                if (activeScreen == "practice_exam") renderPracticeResult(response)
+            } else {
+                val ambiguous = response.optBoolean("network_error") ||
+                    (response.optBoolean("ok") && (!response.has("score") || !response.has("total")))
+                practiceUncertain = ambiguous
+                if (ambiguous) prefs.edit().putBoolean(practiceKey("uncertain_finish"), true).apply()
+                if (activeScreen == "practice_exam") {
+                    renderPracticeQuestion()
+                    message(if (ambiguous) "التصحيح غير مؤكد؛ تحقق من السجل قبل إعادة الإرسال." else
+                        response.optString("message", "تعذر تصحيح الاختبار."))
+                }
+            }
+        }
+    }
+
+    private fun renderPracticeResult(result: JSONObject) {
+        stopPracticeTicker()
+        activeScreen = "practice_result"
+        base("نتيجة الاختبار المخصص", true)
+        val score = result.optDouble("score", 0.0).toInt()
+        line("النتيجة: $score%", true)
+        caption("الإجابات الصحيحة: " + result.optInt("correct") + " من " + result.optInt("total"))
+        line("مراجعة الإجابات", true)
+        val review = result.optJSONArray("review") ?: JSONArray()
+        var incorrect = 0
+        for (i in 0 until review.length()) {
+            val row = review.optJSONObject(i) ?: continue
+            if (ExamRules.knownBoolean(row.opt("is_correct")) == true) continue
+            incorrect++
+            line(row.optString("question_text"), true)
+            caption("إجابتك: " + row.optString("submitted_answer", "—"))
+            caption("الإجابة الصحيحة: " + row.optString("correct_answer"))
+            if (row.optString("explanation").isNotBlank()) caption("الشرح: " + row.optString("explanation"))
+        }
+        if (incorrect == 0) caption("لا توجد إجابات خاطئة ضمن التفاصيل التي أعادها الخادم.")
+        button("سجل الاختبارات") { attemptHistoryScreen() }
+        button("إنشاء اختبار آخر", secondary = true) { practiceBuilderScreen() }
+    }
+
     private fun storiesScreen() {
         fetch("mobile/stories.php") { response ->
             if (!response.optBoolean("ok")) return@fetch
@@ -2316,6 +2700,8 @@ class MainActivity : Activity() {
         when (activeScreen) {
             "phone_reset" -> recoverScreen()
             "recover" -> if (recoverReturnScreen == "account") accountScreen() else loginScreen()
+            "practice_exam" -> { stopPracticeTicker(); practiceBuilderScreen() }
+            "practice_result" -> attemptHistoryScreen()
             "daily_challenge", "contest", "achievements" -> {
                 val previous = if (competitionHistory.isEmpty()) "home" else competitionHistory.removeLast()
                 when (previous) {
@@ -2398,6 +2784,7 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         stopFocusTicker()
+        stopPracticeTicker()
         jobs.shutdownNow()
         super.onDestroy()
     }

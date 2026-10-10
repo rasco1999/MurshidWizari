@@ -29,6 +29,8 @@ Use a dedicated **non-production student test account** and an administrator-app
 - [ ] Verify correct answers/explanations and server-side unfavorite removal in saved questions, including after returning to the screen.
 - [ ] Search Arabic terms through `api/search.php`, inspect weak-topic rates and unread notifications; verify the actual response field names, dates, and new results after refreshing.
 - [ ] Start, background, restore and finish 25/45/60-minute focus sessions; compare server activity/XP, check manual reconciliation after dropped responses, and inspect recorded custom-exam history.
+- [ ] Create custom exams with every subject/topic, 5–50 questions, all iOS type/state filters, timed and untimed sessions; verify server `session_id`, choice/text input, previous/next, expired timer, final scoring and detailed wrong-answer review.
+- [ ] Restart midway through custom practice: ensure the account-scoped draft, current question and deadline are restored without creating a second server session; finish on the server once and verify history.
 - [ ] Exercise registration, recovery, notifications, favorites, support, privacy/deletion flow and every remaining native iOS action.
 
 ## Device, connection and visual tests
