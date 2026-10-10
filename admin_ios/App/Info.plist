@@ -9,8 +9,8 @@
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundleName</key><string>MurshidAdmin</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>2.0.0</string>
-  <key>CFBundleVersion</key><string>2</string>
+  <key>CFBundleShortVersionString</key><string>2.1.0</string>
+  <key>CFBundleVersion</key><string>3</string>
   <key>LSRequiresIPhoneOS</key><true/>
   <key>UIRequiredDeviceCapabilities</key><array><string>arm64</string></array>
   <key>UIDeviceFamily</key><array><integer>1</integer><integer>2</integer></array>

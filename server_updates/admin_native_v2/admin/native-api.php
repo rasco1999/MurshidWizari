@@ -79,6 +79,60 @@ try {
         foreach($tables as $key=>$sql){try{$counts[$key]=(int)$pdo->query($sql)->fetchColumn();}catch(Throwable $e){$counts[$key]=null;}}
         mn_reply(['ok'=>true,'stats'=>$counts,'name'=>$user['full_name']??'المدير','csrf'=>csrf_token()]);
     }
+    if($action==='contest'&&$method==='GET'){
+        mn_owner($pdo,$uid,'contest');
+        require_once __DIR__.'/../includes/prize_contest.php';
+        $cfg=million_contest_config();
+        $leaders=array_map(static function(array $r): array {
+            return [
+                'rank'=>(int)$r['rank'],
+                'user_id'=>(int)$r['user_id'],
+                'full_name'=>(string)$r['full_name'],
+                'grade_name'=>(string)($r['grade_name']??''),
+                'contest_xp'=>(int)$r['contest_xp'],
+                'correct'=>(int)$r['correct'],
+                'avatar_url'=>(string)($r['avatar_url']??''),
+                'verified'=>(bool)$r['verified'],
+            ];
+        },million_contest_leaderboard($pdo,50));
+        mn_reply(['ok'=>true,'start_at'=>$cfg['start_at'],'end_at'=>$cfg['end_at'],
+            'timezone'=>'Asia/Baghdad','active'=>million_contest_is_active(),'leaderboard'=>$leaders]);
+    }
+    if($action==='contest_schedule_set'&&$method==='POST'){
+        mn_owner($pdo,$uid,'contest');
+        require_once __DIR__.'/../includes/prize_contest.php';
+        $start=str_replace('T',' ',mn_str($body,'start_at',25));
+        $end=str_replace('T',' ',mn_str($body,'end_at',25));
+        if(strlen($start)===16)$start.=':00';
+        if(strlen($end)===16)$end.=':00';
+        $tz=new DateTimeZone('Asia/Baghdad');
+        $a=DateTimeImmutable::createFromFormat('!Y-m-d H:i:s',$start,$tz);
+        $b=DateTimeImmutable::createFromFormat('!Y-m-d H:i:s',$end,$tz);
+        if(!$a||!$b||$a->format('Y-m-d H:i:s')!==$start||$b->format('Y-m-d H:i:s')!==$end||$a>=$b)
+            mn_fail('الوقت غير صالح: يجب أن تسبق البداية النهاية بتوقيت بغداد.');
+        million_contest_ensure_settings($pdo);
+        $q=$pdo->prepare('UPDATE million_contest_settings SET start_at=?,end_at=?,updated_by=? WHERE id=1');
+        $q->execute([$start,$end,$uid]);
+        mn_audit('تعديل موعد تحدي المليون','million_contest','1');
+        mn_reply(['ok'=>true,'message'=>'تم حفظ موعد تحدي المليون بتوقيت بغداد.']);
+    }
+    if($action==='content_health'&&$method==='GET'){
+        mn_owner($pdo,$uid,'questions');
+        $checks=[
+            'questions_total'=>'SELECT COUNT(*) FROM questions',
+            'questions_orphaned'=>'SELECT COUNT(*) FROM questions q LEFT JOIN chapters c ON c.id=q.chapter_id LEFT JOIN subjects s ON s.id=c.subject_id LEFT JOIN grades g ON g.id=s.grade_id WHERE g.id IS NULL',
+            'questions_published_inactive'=>'SELECT COUNT(*) FROM questions q JOIN chapters c ON c.id=q.chapter_id JOIN subjects s ON s.id=c.subject_id WHERE q.status=1 AND (c.status<>1 OR s.status<>1)',
+            'questions_without_answers'=>'SELECT COUNT(*) FROM questions q WHERE q.type=\'mcq\' AND NOT EXISTS(SELECT 1 FROM answers a WHERE a.question_id=q.id)',
+            'chapters_orphaned'=>'SELECT COUNT(*) FROM chapters c LEFT JOIN subjects s ON s.id=c.subject_id WHERE s.id IS NULL',
+            'french_subjects'=>'SELECT COUNT(*) FROM subjects WHERE name LIKE \'%فرنسي%\' OR LOWER(name) LIKE \'%french%\'',
+        ];
+        $stats=[];
+        foreach($checks as $key=>$sql){
+            try{$stats[$key]=(int)$pdo->query($sql)->fetchColumn();}
+            catch(Throwable $e){error_log('native content health '.$key.': '.$e->getMessage());$stats[$key]=null;}
+        }
+        mn_reply(['ok'=>true,'stats'=>$stats,'read_only'=>true]);
+    }
     if($action==='codes'&&$method==='GET'){
         mn_owner($pdo,$uid,'codes');
         $rows=$pdo->query("SELECT id,months,status,batch_label,valid_until,redeemed_by,redeemed_at,created_at FROM subscription_access_codes ORDER BY id DESC LIMIT 200")->fetchAll(PDO::FETCH_ASSOC);

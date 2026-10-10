@@ -35,6 +35,8 @@ enum LoginStage {case loading, signin, otp, ready}
     @Published var subscriptions:[J] = []
     @Published var questions:[J] = []
     @Published var curriculum:J = [:]
+    @Published var contest:J = [:]
+    @Published var contentHealth:J = [:]
     private let session:URLSession = {
         let c=URLSessionConfiguration.default
         c.httpCookieAcceptPolicy = .always
@@ -166,6 +168,8 @@ enum LoginStage {case loading, signin, otp, ready}
             case "subscriptions": subscriptions=list(result)
             case "questions": questions=list(result)
             case "curriculum": curriculum=result
+            case "contest": contest=result
+            case "content_health": contentHealth=result
             default: break
             }
         } catch { self.error=error.localizedDescription }
@@ -694,6 +698,10 @@ private struct MoreScreen:View {
                             NavigationLink{QuestionsScreen(state:state)}label:{entry("بنك الأسئلة","doc.text.fill")}
                             Divider().overlay(Ink.blue2)
                             NavigationLink{CurriculumScreen(state:state)}label:{entry("المواد والفصول","books.vertical.fill")}
+                            Divider().overlay(Ink.blue2)
+                            NavigationLink{ContestAdminScreen(state:state)}label:{entry("تحدي المليون والمواعيد","trophy.fill")}
+                            Divider().overlay(Ink.blue2)
+                            NavigationLink{ContentHealthScreen(state:state)}label:{entry("فحص ربط الأسئلة بالمنهج","checkmark.shield.fill")}
                         }
                     }
                     GlassBox{
@@ -914,5 +922,154 @@ private struct CurriculumEditor:View {
             }
             .toolbar{ToolbarItem(placement:.topBarLeading){Button("إغلاق"){dismiss()}}}
         }
+    }
+}
+
+private struct ContestAdminScreen:View {
+    @ObservedObject var state:AdminState
+    @State private var startAt=Date()
+    @State private var endAt=Date().addingTimeInterval(86400)
+    @State private var loaded=false
+    @State private var showConfirmation=false
+    private let baghdad=TimeZone(identifier:"Asia/Baghdad")!
+    private var dateFormat:DateFormatter {
+        let format=DateFormatter()
+        format.locale=Locale(identifier:"en_US_POSIX")
+        format.calendar=Calendar(identifier:.gregorian)
+        format.timeZone=baghdad
+        format.dateFormat="yyyy-MM-dd HH:mm:ss"
+        return format
+    }
+    private var validDates:Bool {startAt<endAt}
+    var body:some View {
+        ScrollView {
+            VStack(alignment:.leading,spacing:16){
+                ScreenTitle(text:"تحدي المليون",detail:"إدارة فترة التحدي وترتيب المتنافسين من الموقع")
+                Note(state:state)
+                GlassBox {
+                    VStack(alignment:.leading,spacing:14) {
+                        Label("الموعد بتوقيت بغداد",systemImage:"calendar.badge.clock")
+                            .font(.headline).foregroundStyle(Ink.gold)
+                        DatePicker("بداية التحدي",selection:$startAt,displayedComponents:[.date,.hourAndMinute])
+                        DatePicker("نهاية التحدي",selection:$endAt,displayedComponents:[.date,.hourAndMinute])
+                        if !validDates {
+                            Text("يجب أن تكون نهاية التحدي بعد بدايته.")
+                                .font(.footnote).foregroundStyle(.orange)
+                        }
+                        Text("تغيير الفترة يعيد احتساب الترتيب من سجلات النشاط داخل المدة الجديدة، دون حذف نقاط الطلاب القديمة.")
+                            .font(.footnote).foregroundStyle(Ink.faded)
+                        Primary(title:"حفظ موعد التحدي",symbol:"calendar.badge.checkmark",busy:state.busy){
+                            showConfirmation=true
+                        }
+                        .disabled(!loaded || !validDates || state.busy)
+                    }
+                }
+                GlassBox {
+                    VStack(alignment:.leading,spacing:7) {
+                        Text("الحالة الحالية").font(.headline).foregroundStyle(Ink.gold)
+                        Text(state.contest["active"] as? Bool == true ? "التحدي جارٍ الآن" : "التحدي خارج الفترة الحالية")
+                            .foregroundStyle(state.contest["active"] as? Bool == true ? .green:.orange)
+                        Text("البداية: \(s(state.contest,"start_at"))")
+                        Text("النهاية: \(s(state.contest,"end_at"))")
+                    }.font(.footnote)
+                }
+                Text("ترتيب أفضل 50 طالبًا").font(.title3.bold())
+                ForEach(list(state.contest,"leaderboard")){student in
+                    GlassBox {
+                        HStack(spacing:12){
+                            Text("#\(num(student,"rank"))").foregroundStyle(Ink.gold)
+                                .font(.headline.monospacedDigit()).frame(width:39)
+                            AsyncImage(url:URL(string:s(student,"avatar_url",""))){image in
+                                image.resizable().scaledToFill()
+                            }placeholder:{
+                                Image(systemName:"person.crop.circle.fill")
+                                    .resizable().scaledToFit().foregroundStyle(Ink.gold)
+                            }
+                            .frame(width:46,height:46).clipShape(Circle())
+                            VStack(alignment:.leading,spacing:4){
+                                Text(s(student,"full_name")).font(.subheadline.bold())
+                                Text(s(student,"grade_name","غير محدد"))
+                                    .font(.caption).foregroundStyle(Ink.faded)
+                                Text(student["verified"] as? Bool == true ? "موثّق" : "بانتظار التوثيق")
+                                    .font(.caption2).foregroundStyle(Ink.faded)
+                            }
+                            Spacer(minLength:4)
+                            VStack(alignment:.trailing,spacing:4){
+                                Text("\(num(student,"contest_xp")) XP").font(.subheadline.bold())
+                                Text("\(num(student,"correct")) صحيحة")
+                                    .font(.caption).foregroundStyle(Ink.faded)
+                            }
+                        }
+                    }
+                }
+                if loaded && list(state.contest,"leaderboard").isEmpty {
+                    Text("لا توجد مشاركات ضمن الفترة الحالية.")
+                        .font(.footnote).foregroundStyle(Ink.faded)
+                }
+            }.padding(16)
+        }.adminBG().navigationTitle("تحدي المليون").navigationBarTitleDisplayMode(.inline)
+            .task{await fetch()}.refreshable{await fetch()}
+            .confirmationDialog("تأكيد تغيير فترة تحدي المليون؟",isPresented:$showConfirmation,titleVisibility:.visible){
+                Button("حفظ المواعيد"){
+                    guard validDates else{return}
+                    Task{
+                        _ = await state.mutation("contest_schedule_set",[
+                            "start_at":dateFormat.string(from:startAt),
+                            "end_at":dateFormat.string(from:endAt)
+                        ],refresh:"contest")
+                    }
+                }
+            }
+            .environment(\.timeZone,baghdad)
+    }
+    private func fetch() async {
+        await state.refresh("contest")
+        guard state.contest["ok"] as? Bool == true,
+              let start=dateFormat.date(from:s(state.contest,"start_at","")),
+              let end=dateFormat.date(from:s(state.contest,"end_at","")) else {loaded=false;return}
+        startAt=start;endAt=end;loaded=true
+    }
+}
+
+private struct ContentHealthScreen:View {
+    @ObservedObject var state:AdminState
+    private var checks:[(String,String,String)] {[
+        ("questions_total","جميع الأسئلة","doc.text.fill"),
+        ("questions_orphaned","أسئلة مرتبطة بفصول أو مواد أو صفوف مفقودة","link.badge.plus"),
+        ("questions_published_inactive","أسئلة منشورة في مادة أو فصل مخفي","exclamationmark.triangle.fill"),
+        ("questions_without_answers","أسئلة اختيار من متعدد دون خيارات","list.bullet.rectangle"),
+        ("chapters_orphaned","فصول لا تتبع مادة موجودة","books.vertical.fill"),
+        ("french_subjects","مواد فرنسية باقية في قاعدة البيانات","text.book.closed.fill")
+    ]}
+    var body:some View {
+        ScrollView{
+            VStack(alignment:.leading,spacing:16){
+                ScreenTitle(text:"سلامة المنهج والأسئلة",detail:"فحص مباشر للمواد والفصول والارتباطات")
+                Note(state:state)
+                GlassBox {
+                    VStack(alignment:.leading,spacing:8){
+                        Label("فحص للقراءة فقط",systemImage:"checkmark.shield.fill")
+                            .foregroundStyle(Ink.gold).font(.headline)
+                        Text("تظهر النتائج من قاعدة بيانات الموقع. لا يحذف هذا الفحص أي سؤال أو مادة ولا يصحح روابط تلقائيًا؛ راجع النسخة الاحتياطية قبل أي تغيير.")
+                            .font(.footnote).foregroundStyle(Ink.faded)
+                    }
+                }
+                let stats=state.contentHealth["stats"] as? J ?? [:]
+                ForEach(checks.indices,id:\.self){index in
+                    let item=checks[index]
+                    GlassBox{
+                        HStack(spacing:12){
+                            Image(systemName:item.2).foregroundStyle(Ink.gold).frame(width:30)
+                            Text(item.1).font(.subheadline)
+                            Spacer()
+                            Text(stats[item.0] is NSNull || stats[item.0] == nil ? "غير متاح" : "\(num(stats,item.0))")
+                                .font(.headline.monospacedDigit())
+                        }
+                    }
+                }
+            }.padding(16)
+        }.adminBG().navigationTitle("فحص المنهج").navigationBarTitleDisplayMode(.inline)
+            .task{await state.refresh("content_health")}
+            .refreshable{await state.refresh("content_health")}
     }
 }
