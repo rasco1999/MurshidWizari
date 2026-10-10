@@ -96,7 +96,7 @@ private fun SubscriptionScreen(vm: MurshidViewModel) {
                 Text("لديك رمز اشتراك؟", fontWeight = FontWeight.Bold)
                 OutlinedTextField(code, { code = it }, label = { Text("رمز الاشتراك") },
                     singleLine = true, modifier = Modifier.fillMaxWidth())
-                PrimaryAction("تفعيل الرمز", { vm.redeem(code); code = "" },
+                PrimaryAction("تفعيل الرمز", { vm.redeem(code) },
                     enabled = code.isNotBlank() && !vm.loading)
             }
         }
@@ -184,7 +184,7 @@ private fun SupportScreen(vm: MurshidViewModel) {
                 OutlinedTextField(text, { text = it },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("اكتب رسالتك للإدارة") }, minLines = 4)
-                PrimaryAction("إرسال الرسالة", { vm.sendSupport(text); text = "" },
+                PrimaryAction("إرسال الرسالة", { vm.sendSupport(text) },
                     enabled = text.isNotBlank() && !vm.loading)
             }
         }
@@ -250,7 +250,8 @@ private fun QuestionRequestScreen(vm: MurshidViewModel) {
             MurshidCard {
                 Text("طلب المزيد من الأسئلة", fontWeight = FontWeight.Bold)
                 Text("يمكن إرسال الطلب بعد إكمال أسئلة الموضوع.")
-                PrimaryAction("إرسال طلب إضافة أسئلة") { vm.requestMoreQuestions() }
+                PrimaryAction("إرسال طلب إضافة أسئلة", { vm.requestMoreQuestions() },
+                    enabled = vm.topic != null && !vm.loading)
             }
         }
     }

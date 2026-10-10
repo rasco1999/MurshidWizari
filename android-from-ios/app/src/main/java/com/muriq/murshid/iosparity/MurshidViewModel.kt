@@ -322,7 +322,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
 
     fun loadAccount() {
         viewModelScope.launch {
-            try { accountData = api.get("mobile/account.php"); featureData = accountData }
+            try { accountData = api.get("mobile/account.php") }
             catch (error: Exception) { fail(error) }
         }
     }
