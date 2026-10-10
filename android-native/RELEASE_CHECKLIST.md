@@ -10,7 +10,7 @@ Target: feature parity with iOS **4.8.18**. Branch: **`android-native`**. Do not
 - [x] Live anonymous `GET /mobile/account.php` returns HTTP 401 JSON (2026-10-10 UTC).
 - [x] Live anonymous `GET /api/grades.php` returns HTTP 200 JSON with three grade entries (2026-10-10 UTC).
 - [x] Public `GET /forgot-password.php` includes a same-origin CSRF field and `identifier` form field (2026-10-10 UTC). No password-reset request was submitted.
-- [x] JVM rules and debug compile passed on GitHub Actions (run 38094896178); a subsequent avatar/signing build must pass separately.
+- [x] All 35 JVM unit tests and debug compile passed on GitHub Actions for native registration/verification and custom practice (run 38096444401, 2026-10-10 UTC). These checks do **not** prove authenticated server behaviour or visual parity.
 
 ## Required authenticated integration tests
 
@@ -44,6 +44,8 @@ Use a dedicated **non-production student test account** and an administrator-app
 - [ ] Android API 26, 29, 33 and 35 on real devices/emulators; test accessibility labels, touch areas, edge insets and bottom navigation gesture zones.
 - [ ] Simulate slow 2G/packet loss, DNS failure, SSL error, HTTP 401/429/500 and disconnect mid-GET and mid-POST. Check explicit retry and no automatic POST duplication.
 - [ ] Reconnect in foreground/background and after process restart with “remember me”; verify session restoration, expiration and safe updates to profile/subscription.
+- [ ] Provide and validate an Android push-notification channel (FCM app/project configuration, token-registration API and test delivery); the existing iOS APNs registration endpoint is not an Android push service. Manual inbox loading does **not** satisfy push parity.
+- [ ] Compare actual icon/font assets and transitions from the owner-approved iOS build on supported devices; brand-token matching alone is insufficient.
 
 ## Signing and distribution gate
 
