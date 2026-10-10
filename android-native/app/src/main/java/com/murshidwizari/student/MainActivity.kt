@@ -216,6 +216,10 @@ class MainActivity : Activity() {
         Button(this).apply {
             this.text = text; textSize = 15f
             isAllCaps = false
+            setSingleLine(false)
+            maxLines = 3
+            minHeight = dp(50)
+            setPadding(dp(10), dp(8), dp(10), dp(8))
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setTextColor(if (secondary) accent else Color.WHITE)
             val fill = if (secondary) shape(if (night) surface else Color.rgb(227,235,250), dp(17).toFloat())
@@ -234,7 +238,7 @@ class MainActivity : Activity() {
 
     private fun button(text: String, secondary: Boolean = false, action: () -> Unit): Button {
         val b = makeButton(text, secondary, action)
-        root.addView(b, LinearLayout.LayoutParams(-1, dp(50)).apply { bottomMargin = dp(8) })
+        root.addView(b, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
         return b
     }
 
@@ -282,7 +286,7 @@ class MainActivity : Activity() {
         items.toList().chunked(columns).forEach { group ->
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             group.forEach { (label, action) ->
-                row.addView(makeButton(label, action = action), LinearLayout.LayoutParams(0, dp(56), 1f).apply {
+                row.addView(makeButton(label, action = action), LinearLayout.LayoutParams(0, -2, 1f).apply {
                     marginStart = dp(4); marginEnd = dp(4)
                 })
             }
