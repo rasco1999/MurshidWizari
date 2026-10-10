@@ -100,6 +100,45 @@ class ApiClient(context: Context) {
         } finally { conn.disconnect() }
     }
 
+    /**
+     * Used by PHP endpoints expecting application/x-www-form-urlencoded instead of JSON.
+     * Keep this separate from JSON calls to preserve existing iOS-compatible contracts.
+     */
+    fun postForm(path: String, fields: Map<String, String>): JSONObject {
+        val safePath = path.trimStart('/')
+        if (!safePath.matches(Regex("[a-zA-Z0-9_./-]+")) || safePath.contains(".."))
+            return JSONObject().put("ok", false).put("message", "مسار غير آمن.")
+        val conn = URL(origin.toString() + safePath).openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 15000
+            conn.readTimeout = 20000
+            conn.instanceFollowRedirects = false
+            conn.doOutput = true
+            conn.setRequestProperty("Accept", "application/json")
+            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
+            conn.setRequestProperty("Cache-Control", "no-store")
+            val cookies = cookieManager.cookieStore.get(origin)
+            if (cookies.isNotEmpty())
+                conn.setRequestProperty("Cookie", cookies.joinToString("; ") { it.name + "=" + it.value })
+            val encoded = fields.entries.joinToString("&") {
+                java.net.URLEncoder.encode(it.key, "UTF-8") + "=" + java.net.URLEncoder.encode(it.value, "UTF-8")
+            }
+            conn.outputStream.use { it.write(encoded.toByteArray(StandardCharsets.UTF_8)) }
+            val status = conn.responseCode
+            cookieManager.put(origin, conn.headerFields)
+            if (remember) saveCookies()
+            if (status in 300..399) return JSONObject().put("ok", false).put("message", "أعاد الخادم توجيه الطلب.")
+            val stream = if (status >= 400) conn.errorStream else conn.inputStream
+            val raw = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText().take(3_000_000) } ?: ""
+            val result = try { JSONObject(raw) } catch (_: Exception) {
+                JSONObject().put("ok", false).put("message", "استجابة غير متوقعة من الخادم (" + status + ").")
+            }
+            if (status == 401) result.put("session_expired", true)
+            return result
+        } finally { conn.disconnect() }
+    }
+
     private fun saveCookies() {
         try {
             val cookies = JSONArray()
