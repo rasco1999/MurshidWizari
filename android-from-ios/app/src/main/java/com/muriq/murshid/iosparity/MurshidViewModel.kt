@@ -105,8 +105,17 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
         private set
     private var inflight = false
 
+    var biometricEnabled by mutableStateOf(prefs.getBoolean("biometric_enabled", false))
+        private set
+    fun setBiometricEnabled(enabled: Boolean) {
+        biometricEnabled = enabled
+        prefs.edit().putBoolean("biometric_enabled", enabled).apply()
+    }
     init {
-        if (api.hasSavedSession()) refreshDashboard(firstLoad = true)
+        if (api.hasSavedSession() && !biometricEnabled) refreshDashboard(firstLoad = true)
+    }
+    fun unlockRememberedSession() {
+        if (dashboard == null && api.hasSavedSession() && !loading) refreshDashboard(firstLoad = true)
     }
 
     fun clearMessage() { message = "" }
@@ -759,6 +768,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
             } catch (_: Exception) {
                 // Always let the student explicitly clear their own local credentials.
             } finally {
+                setBiometricEnabled(false)
                 clearNotices(); api.clearSession(); dashboard = null; featureData = JSONObject()
                 screen = Screen.GUEST; tab = 0; clearMessage()
             }

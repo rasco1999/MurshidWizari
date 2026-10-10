@@ -381,6 +381,29 @@ fun AccountTab(vm: MurshidViewModel) {
                 PrimaryAction("إدارة الاشتراك") { vm.openFeature(Feature.SUBSCRIPTION) }
             }
         }
+        item {
+            val context = LocalContext.current
+            val supported = remember {
+                androidx.biometric.BiometricManager.from(context).canAuthenticate(
+                    androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                        androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                ) == androidx.biometric.BiometricManager.BIOMETRIC_SUCCESS
+            }
+            MurshidCard {
+                Text("الدخول بالبصمة", fontWeight = FontWeight.Bold)
+                Text("بعد تسجيل الدخول وتفعيل تذكرني، افتح حسابك ببصمة الإصبع أو الوجه أو رمز قفل الجهاز. التحقق مرة واحدة عند فتح التطبيق، وليس عند التنقل بين الصفحات.")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("تفعيل فتح الحساب بالبصمة", modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = vm.biometricEnabled,
+                        enabled = supported && vm.api.hasSavedSession(),
+                        onCheckedChange = vm::setBiometricEnabled
+                    )
+                }
+                if (!supported) Text("هذا الجهاز لا يدعم طريقة تحقق آمنة مفعّلة حالياً.")
+                else if (!vm.api.hasSavedSession()) Text("فعّل «تذكرني على هذا الجهاز» عند تسجيل الدخول أولاً.")
+            }
+        }
         item { SectionTitle("خدمات الطالب", "أدوات حسابك") }
         items(
             listOf(
