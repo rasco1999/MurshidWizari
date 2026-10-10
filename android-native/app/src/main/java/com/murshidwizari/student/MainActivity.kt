@@ -2,12 +2,19 @@ package com.murshidwizari.student
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.res.Configuration
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
+import android.content.res.ColorStateList
 import android.net.Uri
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.content.Context
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -17,6 +24,7 @@ import android.text.TextWatcher
 import android.text.method.HideReturnsTransformationMethod
 import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.widget.*
 import org.json.JSONArray
@@ -65,13 +73,24 @@ class MainActivity : Activity() {
     private var achievementStats = JSONObject()
     private var achievementFilter = "all"
     private var night = false
+    private var screenFrame: FrameLayout? = null
+    private var lastValidatedInternet: Boolean? = null
+    private var connectivity: ConnectivityManager? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var sessionGeneration = 0
+    private var avatarGeneration = 0
+    private var paymentBusy = false
+    private var paymentPlan = ""
+    private var checkoutReturnPending = false
     private val prefs by lazy { getSharedPreferences("native_preferences", MODE_PRIVATE) }
-    private val gold = Color.rgb(205,151,40)
-    private val navy = Color.rgb(24,49,92)
-    private val appColor get() = if (night) Color.rgb(28,35,48) else Color.WHITE
+    // Identical brand palette to the SwiftUI ThemeV34 definitions.
+    private val gold = Color.rgb(245,184,61)
+    private val navy = Color.rgb(11,31,51)
+    private val blue = Color.rgb(45,108,223)
+    private val appColor get() = if (night) Color.rgb(22,27,36) else Color.rgb(243,244,249)
     private val textColor get() = if (night) Color.rgb(241,244,249) else Color.rgb(30,40,55)
-    private val surface get() = if (night) Color.rgb(45,55,70) else Color.rgb(246,248,252)
-    private val accent get() = if (night) gold else navy
+    private val surface get() = if (night) Color.rgb(40,47,61) else Color.WHITE
+    private val accent get() = if (night) gold else blue
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -84,20 +103,26 @@ class MainActivity : Activity() {
             }
         }
     }
-    private fun shape(color: Int, radius: Float = 20f): GradientDrawable =
+    private fun shape(color: Int, radius: Float = dp(22).toFloat()): GradientDrawable =
         GradientDrawable().apply { setColor(color); cornerRadius = radius }
     private fun dp(size: Int): Int = (size * resources.displayMetrics.density).toInt()
-    private fun base(title: String, showBack: Boolean = false) {
-        window.statusBarColor = if (night) Color.rgb(28,35,48) else navy
-        window.navigationBarColor = appColor
-        val scroll = ScrollView(this).apply { isFillViewport = true; setBackgroundColor(appColor) }
+    private fun contentWidth(): Int = if (resources.configuration.screenWidthDp >= 740) dp(700) else -1
+    private fun setupRoot(horizontalPadding: Int = 16, topPadding: Int = 16) {
+        val scroll = ScrollView(this).apply { isFillViewport = true; setBackgroundColor(appColor); clipToPadding = false }
+        screenFrame = FrameLayout(this)
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(24), dp(20), dp(35))
             layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(dp(horizontalPadding), dp(topPadding), dp(horizontalPadding), dp(32))
         }
-        scroll.addView(root)
+        screenFrame!!.addView(root, FrameLayout.LayoutParams(contentWidth(), -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
+        scroll.addView(screenFrame)
         setContentView(scroll)
+    }
+    private fun base(title: String, showBack: Boolean = false) {
+        window.statusBarColor = navy
+        window.navigationBarColor = appColor
+        setupRoot()
         if (showBack) button("‹ الرجوع", secondary = true) { navigateBack() }
         title(title)
     }
@@ -148,31 +173,69 @@ class MainActivity : Activity() {
         root.addView(field, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(11) })
         return field
     }
-    private fun button(text: String, secondary: Boolean = false, action: () -> Unit): Button {
-        val b = Button(this).apply {
+    private fun makeButton(text: String, secondary: Boolean = false, action: () -> Unit): Button =
+        Button(this).apply {
             this.text = text; textSize = 15f
             isAllCaps = false
-            setTextColor(if (secondary) textColor else Color.WHITE)
-            background = shape(if (secondary) surface else navy, dp(12).toFloat())
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setTextColor(if (secondary) accent else Color.WHITE)
+            val fill = if (secondary) shape(if (night) surface else Color.rgb(227,235,250), dp(17).toFloat())
+                else GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(blue, Color.rgb(23,71,173)))
+                    .apply { cornerRadius = dp(17).toFloat() }
+            background = RippleDrawable(ColorStateList.valueOf(Color.argb(60, 120, 160, 230)), fill, shape(Color.WHITE, dp(17).toFloat()))
+            setOnTouchListener { view, event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> if (view.isEnabled) view.animate().scaleX(0.985f).scaleY(0.985f).setDuration(120).start()
+                    MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_UP -> view.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+                }
+                false
+            }
             setOnClickListener { action() }
         }
+
+    private fun button(text: String, secondary: Boolean = false, action: () -> Unit): Button {
+        val b = makeButton(text, secondary, action)
         root.addView(b, LinearLayout.LayoutParams(-1, dp(50)).apply { bottomMargin = dp(8) })
         return b
     }
+
+    private fun homeActionGrid(vararg items: Pair<String, () -> Unit>) {
+        val columns = if (resources.configuration.screenWidthDp >= 600) 2 else 1
+        if (columns == 1) {
+            items.forEach { (label, action) -> button(label, action = action) }
+            return
+        }
+        items.toList().chunked(columns).forEach { group ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            group.forEach { (label, action) ->
+                row.addView(makeButton(label, action = action), LinearLayout.LayoutParams(0, dp(56), 1f).apply {
+                    marginStart = dp(4); marginEnd = dp(4)
+                })
+            }
+            root.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+        }
+    }
     private fun message(text: String) = Toast.makeText(this, text, Toast.LENGTH_LONG).show()
+    private fun expireSession() {
+        sessionGeneration++
+        api.clear()
+        csrf = ""; student = JSONObject(); homepage = JSONObject(); subscribed = false
+        busyAnswer = false; submissionUncertain = false; dailyBusy = false; dailyUncertain = false
+        prefs.edit().remove("last_payment_order").apply()
+        loginScreen()
+        message("انتهت جلسة الدخول. سجّل الدخول مجدداً.")
+    }
     private fun fetch(path: String, body: JSONObject? = null, showError: Boolean = true, done: (JSONObject) -> Unit) {
+        val generation = sessionGeneration
         jobs.execute {
             val result = try { api.call(path, body) } catch (e: Exception) {
-                JSONObject().put("ok", false).put("message", "الاتصال بالخادم غير متاح. تحقق من الإنترنت وأعد المحاولة.")
+                JSONObject().put("ok", false).put("network_error", true)
+                    .put("message", NetworkRules.message(e, body != null))
             }
             main.post {
+                if (generation != sessionGeneration || isFinishing || isDestroyed) return@post
+                if (result.optBoolean("session_expired")) { expireSession(); return@post }
                 if (showError && !result.optBoolean("ok")) {
-                    if (result.optBoolean("session_expired")) {
-                        api.clear(); csrf = ""; busyAnswer = false; submissionUncertain = false
-                        dailyBusy = false; dailyUncertain = false; loginScreen()
-                        message("انتهت جلسة الدخول. سجّل الدخول مجدداً.")
-                        return@post
-                    }
                     message(result.optString("message", "تعذر تنفيذ الطلب."))
                 }
                 done(result)
@@ -184,35 +247,42 @@ class MainActivity : Activity() {
     }
 
     private fun fetchForm(path: String, data: Map<String, String>, done: (JSONObject) -> Unit) {
+        val generation = sessionGeneration
         jobs.execute {
-            val result = try { api.postForm(path, data) } catch (_: Exception) {
-                JSONObject().put("ok", false).put("message", "تعذر الاتصال بالخادم.")
+            val result = try { api.postForm(path, data) } catch (e: Exception) {
+                JSONObject().put("ok", false).put("message", NetworkRules.message(e, true))
             }
             main.post {
+                if (generation != sessionGeneration || isFinishing || isDestroyed) return@post
+                if (result.optBoolean("session_expired")) { expireSession(); return@post }
                 if (!result.optBoolean("ok")) message(result.optString("message", "تعذر تنفيذ الطلب."))
                 done(result)
             }
         }
     }
 
-    private fun loadAvatar(url: String) {
-        if (url.isBlank()) return
-        val uri = try { java.net.URI(url) } catch (_: Exception) { return }
-        if (uri.scheme != "https" || uri.host !in setOf("www.mur-iq.com", "mur-iq.com")) return
+    private fun loadAvatar(url: String, revision: String = "") {
         val view = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             contentDescription = "الصورة الشخصية"
         }
+        view.setImageResource(R.drawable.ic_murshid)
         root.addView(view, LinearLayout.LayoutParams(dp(88), dp(88)).apply {
             gravity = Gravity.CENTER_HORIZONTAL
             bottomMargin = dp(12)
         })
+        fetchAvatarInto(view, url, revision)
+    }
+
+    private fun fetchAvatarInto(view: ImageView, raw: String, revision: String) {
+        val url = AccountRules.avatarUrl(raw, revision + "_" + avatarGeneration) ?: return
         jobs.execute {
             val bitmap = try {
                 val connection = URL(url).openConnection() as java.net.HttpURLConnection
                 connection.connectTimeout = 10000
                 connection.readTimeout = 12000
                 connection.instanceFollowRedirects = false
+                connection.useCaches = false
                 val length = connection.contentLength
                 if (length > 3_000_000) null else connection.inputStream.use { input ->
                     val output = java.io.ByteArrayOutputStream()
@@ -231,7 +301,7 @@ class MainActivity : Activity() {
                     }
                 }.also { connection.disconnect() }
             } catch (_: Exception) { null }
-            main.post { if (bitmap != null && view.parent != null) view.setImageBitmap(bitmap) }
+            main.post { if (bitmap != null && view.parent != null && !isDestroyed) view.setImageBitmap(bitmap) }
         }
     }
 
@@ -239,18 +309,7 @@ class MainActivity : Activity() {
         activeScreen = "login"
         window.statusBarColor = if (night) Color.rgb(13, 29, 54) else navy
         window.navigationBarColor = appColor
-        val scroll = ScrollView(this).apply {
-            isFillViewport = true
-            setBackgroundColor(appColor)
-            clipToPadding = false
-        }
-        root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutDirection = View.LAYOUT_DIRECTION_RTL
-            setPadding(dp(24), dp(18), dp(24), dp(26))
-        }
-        scroll.addView(root)
-        setContentView(scroll)
+        setupRoot(horizontalPadding = 20, topPadding = 18)
 
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -261,15 +320,14 @@ class MainActivity : Activity() {
                 intArrayOf(Color.rgb(15, 40, 79), Color.rgb(39, 91, 165))
             ).apply { cornerRadius = dp(28).toFloat() }
         }
-        val emblem = TextView(this).apply {
-            text = "✦"
-            textSize = 42f
-            gravity = Gravity.CENTER
-            setTextColor(Color.rgb(244, 203, 116))
+        val emblem = ImageView(this).apply {
+            setImageResource(R.drawable.ic_murshid)
+            scaleType = ImageView.ScaleType.FIT_CENTER
             background = GradientDrawable().apply {
-                setColor(Color.argb(38, 255, 255, 255))
+                setColor(Color.WHITE)
                 cornerRadius = dp(24).toFloat()
             }
+            contentDescription = "شعار المرشد الوزاري"
         }
         header.addView(emblem, LinearLayout.LayoutParams(dp(76), dp(76)).apply {
             bottomMargin = dp(14)
@@ -361,6 +419,13 @@ class MainActivity : Activity() {
                 }
             }
         }
+        if (api.hasRememberedSession()) {
+            button("إعادة الاتصال واستعادة جلستي", secondary = true) {
+                fetch("mobile/bootstrap.php") { result ->
+                    if (result.optBoolean("ok")) showHome(result)
+                }
+            }
+        }
         gap(6)
         button("إنشاء حساب طالب جديد", secondary = true) { registerScreen() }
         button("نسيت كلمة المرور؟", secondary = true) { recoverScreen() }
@@ -447,15 +512,19 @@ class MainActivity : Activity() {
         button("لديك حساب بالفعل؟", secondary = true) { loginScreen() }
     }
 
-    private fun showHome(response: JSONObject) {
-        if (!response.optBoolean("ok")) { loginScreen(); return }
-        competitionHistory.clear()
+    private fun applyBootstrap(response: JSONObject) {
         homepage = response; csrf = response.optString("csrf", csrf)
         student = response.optJSONObject("user") ?: JSONObject()
         subscribed = response.optBoolean("subscribed")
+    }
+
+    private fun showHome(response: JSONObject) {
+        if (!response.optBoolean("ok")) { loginScreen(); return }
+        competitionHistory.clear()
+        applyBootstrap(response)
         activeScreen = "home"
         base("المرشد الوزاري")
-        loadAvatar(student.optString("avatar_url"))
+        loadAvatar(student.optString("avatar_url"), student.optString("avatar_revision"))
         line("مرحباً، " + student.optString("name", "الطالب"), true)
         caption("الصف الدراسي: " + student.optString("grade"))
         val remaining = response.optInt("free_remaining", 0)
@@ -465,10 +534,12 @@ class MainActivity : Activity() {
         val stats = response.optJSONObject("stats") ?: JSONObject()
         caption("المستوى " + stats.optInt("level",1) + " • نقاط XP " + stats.optInt("xp",0) +
             " • الإجابات الصحيحة " + stats.optInt("correct_answers",0))
-        button("المواد الدراسية والاختبارات") { subjectsScreen() }
-        button("تحدي اليوم • اختبار سريع") { openCompetition("daily_challenge") }
-        button("تحدي المليون • الترتيب والمنافسة") { openCompetition("contest") }
-        button("إنجازاتي • الشارات والمستوى") { openCompetition("achievements") }
+        homeActionGrid(
+            "المواد الدراسية والاختبارات" to { subjectsScreen() },
+            "تحدي اليوم • اختبار سريع" to { openCompetition("daily_challenge") },
+            "تحدي المليون • المنافسة" to { openCompetition("contest") },
+            "إنجازاتي • الشارات" to { openCompetition("achievements") }
+        )
         button("حسابي") { accountScreen() }
         button("الإشعارات") { notificationsScreen() }
         button("المفضلة") { favoritesScreen() }
@@ -488,24 +559,138 @@ class MainActivity : Activity() {
         button("تحديث البيانات", secondary = true) { refreshHome() }
         button("تسجيل الخروج", secondary = true) {
             fetch("mobile/logout.php", JSONObject().put("csrf", csrf), showError = false) {
+                sessionGeneration++
                 api.clear(); csrf = ""; student = JSONObject(); loginScreen()
             }
         }
     }
 
-    private fun plansScreen() {
-        base("الاشتراكات", true)
-        caption("الدفع يتم عبر قنوات المنصة الرسمية.")
+    private fun lastPaymentKey(): String = "last_payment_order_" + student.optInt("id", 0)
+
+    /** Mirrors the latest iOS V31 flow: plan selection, external HTTPS checkout and status polling. */
+    private fun plansScreen(statusText: String = "") {
+        activeScreen = "plans"
+        base("الاشتراك", true)
+        line(if (subscribed) "✓ اشتراكك مفعّل" else "افتح كامل الأسئلة", true)
+        caption(if (subscribed) "يمكنك الوصول إلى كامل المحتوى المتاح في صفك." else
+            "اختر الباقة، ثم انتقل إلى صفحة الدفع الخارجية الآمنة.")
+        if (statusText.isNotBlank()) line(statusText)
+        if (subscribed) {
+            line("لا تحتاج إلى إجراء أي عملية دفع الآن.")
+            button("تحديث حالة الاشتراك", secondary = true) { refreshSubscriptionStatus() }
+            return
+        }
         val plans = homepage.optJSONArray("plans") ?: JSONArray()
+        if (plans.length() == 0) {
+            line("لم تصل الباقات من الخادم.")
+            button("إعادة التحميل") { refreshSubscriptionStatus() }
+            return
+        }
+        caption("اختر الباقة المناسبة:")
+        val validIds = ArrayList<String>()
         for (i in 0 until plans.length()) {
             val plan = plans.optJSONObject(i) ?: continue
-            line(plan.optString("label") + " — " + plan.optInt("amount") + " دينار عراقي")
+            val id = plan.optString("id")
+            if (id.isBlank()) continue
+            validIds.add(id)
         }
-        button("تفعيل رمز اشتراك") { redeemScreen() }
+        if (paymentPlan !in validIds) paymentPlan = validIds.firstOrNull() ?: ""
+        for (i in 0 until plans.length()) {
+            val plan = plans.optJSONObject(i) ?: continue
+            val id = plan.optString("id")
+            if (id.isBlank()) continue
+            val selected = id == paymentPlan
+            val price = java.text.NumberFormat.getNumberInstance(java.util.Locale("ar", "IQ"))
+                .format(plan.optLong("amount", 0))
+            button((if (selected) "◉ " else "◯ ") + plan.optString("label") + " — " + price + " د.ع",
+                secondary = !selected) {
+                if (!paymentBusy) { paymentPlan = id; plansScreen(statusText) }
+            }
+        }
+        val checkout = button("الانتقال إلى الدفع الخارجي") { beginCheckout() }
+        checkout.isEnabled = !paymentBusy && paymentPlan.isNotBlank()
+        val lastOrder = prefs.getInt(lastPaymentKey(), 0)
+        if (lastOrder > 0) button("التحقق من حالة آخر عملية #$lastOrder", secondary = true) {
+            checkPaymentStatus(lastOrder)
+        }
+        caption("بيانات الدفع الحساسة لا تمر عبر التطبيق، وسيُؤكَّد الاشتراك بعد تحقق الخادم من العملية.")
+        button("لديك رمز اشتراك؟", secondary = true) { redeemScreen() }
+    }
+
+    private fun beginCheckout() {
+        if (paymentBusy || subscribed || paymentPlan.isBlank()) return
+        paymentBusy = true
+        plansScreen("جارٍ تجهيز رابط الدفع…")
+        val body = JSONObject().put("csrf", csrf).put("action", "checkout")
+            .put("plan", paymentPlan)
+            .put("customer_name", student.optString("name", "طالب مشترك"))
+            // The live V31 iOS contract uses this server placeholder; no phone is collected in-app.
+            .put("customer_phone", "07700000000")
+        fetch("api/payment-checkout.php", body, showError = false) { result ->
+            paymentBusy = false
+            if (!result.optBoolean("ok")) {
+                plansScreen(result.optString("message", "تعذر تجهيز الدفع؛ تحقق من حالة أي طلب سابق."))
+                return@fetch
+            }
+            if (result.optBoolean("subscribed")) { refreshSubscriptionStatus(); return@fetch }
+            val url = result.optString("redirect")
+            val order = result.optInt("order_id")
+            if (order <= 0 || !AccountRules.safePaymentRedirect(url)) {
+                plansScreen("لم يُرجع الخادم رابط دفع آمن ورقم طلب صالحاً. تحقق من الطلب قبل المحاولة مجدداً.")
+                return@fetch
+            }
+            prefs.edit().putInt(lastPaymentKey(), order).apply()
+            plansScreen("تم إنشاء الطلب #$order. أكمل الدفع في المتصفح ثم تحقق من حالته.")
+            try {
+                checkoutReturnPending = true
+                external(url)
+            } catch (_: Exception) {
+                checkoutReturnPending = false
+                message("تعذر فتح متصفح الدفع. يمكنك التحقق من حالة الطلب لاحقاً.")
+            }
+        }
+    }
+
+    private fun checkPaymentStatus(order: Int) {
+        if (paymentBusy || order <= 0) return
+        paymentBusy = true
+        plansScreen("جارٍ التحقق من العملية #$order…")
+        fetch("api/payment-checkout.php", JSONObject().put("csrf", csrf)
+            .put("action", "status").put("order_id", order), showError = false) { result ->
+            paymentBusy = false
+            if (!result.optBoolean("ok")) {
+                plansScreen(result.optString("message", "تعذر التحقق من حالة الدفع حالياً."))
+            } else if (result.optBoolean("subscribed")) {
+                // The checkout response alone does not unlock subscriber-only features.
+                refreshSubscriptionStatus(clearOrderOnSuccess = true)
+            } else {
+                plansScreen(result.optString("message", "الدفع قيد التحقق."))
+            }
+        }
+    }
+
+    private fun refreshSubscriptionStatus(clearOrderOnSuccess: Boolean = false) {
+        fetch("mobile/bootstrap.php", showError = false) { result ->
+            if (!result.optBoolean("ok")) {
+                plansScreen("تعذر جلب حالة الاشتراك من الخادم. أعد التحديث عند عودة الاتصال.")
+                return@fetch
+            }
+            applyBootstrap(result)
+            if (subscribed && clearOrderOnSuccess) prefs.edit().remove(lastPaymentKey()).apply()
+            plansScreen(if (subscribed) "أكد الخادم تفعيل اشتراكك." else "لم يؤكد الخادم التفعيل بعد.")
+        }
     }
 
     private fun refreshHome() {
         fetch("mobile/bootstrap.php") { result -> if (result.optBoolean("ok")) showHome(result) }
+    }
+
+    private fun refreshAccountAfterMutation() {
+        fetch("mobile/bootstrap.php", showError = false) { result ->
+            if (result.optBoolean("ok")) applyBootstrap(result)
+            else message("تم حفظ التغيير لكن تعذر تحديث حالة الحساب الآن. اسحب/حدّث عند عودة الاتصال.")
+            accountScreen()
+        }
     }
 
     private fun subjectsScreen(predictions: Boolean = false) {
@@ -957,6 +1142,7 @@ class MainActivity : Activity() {
             message("اختر صورة JPG أو PNG.")
             return
         }
+        val generation = sessionGeneration
         jobs.execute {
             val bytes = try {
                 contentResolver.openInputStream(selected)?.use { stream ->
@@ -976,51 +1162,142 @@ class MainActivity : Activity() {
             val response = if (bytes == null)
                 JSONObject().put("ok", false).put("message", "تعذر قراءة الصورة أو حجمها أكبر من 3 ميغابايت.")
             else try { api.uploadAvatar(csrf, if (mime == "image/png") "avatar.png" else "avatar.jpg", mime ?: "image/jpeg", bytes) }
-            catch (_: Exception) { JSONObject().put("ok", false).put("message", "تعذر رفع الصورة. حاول مجدداً.") }
+            catch (e: Exception) { JSONObject().put("ok", false).put("message", NetworkRules.message(e, true)) }
             main.post {
+                if (generation != sessionGeneration || isFinishing || isDestroyed) return@post
+                if (response.optBoolean("session_expired")) { expireSession(); return@post }
                 if (response.optBoolean("ok")) {
+                    avatarGeneration++
                     message(response.optString("message", "تم تحديث الصورة الشخصية."))
-                    accountScreen()
+                    refreshAccountAfterMutation()
                 } else message(response.optString("message", "تعذر رفع الصورة."))
             }
         }
     }
 
+    private fun accountProfileCard(profile: JSONObject, account: JSONObject) {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(dp(18), dp(20), dp(18), dp(20))
+            background = GradientDrawable(GradientDrawable.Orientation.TR_BL,
+                intArrayOf(navy, blue)).apply { cornerRadius = dp(28).toFloat() }
+            elevation = dp(4).toFloat()
+        }
+        val avatarColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
+        }
+        val avatar = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            setImageResource(R.drawable.ic_murshid)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.WHITE)
+                setStroke(dp(2), Color.argb(140,255,255,255))
+            }
+            clipToOutline = true
+            contentDescription = "الصورة الشخصية الحالية"
+        }
+        avatarColumn.addView(avatar, LinearLayout.LayoutParams(dp(78), dp(78)))
+        fetchAvatarInto(avatar, account.optString("avatar_url"), account.optString("avatar_revision"))
+        val photoChange = TextView(this).apply {
+            text = "📷 تغيير الصورة"
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setPadding(dp(2), dp(7), dp(2), dp(3))
+            setOnClickListener { chooseAvatar() }
+            contentDescription = "اختيار صورة شخصية جديدة"
+        }
+        avatarColumn.addView(photoChange)
+        card.addView(avatarColumn)
+        val details = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), 0, dp(4), 0)
+        }
+        fun detail(value: String, size: Float, strong: Boolean, opacity: Int = 255) {
+            details.addView(TextView(this).apply {
+                text = value; textSize = size
+                setTextColor(Color.argb(opacity, 255,255,255))
+                if (strong) typeface = Typeface.DEFAULT_BOLD
+                setPadding(0, dp(3), 0, dp(3))
+            })
+        }
+        detail(profile.optString("name", student.optString("name", "طالب")), 20f, true)
+        detail(profile.optString("grade", student.optString("grade")), 14f, false, 210)
+        detail(if (subscribed) "✓ اشتراك فعّال" else "🎁 ${homepage.optInt("free_remaining", 0)} سؤال مجاني متبقٍ", 13f, true)
+        card.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
+        root.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(16) })
+    }
+
+    private fun chooseAvatar() {
+        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+            type = "image/*"; addCategory(Intent.CATEGORY_OPENABLE)
+        }
+        startActivityForResult(Intent.createChooser(intent, "اختر صورة شخصية"), 301)
+    }
+
+    private fun promptRename(current: String) {
+        val field = EditText(this).apply {
+            setSingleLine(true); setText(current); setSelection(text.length)
+            hint = "الاسم الثلاثي"
+            setPadding(dp(20), dp(12), dp(20), dp(12))
+        }
+        val dialog = AlertDialog.Builder(this).setTitle("تغيير الاسم")
+            .setMessage("يمكن تغيير الاسم مرة واحدة فقط حسب إعدادات المنصة.")
+            .setView(field).setPositiveButton("حفظ", null).setNegativeButton("إلغاء", null).create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val normalized = AccountRules.normalizeName(field.text.toString())
+                if (!AccountRules.validFullName(normalized)) {
+                    field.error = "اكتب الاسم الثلاثي على الأقل، دون أرقام."; return@setOnClickListener
+                }
+                val save = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                save.isEnabled = false
+                fetch("mobile/account.php", JSONObject().put("csrf", csrf).put("action", "change_name")
+                    .put("name", normalized)) { result ->
+                    save.isEnabled = true
+                    if (result.optBoolean("ok")) {
+                        student.put("name", normalized)
+                        dialog.dismiss()
+                        message("تم تحديث الاسم.")
+                        refreshAccountAfterMutation()
+                    }
+                }
+            }
+        }
+        dialog.show()
+    }
+
     private fun accountScreen() {
+        activeScreen = "account"
+        base("حسابي", true)
+        line("جارٍ تحديث بيانات الحساب…")
+        button("إعادة التحميل", secondary = true) { accountScreen() }
         fetch("mobile/account.php") { response ->
             if (!response.optBoolean("ok")) return@fetch
             base("حسابي", true)
             val profile = response.optJSONObject("user") ?: JSONObject()
-            loadAvatar(response.optString("avatar_url"))
-            line("الاسم: " + profile.optString("name"), true)
-            line("معرّف الطالب: " + profile.optInt("id"))
-            caption("حالة الصورة: " + response.optString("avatar_status", "غير محددة"))
-            button("رفع صورة شخصية") {
-                val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-                    type = "image/*"
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                }
-                startActivityForResult(Intent.createChooser(intent, "اختر صورة شخصية"), 301)
-            }
+            accountProfileCard(profile, response)
+            caption("معرّف الطالب: " + profile.optInt("id"))
+            caption(if (response.optString("avatar_status") == "approved") "الصورة مفعّلة" else "يمكن تغيير الصورة مباشرة")
+            button("تغيير الصورة الشخصية") { chooseAvatar() }
             button("حذف الصورة الشخصية", secondary = true) {
                 AlertDialog.Builder(this).setTitle("حذف الصورة")
                     .setMessage("هل تريد إزالة صورتك الشخصية؟")
                     .setPositiveButton("نعم") { _, _ ->
                         fetchForm("mobile/avatar.php", mapOf("csrf" to csrf, "remove" to "1")) { result ->
-                            if (result.optBoolean("ok")) accountScreen()
+                            if (result.optBoolean("ok")) { avatarGeneration++; refreshAccountAfterMutation() }
                         }
                     }.setNegativeButton("إلغاء", null).show()
             }
             val days = response.optInt("subscription_days_remaining", -1)
             if (days >= 0) line("الأيام المتبقية من الاشتراك: " + days)
+            button(if (subscribed) "إدارة الاشتراك الفعّال" else "فتح الاشتراك الكامل") { plansScreen() }
+            button("تحديث حالة الاشتراك", secondary = true) { refreshAccountAfterMutation() }
             if (response.optBoolean("can_change_name")) {
-                val name = input("تغيير الاسم الثلاثي")
-                button("حفظ الاسم") {
-                    val newName = name.text.toString().trim()
-                    fetch("mobile/account.php",JSONObject().put("csrf",csrf).put("action","change_name").put("name",newName)) {
-                        if (it.optBoolean("ok")) { message("تم تحديث الاسم."); refreshHome() }
-                    }
-                }
+                button("تغيير الاسم الثلاثي (مرة واحدة)", secondary = true) { promptRename(profile.optString("name")) }
             }
             button("إدارة خصوصية الحساب", secondary = true) { deletionScreen(response) }
             button("سياسة الخصوصية", secondary = true) { external("https://mur-iq.com/privacy.php") }
@@ -1512,6 +1789,7 @@ class MainActivity : Activity() {
             "exam" -> topicsScreen(topicsSubjectId, topicsSubjectName)
             "topics" -> subjectsScreen()
             "subjects" -> showHome(homepage)
+            "account", "plans" -> showHome(homepage)
             "login" -> finish()
             else -> if (homepage.optBoolean("ok")) showHome(homepage) else loginScreen()
         }
@@ -1519,6 +1797,61 @@ class MainActivity : Activity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() { navigateBack() }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Keep an active exam and its unsent answers intact on phone/tablet rotation.
+        screenFrame?.getChildAt(0)?.let { content ->
+            content.layoutParams = (content.layoutParams as FrameLayout.LayoutParams).apply {
+                width = contentWidth()
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            }
+        }
+    }
+
+    private fun inspectInternet() {
+        val manager = connectivity ?: return
+        val caps = manager.getNetworkCapabilities(manager.activeNetwork)
+        val validated = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+        main.post {
+            val old = lastValidatedInternet
+            lastValidatedInternet = validated
+            if (old == true && !validated) message("انقطع اتصال الإنترنت. ستُحفظ الإجابات غير المرسلة في هذه الشاشة.")
+            if (old == false && validated) message("عاد اتصال الإنترنت. يمكنك إعادة تحميل البيانات؛ لن تُعاد طلبات الحفظ تلقائياً.")
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        connectivity = manager
+        if (networkCallback == null) {
+            networkCallback = object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) { inspectInternet() }
+                override fun onLost(network: Network) { inspectInternet() }
+                override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) { inspectInternet() }
+            }
+            manager.registerDefaultNetworkCallback(networkCallback!!)
+        }
+        inspectInternet()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (checkoutReturnPending && activeScreen == "plans") {
+            checkoutReturnPending = false
+            val order = prefs.getInt(lastPaymentKey(), 0)
+            if (order > 0) checkPaymentStatus(order)
+        }
+    }
+
+    override fun onStop() {
+        networkCallback?.let { callback ->
+            try { connectivity?.unregisterNetworkCallback(callback) } catch (_: Exception) { }
+        }
+        networkCallback = null
+        super.onStop()
+    }
 
     override fun onDestroy() {
         jobs.shutdownNow()

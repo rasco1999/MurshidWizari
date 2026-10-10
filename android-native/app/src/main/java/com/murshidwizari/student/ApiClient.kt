@@ -64,7 +64,8 @@ class ApiClient(context: Context) {
 
     fun call(path: String, payload: JSONObject? = null): JSONObject {
         val safePath = path.trimStart('/')
-        if (safePath.startsWith("http:") || safePath.startsWith("https:") || safePath.startsWith("//"))
+        if (!safePath.matches(Regex("[a-zA-Z0-9_./?=&%+\\-]+")) || safePath.contains("..") ||
+            safePath.contains("//"))
             return JSONObject().put("ok", false).put("message", "المسار غير آمن.")
         val conn = URL(origin.toString() + safePath).openConnection() as HttpURLConnection
         try {
@@ -95,6 +96,7 @@ class ApiClient(context: Context) {
             val response = try { JSONObject(raw) } catch (_: Exception) {
                 JSONObject().put("ok", false).put("message", if (status >= 400) "خطأ من الخادم (" + status + ")" else "استجابة غير متوقعة من الخادم.")
             }
+            if (status !in 200..299) response.put("ok", false)
             if (status == 401 && safePath != "api/login.php") response.put("session_expired", true)
             return response
         } finally { conn.disconnect() }
@@ -134,6 +136,7 @@ class ApiClient(context: Context) {
             val result = try { JSONObject(raw) } catch (_: Exception) {
                 JSONObject().put("ok", false).put("message", "استجابة غير متوقعة من الخادم (" + status + ").")
             }
+            if (status !in 200..299) result.put("ok", false)
             if (status == 401) result.put("session_expired", true)
             return result
         } finally { conn.disconnect() }
@@ -176,6 +179,7 @@ class ApiClient(context: Context) {
             val result = try { JSONObject(raw) } catch (_: Exception) {
                 JSONObject().put("ok", false).put("message", "استجابة غير متوقعة من الخادم (" + status + ").")
             }
+            if (status !in 200..299) result.put("ok", false)
             if (status == 401) result.put("session_expired", true)
             return result
         } finally { conn.disconnect() }
