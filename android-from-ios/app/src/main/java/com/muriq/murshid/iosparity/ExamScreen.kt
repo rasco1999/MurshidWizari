@@ -134,7 +134,7 @@ fun ExamScreen(vm: MurshidViewModel) {
                     Spacer(Modifier.width(9.dp))
                     Text(q.type.ifBlank { "سؤال" }, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Text(q.text, style = MaterialTheme.typography.titleMedium,
+                Text(QuestionPresentation.display(q.text), style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold)
                 if (q.raw.text("meaning_word").isNotBlank()) {
                     Text("المفردة: ${q.raw.text("meaning_word")}", color = MurshidBlue)
