@@ -102,7 +102,7 @@ data class QuizQuestion(
 data class SubscriptionPlan(val id: String, val label: String, val amount: Int) {
     companion object {
         fun from(json: JSONObject) = SubscriptionPlan(
-            json.text("id", "month1"), json.text("label", json.text("name")),
+            json.text("key", json.text("id", "month1")), json.text("label", json.text("name")),
             json.num("amount", json.num("price"))
         )
     }
