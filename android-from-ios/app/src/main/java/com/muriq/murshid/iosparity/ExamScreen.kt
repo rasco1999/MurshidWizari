@@ -171,8 +171,8 @@ fun ExamScreen(vm: MurshidViewModel) {
                                             MurshidBlue.copy(alpha = 0.12f), CircleShape),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text(('أ' + i).toString(), fontWeight = FontWeight.Bold,
-                                            color = MurshidBlue)
+                                        Text(listOf("أ", "ب", "ج", "د", "هـ", "و").getOrElse(i) { (i + 1).toString() },
+                                            fontWeight = FontWeight.Bold, color = MurshidBlue)
                                     }
                                     Spacer(Modifier.width(12.dp))
                                     Text(option.title, modifier = Modifier.weight(1f))
