@@ -23,6 +23,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.text.InputType
+import android.text.InputFilter
 import android.text.Editable
 import android.text.TextWatcher
 import android.text.method.HideReturnsTransformationMethod
@@ -89,6 +90,8 @@ class MainActivity : Activity() {
     private var paymentPlan = ""
     private var plansReturnScreen = "home"
     private var checkoutReturnPending = false
+    private var recoveryBusy = false
+    private var recoverReturnScreen = "login"
     private val prefs by lazy { getSharedPreferences("native_preferences", MODE_PRIVATE) }
     // Identical brand palette to the SwiftUI ThemeV34 definitions.
     private val gold = Color.rgb(245,184,61)
@@ -473,11 +476,88 @@ class MainActivity : Activity() {
     }
 
     private fun recoverScreen() {
+        if (activeScreen != "recover" && activeScreen != "phone_reset")
+            recoverReturnScreen = if (activeScreen == "account") "account" else "login"
         activeScreen = "recover"
-        base("استعادة الحساب", showBack = false)
-        line("استعادة الحساب تتم عبر إجراءات التحقق الرسمية الخاصة بالموقع.")
-        button("فتح استعادة الحساب في المتصفح") { external("https://www.mur-iq.com/auth.php") }
-        button("عودة لتسجيل الدخول", secondary = true) { loginScreen() }
+        base("استعادة كلمة المرور", showBack = true)
+        line("استعد حسابك دون مغادرة التطبيق", true)
+        caption("أدخل البريد أو رقم الهاتف المسجل. سيصل رمز إلى WhatsApp للهاتف، أو رابط آمن إلى البريد الإلكتروني.")
+        val identifier = input("07XXXXXXXXX أو البريد الإلكتروني")
+        identifier.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+        val submit = button("متابعة الاستعادة") {
+            val value = RecoveryRules.normalizedDigits(identifier.text.toString().trim())
+            if (value.isBlank()) { identifier.error = "أدخل الهاتف أو البريد."; return@button }
+            if (recoveryBusy) return@button
+            recoveryBusy = true
+            recoveryRequest(mayHaveSubmitted = true, action = { api.beginPasswordReset(value) }) { response ->
+                recoveryBusy = false
+                if (activeScreen != "recover") return@recoveryRequest
+                if (response.optBoolean("ok")) {
+                    if (response.optString("channel") == "phone") phoneResetScreen(response.optString("token"))
+                    else line(response.optString("message", "تحقق من بريدك الإلكتروني."))
+                } else message(response.optString("message", "تعذر استعادة الحساب الآن."))
+            }
+        }
+        submit.isEnabled = !recoveryBusy
+        button("العودة", secondary = true) { navigateBack() }
+    }
+
+    private fun recoveryRequest(mayHaveSubmitted: Boolean, action: () -> JSONObject, done: (JSONObject) -> Unit) {
+        val generation = sessionGeneration
+        jobs.execute {
+            val response = try { action() } catch (e: Exception) {
+                JSONObject().put("ok", false).put("message", NetworkRules.message(e, mayHaveSubmitted))
+            }
+            main.post {
+                if (generation == sessionGeneration && !isFinishing && !isDestroyed) done(response)
+            }
+        }
+    }
+
+    private fun phoneResetScreen(token: String) {
+        if (!token.matches(Regex("[a-f0-9]{64}"))) { message("رابط استعادة الهاتف غير صالح."); recoverScreen(); return }
+        activeScreen = "phone_reset"
+        base("تأكيد استعادة الهاتف", true)
+        line("أدخل رمز WhatsApp واختر كلمة مرور جديدة.", true)
+        caption("ستحتاج إلى تسجيل الدخول مجدداً بعد نجاح التغيير.")
+        val code = input("رمز WhatsApp من 6 أرقام").apply {
+            inputType = InputType.TYPE_CLASS_NUMBER
+            filters = arrayOf(InputFilter.LengthFilter(6))
+        }
+        val password = input("كلمة مرور جديدة (8 أحرف على الأقل)", password = true)
+        val confirm = input("تأكيد كلمة المرور", password = true)
+        val save = button("حفظ كلمة المرور الجديدة") {
+            val otp = RecoveryRules.normalizedDigits(code.text.toString().trim())
+            val pass = password.text.toString()
+            val confirmation = confirm.text.toString()
+            if (!RecoveryRules.validReset(otp, pass, confirmation)) {
+                message("تحقق من الرمز المكوّن من 6 أرقام ومن تطابق كلمتي المرور (8 أحرف على الأقل).")
+                return@button
+            }
+            if (recoveryBusy) return@button
+            recoveryBusy = true
+            recoveryRequest(mayHaveSubmitted = true,
+                action = { api.resetPhonePassword(token, otp, pass, confirmation) }) { result ->
+                recoveryBusy = false
+                if (activeScreen != "phone_reset") return@recoveryRequest
+                if (result.optBoolean("ok")) {
+                    sessionGeneration++
+                    csrf = ""; student = JSONObject(); homepage = JSONObject(); subscribed = false
+                    message(result.optString("message", "تم تغيير كلمة المرور. سجّل الدخول من جديد."))
+                    loginScreen()
+                } else message(result.optString("message", "تعذر تغيير كلمة المرور."))
+            }
+        }
+        save.isEnabled = !recoveryBusy
+        button("إعادة إرسال رمز WhatsApp", secondary = true) {
+            if (recoveryBusy) return@button
+            recoveryBusy = true
+            recoveryRequest(mayHaveSubmitted = true, action = { api.resendPhonePasswordCode(token) }) { result ->
+                recoveryBusy = false
+                if (activeScreen == "phone_reset")
+                    message(result.optString("message", "تعذر إعادة إرسال الرمز."))
+            }
+        }
     }
 
     private fun registerScreen() {
@@ -1370,6 +1450,7 @@ class MainActivity : Activity() {
             if (response.optBoolean("can_change_name")) {
                 button("تغيير الاسم الثلاثي (مرة واحدة)", secondary = true) { promptRename(profile.optString("name")) }
             }
+            button("استعادة / تغيير كلمة المرور", secondary = true) { recoverScreen() }
             button("إدارة خصوصية الحساب", secondary = true) { deletionScreen(response) }
             button("سياسة الخصوصية", secondary = true) { external("https://mur-iq.com/privacy.php") }
         }
@@ -1852,6 +1933,8 @@ class MainActivity : Activity() {
             return
         }
         when (activeScreen) {
+            "phone_reset" -> recoverScreen()
+            "recover" -> if (recoverReturnScreen == "account") accountScreen() else loginScreen()
             "daily_challenge", "contest", "achievements" -> {
                 val previous = if (competitionHistory.isEmpty()) "home" else competitionHistory.removeLast()
                 when (previous) {

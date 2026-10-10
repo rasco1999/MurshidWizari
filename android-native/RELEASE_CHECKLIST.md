@@ -9,6 +9,7 @@ Target: feature parity with iOS **4.8.18**. Branch: **`android-native`**. Do not
 - [x] Live anonymous `GET /mobile/bootstrap.php` returns HTTP 401 JSON: `ok=false` and an expired-session message (2026-10-10 UTC).
 - [x] Live anonymous `GET /mobile/account.php` returns HTTP 401 JSON (2026-10-10 UTC).
 - [x] Live anonymous `GET /api/grades.php` returns HTTP 200 JSON with three grade entries (2026-10-10 UTC).
+- [x] Public `GET /forgot-password.php` includes a same-origin CSRF field and `identifier` form field (2026-10-10 UTC). No password-reset request was submitted.
 - [x] JVM rules and debug compile passed on GitHub Actions (run 38094896178); a subsequent avatar/signing build must pass separately.
 
 ## Required authenticated integration tests

@@ -185,6 +185,96 @@ class ApiClient(context: Context) {
         } finally { conn.disconnect() }
     }
 
+    private data class HtmlReply(val status: Int, val body: String, val location: String?)
+
+    /** Same-origin HTML form transport for the legacy password reset endpoints used on iOS. */
+    private fun htmlRequest(path: String, fields: Map<String, String>? = null): HtmlReply {
+        if (!path.matches(Regex("[a-zA-Z0-9_./?=&%-]+")) || path.contains("..") || path.contains("//"))
+            error("Invalid recovery endpoint")
+        val conn = URL(origin.toString() + path).openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = if (fields == null) "GET" else "POST"
+            conn.connectTimeout = 15000
+            conn.readTimeout = 20000
+            conn.instanceFollowRedirects = false
+            conn.setRequestProperty("Accept", "text/html,application/xhtml+xml")
+            conn.setRequestProperty("Cache-Control", "no-store")
+            cookieManager.cookieStore.get(origin).takeIf { it.isNotEmpty() }?.let { cookies ->
+                conn.setRequestProperty("Cookie", cookies.joinToString("; ") { it.name + "=" + it.value })
+            }
+            if (fields != null) {
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
+                val body = fields.entries.joinToString("&") {
+                    java.net.URLEncoder.encode(it.key, "UTF-8") + "=" + java.net.URLEncoder.encode(it.value, "UTF-8")
+                }
+                conn.outputStream.use { it.write(body.toByteArray(StandardCharsets.UTF_8)) }
+            }
+            val status = conn.responseCode
+            cookieManager.put(origin, conn.headerFields)
+            if (remember) saveCookies()
+            val stream = if (status >= 400) conn.errorStream else conn.inputStream
+            val body = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText().take(500_000) } ?: ""
+            return HtmlReply(status, body, conn.getHeaderField("Location"))
+        } finally { conn.disconnect() }
+    }
+
+    private fun readRecoveryRedirect(source: HtmlReply): HtmlReply {
+        if (source.status !in 300..399 || source.location.isNullOrBlank()) return source
+        val destination = try { origin.resolve(source.location) } catch (_: Exception) { return source }
+        if (destination.scheme != "https" || destination.host != origin.host || destination.userInfo != null ||
+            destination.port !in setOf(-1, 443)) return source
+        val path = destination.rawPath.trimStart('/') +
+            (if (destination.rawQuery.isNullOrBlank()) "" else "?" + destination.rawQuery)
+        return htmlRequest(path) // At most one GET follow-up; never repeat a POST.
+    }
+
+    fun beginPasswordReset(identifier: String): JSONObject {
+        if (identifier.isBlank()) return JSONObject().put("ok", false).put("message", "أدخل الهاتف أو البريد المسجل.")
+        val csrf = RecoveryRules.csrf(htmlRequest("forgot-password.php").body)
+            ?: return JSONObject().put("ok", false).put("message", "تعذر تهيئة التحقق. حاول لاحقاً.")
+        val response = htmlRequest("forgot-password.php", mapOf("csrf" to csrf, "identifier" to identifier))
+        RecoveryRules.phoneToken(response.location.orEmpty())?.let { token ->
+            return JSONObject().put("ok", true).put("channel", "phone").put("token", token)
+        }
+        val final = readRecoveryRedirect(response)
+        val message = RecoveryRules.formMessage(final.body)
+        if (message.isError || final.status !in 200..299)
+            return JSONObject().put("ok", false)
+                .put("message", message.text.ifBlank { "تعذر إكمال الاستعادة. تحقق من البيانات وحاول لاحقاً." })
+        return JSONObject().put("ok", true).put("channel", "email")
+            .put("message", message.text.ifBlank { "إذا كان البريد مرتبطاً بحساب صالح فسيصلك رابط استعادة آمن." })
+    }
+
+    fun resetPhonePassword(token: String, code: String, password: String, confirm: String): JSONObject {
+        if (!token.matches(Regex("[a-f0-9]{64}")) || !RecoveryRules.validReset(code, password, confirm))
+            return JSONObject().put("ok", false).put("message", "تحقق من رمز WhatsApp وكلمة المرور وتطابق التأكيد.")
+        val csrf = RecoveryRules.csrf(htmlRequest("reset-password.php?phone_token=$token").body)
+            ?: return JSONObject().put("ok", false).put("message", "انتهت جلسة الاستعادة أو الرابط غير صالح.")
+        val response = readRecoveryRedirect(htmlRequest("reset-password.php", mapOf(
+            "csrf" to csrf, "phone_token" to token, "action" to "reset",
+            "code" to RecoveryRules.normalizedDigits(code), "password" to password, "confirm" to confirm)))
+        val status = RecoveryRules.formMessage(response.body)
+        if (response.status !in 200..299 || status.isError || !status.text.contains("تم تغيير كلمة المرور"))
+            return JSONObject().put("ok", false).put("message", status.text.ifBlank { "لم يؤكد الخادم تغيير كلمة المرور." })
+        clear() // All previous login sessions must be reauthenticated after a password change.
+        return JSONObject().put("ok", true).put("message", status.text)
+    }
+
+    fun resendPhonePasswordCode(token: String): JSONObject {
+        if (!token.matches(Regex("[a-f0-9]{64}")))
+            return JSONObject().put("ok", false).put("message", "رابط الاستعادة غير صالح.")
+        val csrf = RecoveryRules.csrf(htmlRequest("reset-password.php?phone_token=$token").body)
+            ?: return JSONObject().put("ok", false).put("message", "تعذر تهيئة إعادة الإرسال.")
+        val response = readRecoveryRedirect(htmlRequest("reset-password.php", mapOf(
+            "csrf" to csrf, "phone_token" to token, "action" to "resend")))
+        val status = RecoveryRules.formMessage(response.body)
+        if (response.status !in 200..299 || status.isError)
+            return JSONObject().put("ok", false).put("message", status.text.ifBlank { "تعذر إعادة إرسال الرمز." })
+        return JSONObject().put("ok", true)
+            .put("message", status.text.ifBlank { "تم طلب رمز WhatsApp جديد." })
+    }
+
     private fun saveCookies() {
         try {
             val cookies = JSONArray()
