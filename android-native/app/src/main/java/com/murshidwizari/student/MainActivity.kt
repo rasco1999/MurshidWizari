@@ -760,6 +760,39 @@ class MainActivity : Activity() {
                     }
                 }
             }
+            val deletion = response.optJSONObject("deletion") ?: JSONObject()
+            if (deletion.optBoolean("pending")) {
+                caption("يوجد طلب حذف حساب قيد المعالجة.")
+                button("إلغاء طلب حذف الحساب", secondary = true) {
+                    AlertDialog.Builder(this).setTitle("إلغاء طلب الحذف")
+                        .setMessage("هل تريد إلغاء طلب حذف الحساب الحالي؟")
+                        .setPositiveButton("تأكيد") { _, _ ->
+                            fetch("mobile/account.php", JSONObject().put("csrf", csrf)
+                                .put("action", "cancel_delete")) { result ->
+                                if (result.optBoolean("ok")) accountScreen()
+                            }
+                        }.setNegativeButton("رجوع", null).show()
+                }
+            } else {
+                button("طلب حذف حسابي", secondary = true) {
+                    AlertDialog.Builder(this).setTitle("طلب حذف الحساب")
+                        .setMessage("هذا إجراء حساس وقد يؤدي إلى فقدان بياناتك. لن يُرسل الطلب إلا بعد التأكيد الصريح.")
+                        .setPositiveButton("متابعة") { _, _ ->
+                            val confirmation = input("اكتب: حذف حسابي")
+                            button("تأكيد طلب حذف الحساب", secondary = true) {
+                                if (confirmation.text.toString().trim() != "حذف حسابي") {
+                                    message("اكتب عبارة التأكيد كما هي.")
+                                } else {
+                                    fetch("mobile/account.php", JSONObject().put("csrf", csrf)
+                                        .put("action", "request_delete")
+                                        .put("confirmation", "حذف حسابي")) { result ->
+                                        if (result.optBoolean("ok")) accountScreen()
+                                    }
+                                }
+                            }
+                        }.setNegativeButton("إلغاء", null).show()
+                }
+            }
             button("سياسة الخصوصية", secondary = true) { external("https://mur-iq.com/privacy.php") }
         }
     }
