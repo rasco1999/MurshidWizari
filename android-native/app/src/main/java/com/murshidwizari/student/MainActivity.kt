@@ -19,6 +19,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.content.Context
 import android.os.Bundle
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.text.InputType
@@ -29,6 +30,7 @@ import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.WindowInsets
 import android.widget.*
 import org.json.JSONArray
 import org.json.JSONObject
@@ -85,6 +87,7 @@ class MainActivity : Activity() {
     private var activeAvatar: java.lang.ref.WeakReference<ImageView>? = null
     private var paymentBusy = false
     private var paymentPlan = ""
+    private var plansReturnScreen = "home"
     private var checkoutReturnPending = false
     private val prefs by lazy { getSharedPreferences("native_preferences", MODE_PRIVATE) }
     // Identical brand palette to the SwiftUI ThemeV34 definitions.
@@ -113,6 +116,14 @@ class MainActivity : Activity() {
     private fun contentWidth(): Int = if (resources.configuration.screenWidthDp >= 740) dp(700) else -1
     private fun setupRoot(horizontalPadding: Int = 16, topPadding: Int = 16) {
         val scroll = ScrollView(this).apply { isFillViewport = true; setBackgroundColor(appColor); clipToPadding = false }
+        if (Build.VERSION.SDK_INT >= 35) {
+            // Android 15 enforces edge-to-edge: keep text and actions out of status/nav cutouts.
+            scroll.setOnApplyWindowInsetsListener { view, insets ->
+                val safe = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+                view.setPadding(safe.left, safe.top, safe.right, safe.bottom)
+                insets
+            }
+        }
         screenFrame = FrameLayout(this)
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -573,6 +584,7 @@ class MainActivity : Activity() {
 
     /** Mirrors the latest iOS V31 flow: plan selection, external HTTPS checkout and status polling. */
     private fun plansScreen(statusText: String = "") {
+        if (activeScreen != "plans") plansReturnScreen = if (activeScreen == "account") "account" else "home"
         activeScreen = "plans"
         base("الاشتراك", true)
         line(if (subscribed) "✓ اشتراكك مفعّل" else "افتح كامل الأسئلة", true)
@@ -1835,6 +1847,10 @@ class MainActivity : Activity() {
     }
 
     private fun navigateBack() {
+        if (activeScreen == "plans" && paymentBusy) {
+            message("انتظر اكتمال التحقق من طلب الدفع حتى لا تضيع حالته.")
+            return
+        }
         when (activeScreen) {
             "daily_challenge", "contest", "achievements" -> {
                 val previous = if (competitionHistory.isEmpty()) "home" else competitionHistory.removeLast()
@@ -1848,7 +1864,8 @@ class MainActivity : Activity() {
             "exam" -> topicsScreen(topicsSubjectId, topicsSubjectName)
             "topics" -> subjectsScreen()
             "subjects" -> showHome(homepage)
-            "account", "plans" -> showHome(homepage)
+            "account" -> showHome(homepage)
+            "plans" -> if (plansReturnScreen == "account") accountScreen() else showHome(homepage)
             "login" -> finish()
             else -> if (homepage.optBoolean("ok")) showHome(homepage) else loginScreen()
         }
