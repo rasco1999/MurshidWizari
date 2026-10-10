@@ -24,6 +24,9 @@ jobs:
       - name: Build fresh native Compose app
         working-directory: android-from-ios
         run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Run Android native unit tests
+        working-directory: android-from-ios
+        run: gradle --no-daemon :app:testDebugUnitTest
       - name: Validate APK integrity
         working-directory: android-from-ios
         run: |
