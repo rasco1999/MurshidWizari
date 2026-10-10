@@ -1,6 +1,12 @@
 package com.muriq.murshid.iosparity
 
 import androidx.compose.foundation.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -53,7 +59,7 @@ fun DashboardScreen(vm: MurshidViewModel) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("المرشد الوزاري", fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                IconButton(onClick = { vm.setAppearance(if (vm.appearance == "dark") "light" else "dark") }) {
+                IconButton(onClick = { vm.changeAppearance(if (vm.appearance == "dark") "light" else "dark") }) {
                     Icon(if (vm.appearance == "dark") Icons.Default.LightMode else Icons.Default.DarkMode,
                         contentDescription = "تغيير الوضع")
                 }
@@ -68,12 +74,23 @@ fun DashboardScreen(vm: MurshidViewModel) {
                 dash.user.grade.ifBlank { "رحلتك الدراسية تبدأ هنا" }
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier.size(45.dp).clip(RoundedCornerShape(13.dp))
-                            .background(Color.White.copy(alpha = 0.12f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.School, null, tint = Color.White)
+                    val avatar = vm.accountData.text("avatar_url")
+                    if (avatar.startsWith("https://")) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(avatar)
+                                .memoryCacheKey(avatar + vm.accountData.text("avatar_revision"))
+                                .build(),
+                            contentDescription = "صورة الطالب",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(45.dp).clip(RoundedCornerShape(13.dp))
+                        )
+                    } else {
+                        Box(
+                            Modifier.size(45.dp).clip(RoundedCornerShape(13.dp))
+                                .background(Color.White.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
+                        ) { Icon(Icons.Default.School, null, tint = Color.White) }
                     }
                     Spacer(Modifier.width(12.dp))
                     Text(motivation, color = Color.White, fontWeight = FontWeight.SemiBold,
@@ -305,6 +322,10 @@ fun AccountTab(vm: MurshidViewModel) {
     val account = vm.accountData
     val actualUser = account.optJSONObject("user")
     val name = actualUser?.text("name", dash.user.name) ?: dash.user.name
+    val avatarUrl = account.text("avatar_url")
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { image ->
+        if (image != null) vm.uploadAvatar(image)
+    }
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(15.dp)
@@ -313,9 +334,21 @@ fun AccountTab(vm: MurshidViewModel) {
         item {
             MurshidCard {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(60.dp).clip(CircleShape).background(MurshidBlue.copy(alpha = 0.10f)),
-                        contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Person, null, tint = MurshidBlue, modifier = Modifier.size(35.dp))
+                    if (avatarUrl.startsWith("https://")) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(avatarUrl)
+                                .memoryCacheKey(avatarUrl + account.text("avatar_revision"))
+                                .build(),
+                            contentDescription = "صورة صاحب الحساب",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(60.dp).clip(CircleShape)
+                        )
+                    } else {
+                        Box(Modifier.size(60.dp).clip(CircleShape).background(MurshidBlue.copy(alpha = 0.10f)),
+                            contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Person, null, tint = MurshidBlue, modifier = Modifier.size(35.dp))
+                        }
                     }
                     Spacer(Modifier.width(13.dp))
                     Column {
@@ -323,6 +356,10 @@ fun AccountTab(vm: MurshidViewModel) {
                             style = MaterialTheme.typography.titleMedium)
                         Text(dash.user.grade, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                }
+                SecondaryAction("رفع صورة شخصية") { picker.launch("image/*") }
+                if (avatarUrl.isNotBlank()) {
+                    SecondaryAction("حذف الصورة الشخصية", vm::removeAvatar)
                 }
                 SecondaryAction("تعديل بيانات الحساب") { vm.openFeature(Feature.ACCOUNT) }
             }
@@ -351,7 +388,7 @@ fun AccountTab(vm: MurshidViewModel) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("light" to "فاتح", "dark" to "داكن", "system" to "النظام").forEach { (mode, text) ->
                         FilterChip(selected = vm.appearance == mode,
-                            onClick = { vm.setAppearance(mode) },
+                            onClick = { vm.changeAppearance(mode) },
                             label = { Text(text, fontSize = 12.sp) })
                     }
                 }

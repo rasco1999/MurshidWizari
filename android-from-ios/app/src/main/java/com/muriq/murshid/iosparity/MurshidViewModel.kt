@@ -87,7 +87,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun clearMessage() { message = "" }
-    fun setAppearance(value: String) {
+    fun changeAppearance(value: String) {
         if (value !in setOf("dark", "light", "system")) return
         appearance = value
         prefs.edit().putString("appearance", value).apply()
@@ -136,6 +136,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
                     api.setRemember(remember)
                     val bootstrap = api.get("mobile/bootstrap.php")
                     dashboard = StudentDashboard.from(bootstrap)
+                    loadAccount()
                     tab = 0; screen = Screen.MAIN
                 }
             } catch (error: Exception) { fail(error) }
@@ -184,6 +185,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
             loading = true
             try {
                 dashboard = StudentDashboard.from(api.get("mobile/bootstrap.php"))
+                loadAccount()
                 tab = 0; screen = Screen.MAIN; clearMessage()
             } catch (error: Exception) {
                 if (firstLoad) {
@@ -535,6 +537,32 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
                         JSONObject().put("csrf", dashboard?.csrf).put("chapter_id", current.id))
                     message = result.text("message", "تم إرسال طلب إضافة أسئلة.")
                 }
+            } catch (error: Exception) { fail(error) }
+            finally { loading = false }
+        }
+    }
+
+    fun uploadAvatar(image: android.net.Uri) {
+        val csrf = dashboard?.csrf ?: return
+        viewModelScope.launch {
+            loading = true
+            try {
+                api.uploadAvatar(image, csrf)
+                accountData = api.get("mobile/account.php")
+                message = "تم تحديث الصورة الشخصية."
+            } catch (error: Exception) { fail(error) }
+            finally { loading = false }
+        }
+    }
+
+    fun removeAvatar() {
+        val csrf = dashboard?.csrf ?: return
+        viewModelScope.launch {
+            loading = true
+            try {
+                api.removeAvatar(csrf)
+                accountData = api.get("mobile/account.php")
+                message = "تم حذف الصورة الشخصية."
             } catch (error: Exception) { fail(error) }
             finally { loading = false }
         }

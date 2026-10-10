@@ -181,6 +181,97 @@ class MurshidApi(private val context: Context) {
         }
     }
 
+    /** Multipart avatar upload, using the same form contract as the original iOS app. */
+    suspend fun uploadAvatar(image: android.net.Uri, csrf: String): JSONObject =
+        withContext(Dispatchers.IO) {
+            val mime = context.contentResolver.getType(image)?.lowercase()
+                ?: throw ApiProblem("تعذر معرفة نوع الصورة.")
+            if (mime != "image/jpeg" && mime != "image/png") {
+                throw ApiProblem("اختر صورة JPEG أو PNG.")
+            }
+            val bytes = context.contentResolver.openInputStream(image)?.use { stream ->
+                val output = ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                var count = 0
+                while (true) {
+                    val n = stream.read(buffer)
+                    if (n < 0) break
+                    count += n
+                    if (count > 3_000_000) throw ApiProblem("حجم الصورة أكبر من 3 ميغابايت.")
+                    output.write(buffer, 0, n)
+                }
+                output.toByteArray()
+            } ?: throw ApiProblem("تعذر قراءة الصورة.")
+            val boundary = "murshid_android_upload_boundary"
+            val output = ByteArrayOutputStream()
+            fun addText(text: String) = output.write(text.toByteArray(StandardCharsets.UTF_8))
+            addText("--$boundary\r\nContent-Disposition: form-data; name=\"csrf\"\r\n\r\n$csrf\r\n")
+            addText("--$boundary\r\nContent-Disposition: form-data; name=\"avatar\"; filename=\"profile.${if (mime == "image/png") "png" else "jpg"}\"\r\n")
+            addText("Content-Type: $mime\r\n\r\n")
+            output.write(bytes)
+            addText("\r\n--$boundary--\r\n")
+            val url = URL(origin.toString() + "mobile/avatar.php")
+            val conn = url.openConnection() as HttpURLConnection
+            try {
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 15000
+                conn.readTimeout = 25000
+                conn.instanceFollowRedirects = false
+                conn.doOutput = true
+                conn.setRequestProperty("Accept", "application/json")
+                conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+                cookies.cookieStore.get(origin).filter { !it.hasExpired() }.let { jar ->
+                    if (jar.isNotEmpty()) conn.setRequestProperty("Cookie", jar.joinToString("; ") {
+                        "${it.name}=${it.value}"
+                    })
+                }
+                val payload = output.toByteArray()
+                conn.setFixedLengthStreamingMode(payload.size)
+                conn.outputStream.use { it.write(payload) }
+                parseUploadResponse(conn)
+            } finally { conn.disconnect() }
+        }
+
+    suspend fun removeAvatar(csrf: String): JSONObject = withContext(Dispatchers.IO) {
+        val payload = "csrf=" + java.net.URLEncoder.encode(csrf, "UTF-8") + "&remove=1"
+        val conn = URL(origin.toString() + "mobile/avatar.php").openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 15000
+            conn.readTimeout = 20000
+            conn.instanceFollowRedirects = false
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
+            conn.setRequestProperty("Accept", "application/json")
+            cookies.cookieStore.get(origin).filter { !it.hasExpired() }.let { jar ->
+                if (jar.isNotEmpty()) conn.setRequestProperty("Cookie", jar.joinToString("; ") {
+                    "${it.name}=${it.value}"
+                })
+            }
+            conn.outputStream.use { it.write(payload.toByteArray(StandardCharsets.UTF_8)) }
+            parseUploadResponse(conn)
+        } finally { conn.disconnect() }
+    }
+
+    private fun parseUploadResponse(conn: HttpURLConnection): JSONObject {
+        val status = conn.responseCode
+        cookies.put(origin, conn.headerFields)
+        persistCookies()
+        val content = (if (status >= 400) conn.errorStream else conn.inputStream)
+            ?.bufferedReader(Charsets.UTF_8)?.use { it.readText().take(20_000) }.orEmpty()
+        val response = try { JSONObject(content) } catch (_: Exception) {
+            throw ApiProblem("تعذر قراءة استجابة رفع الصورة.", status)
+        }
+        if (status == 401) {
+            clearSession()
+            throw ApiProblem("انتهت جلسة الطالب.", status, sessionExpired = true)
+        }
+        if (status !in 200..299 || !response.optBoolean("ok", true)) {
+            throw ApiProblem(response.optString("message", "تعذر تحديث الصورة."), status)
+        }
+        return response
+    }
+
     private class SessionVault {
         private val alias = "murshid_android_from_ios_cookie_v1"
 
