@@ -361,7 +361,7 @@ class MainActivity : Activity() {
             caption("الإجابة المسجلة: " + (previous?.optString("text") ?: ""))
             caption("الإجابة النموذجية: " + question.optString("correct_answer"))
             caption("الشرح: " + question.optString("explanation"))
-            button("السؤال التالي") { questionIndex++; renderQuestion() }
+            if (q.optBoolean("submitted")) button("السؤال التالي") { questionIndex++; renderQuestion() }
         } else {
             when {
                 question.optJSONObject("english_match") != null ->
@@ -732,4 +732,13 @@ class MainActivity : Activity() {
         jobs.shutdownNow()
         super.onDestroy()
     }
-}
+}        executor.execute {
+            val result = try {
+                api.call(path,payload)
+            } catch (e: Exception) {
+                JSONObject().put("ok",false).put("message","تعذر الاتصال بالخادم: " + (e.localizedMessage ?: ""))
+            }
+            ui.post { done(result) }
+        }
+    }
+
