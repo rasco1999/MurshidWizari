@@ -21,6 +21,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
+      - name: Native-only and secure transport guardrails
+        working-directory: android-from-ios
+        run: |
+          set -euo pipefail
+          if grep -R -nE 'android\\.webkit\\.WebView|WebViewClient|loadUrl\\(' app/src/main/java; then
+            echo "WebView implementation detected; Android port must remain native."
+            exit 1
+          fi
+          grep -q 'android:usesCleartextTraffic="false"' app/src/main/AndroidManifest.xml
+          grep -q 'android:allowBackup="false"' app/src/main/AndroidManifest.xml
+          grep -q 'https://www.mur-iq.com/' app/src/main/java/com/muriq/murshid/iosparity/net/MurshidApi.kt
+          test -f app/src/main/java/com/muriq/murshid/iosparity/data/QuestionPresentation.kt
       - name: Build fresh native Compose app
         working-directory: android-from-ios
         run: gradle --no-daemon --stacktrace :app:assembleDebug
