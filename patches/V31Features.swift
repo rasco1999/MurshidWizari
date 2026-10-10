@@ -607,7 +607,10 @@ struct V31HomeView: View {
     private func loadHomeAvatar() async {
         guard let data = try? await APIClient.shared.request("mobile/account.php") else { return }
         let url = V43AvatarCache.url(jString(data["avatar_url"]), revision: jString(data["avatar_revision"]))
-        await MainActor.run { homeAvatarURL = url }
+        await MainActor.run {
+            homeAvatarURL = url
+            app.applyAvatar(data)
+        }
     }
 
     private var suggestedTopic: (topic: Topic, subject: Subject, coverage: Int)? {
@@ -1511,6 +1514,7 @@ struct V31AccountView: View {
             let d = try await APIClient.shared.request("mobile/account.php")
             await MainActor.run {
                 account = d
+                app.applyAvatar(d)
                 loading = false
                 error = ""
                 // Keep the successful image visible until the remote avatar finishes loading.
@@ -1559,6 +1563,7 @@ struct V31AccountView: View {
                 account["avatar_url"] = urlText
                 account["avatar_revision"] = jString(d["avatar_revision"])
                 account["avatar_status"] = "approved"
+                app.applyAvatar(d)
                 uploadingAvatar = false
                 avatarItem = nil
                 avatarMessage = "تم تغيير صورة الحساب. الصورة ظاهرة وجاري تحديث رابطها."

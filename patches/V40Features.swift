@@ -1047,6 +1047,7 @@ struct V40WhatsNewView: View {
 }
 
 struct V40QuestionSearchView: View {
+    @EnvironmentObject var app: AppSession
     @State private var query = ""
     @State private var results: [JSON] = []
     @State private var loading = false
@@ -1109,7 +1110,15 @@ struct V40QuestionSearchView: View {
         await MainActor.run { loading = true; message = "" }
         do {
             let d = try await APIClient.shared.request("api/search.php", query: [URLQueryItem(name: "q", value: q)])
-            await MainActor.run { results = jArray(d["results"]); loading = false }
+            await MainActor.run {
+                let allowedSubjects = Set(app.subjects.map(\.id))
+                results = jArray(d["results"]).filter { row in
+                    let subjectID = jInt(row["subject_id"])
+                    return !MurshidSubjectCatalog.isFrenchSubject(jString(row["subject_name"])) &&
+                        (subjectID <= 0 || allowedSubjects.contains(subjectID))
+                }
+                loading = false
+            }
         } catch {
             await MainActor.run { loading = false; message = error.localizedDescription }
         }

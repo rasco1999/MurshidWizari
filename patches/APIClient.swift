@@ -9,6 +9,39 @@ struct APIError: LocalizedError {
 
 enum PasswordResetChannel: Sendable { case email, phone }
 
+// Apply a final client-side guard to the subject list. The server remains the
+// source of truth for grade eligibility and the subject/question relationships.
+enum MurshidSubjectCatalog {
+    private static func normalized(_ name: String) -> String {
+        name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "ar"))
+            .replacingOccurrences(of: "أ", with: "ا")
+            .replacingOccurrences(of: "إ", with: "ا")
+            .replacingOccurrences(of: "آ", with: "ا")
+            .replacingOccurrences(of: "ة", with: "ه")
+            .replacingOccurrences(of: "ى", with: "ي")
+    }
+
+    static func isFrenchSubject(_ name: String) -> Bool {
+        let normalizedName = normalized(name)
+        return normalizedName.contains("فرنس") || normalizedName.contains("french") || normalizedName.contains("franc")
+    }
+
+    static func visibleSubjects(_ subjects: [Subject]) -> [Subject] {
+        var visible = subjects.filter { !isFrenchSubject($0.name) }
+        guard let arabic = visible.firstIndex(where: {
+            let name = normalized($0.name)
+            return (name.contains("عربي") || name.contains("عربى")) && !name.contains("ادب")
+        }), let literature = visible.firstIndex(where: {
+            let name = normalized($0.name)
+            return name.contains("ادب") && name.contains("نصوص")
+        }) else { return visible }
+        let literatureSubject = visible.remove(at: literature)
+        let arabicIndex = literature < arabic ? arabic - 1 : arabic
+        visible.insert(literatureSubject, at: arabicIndex + 1)
+        return visible
+    }
+}
+
 struct PasswordResetStart: Sendable {
     let channel: PasswordResetChannel
     let phoneToken: String?
@@ -23,6 +56,8 @@ final class AppSession: ObservableObject {
     @Published var bootstrapping = true
     @Published var bootstrapNetworkFailed = false
     @Published var user: UserSummary?
+    @Published var avatarURL = ""
+    @Published var avatarRevision = ""
     @Published var subjects: [Subject] = []
     @Published var plans: [SubscriptionPlan] = []
     @Published var subscribed = false
@@ -51,6 +86,8 @@ final class AppSession: ObservableObject {
         v3Authenticated = false
         bootstrapNetworkFailed = false
         user = nil
+        avatarURL = ""
+        avatarRevision = ""
         subjects = []
         plans = []
         subscribed = false
@@ -68,7 +105,9 @@ final class AppSession: ObservableObject {
     func applyBootstrap(_ json: JSON) {
         let u = json["user"] as? JSON ?? [:]
         user = UserSummary(id: jInt(u["id"]), name: jString(u["name"]), grade: jString(u["grade"]), gradeID: jInt(u["grade_id"]))
-        subjects = jArray(json["subjects"]).map(Subject.init)
+        avatarURL = jString(u["avatar_url"])
+        avatarRevision = jString(u["avatar_revision"])
+        subjects = MurshidSubjectCatalog.visibleSubjects(jArray(json["subjects"]).map(Subject.init))
         plans = jArray(json["plans"]).map(SubscriptionPlan.init)
         subscribed = jBool(json["subscribed"])
         subscriptionDaysRemaining = subscribed ? jInt(json["subscription_days_remaining"]) : nil
@@ -88,6 +127,11 @@ final class AppSession: ObservableObject {
     func applyAppConfig(_ json: JSON) {
         featureFlags = json["features"] as? JSON ?? [:]
         releaseInfo = json["release"] as? JSON ?? [:]
+    }
+
+    func applyAvatar(_ json: JSON) {
+        avatarURL = jString(json["avatar_url"])
+        avatarRevision = jString(json["avatar_revision"])
     }
 
     func featureEnabled(_ key: String, default defaultValue: Bool = true) -> Bool {

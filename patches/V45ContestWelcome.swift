@@ -12,7 +12,7 @@ private enum V45ContestRulesSnapshot {
         ["number":4,"title":"حالة التعادل","text":"عند تساوي النقاط تكون الأفضلية للطالب صاحب العدد الأكبر من الإجابات الصحيحة، ثم يُرجع إلى معيار النشاط المسجل في النظام."],
         ["number":5,"title":"النزاهة ومنع التلاعب","text":"تراجع الإدارة نشاط الحساب قبل اعتماد الفائز. الحسابات المكررة أو النشاط الآلي أو أي محاولة للتلاعب بالنقاط قد تؤدي إلى الاستبعاد من المسابقة."],
         ["number":6,"title":"توثيق الفائز","text":"يجب على الفائز إثبات ملكية الحساب وتوثيق وسيلة الاتصال المطلوبة قبل تسليم الجائزة. عدم إكمال التحقق يمنع اعتماد التسليم حتى استكماله."],
-        ["number":7,"title":"موعد إغلاق التحدي","text":"يُغلق التحدي يوم 1 تشرين الثاني 2026 الساعة 11:59 مساءً بتوقيت بغداد، ثم تثبت النتيجة النهائية بعد انتهاء مراجعة النزاهة."]
+        ["number":7,"title":"موعد إغلاق التحدي","text":"تحدد إدارة المنصة موعد إغلاق التحدي، ويظهر الموعد المحدّث هنا عند الاتصال بالموقع. تثبت النتيجة النهائية بعد انتهاء مراجعة النزاهة."]
     ]
     static let points: [JSON] = [
         ["value":"+5 نقاط","description":"لكل إجابة صحيحة عادية جديدة"],
@@ -61,7 +61,7 @@ struct V45ContestInstructionsView: View {
     @State private var pointsNote = V45ContestRulesSnapshot.pointsNote
     @State private var footer = V45ContestRulesSnapshot.footer
     @State private var prize: Int = 1_000_000
-    @State private var endDate = "1 تشرين الثاني 2026 · الساعة 11:59 مساءً بتوقيت بغداد"
+    @State private var endDate = "حسب إعدادات إدارة المنصة"
     @State private var isLive = false
     @State private var networkWarning = false
 

@@ -1667,6 +1667,49 @@ struct SafariSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
 
+// One avatar renderer for Account's tab button and both contest rankings.
+// The account's local cache is never used for another student's row.
+struct V49StudentAvatar: View {
+    let raw: String
+    var revision = ""
+    var cachedUserID = 0
+    var size: CGFloat = 40
+
+    var body: some View {
+        ZStack {
+            Circle().fill(Color.murshidBlue.opacity(0.13))
+            if let url = V43AvatarCache.url(raw, revision: revision) {
+                AsyncImage(url: url) { phase in
+                    if case let .success(image) = phase {
+                        image.resizable().scaledToFill()
+                    } else if let cached = V43AvatarCache.image(userID: cachedUserID) {
+                        Image(uiImage: cached).resizable().scaledToFill()
+                    } else {
+                        placeholder
+                    }
+                }
+                .id(url.absoluteString)
+            } else if let cached = V43AvatarCache.image(userID: cachedUserID) {
+                Image(uiImage: cached).resizable().scaledToFill()
+            } else {
+                placeholder
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(Color.murshidBlue.opacity(0.35), lineWidth: size < 30 ? 1 : 1.5))
+        .accessibilityHidden(true)
+    }
+
+    private var placeholder: some View {
+        Image(systemName: "person.crop.circle.fill")
+            .resizable()
+            .scaledToFit()
+            .foregroundStyle(Color.murshidBlue)
+            .padding(size * 0.08)
+    }
+}
+
 // MARK: - Complete Native iOS v3 Experience
 
 // MARK: - V3 Main Navigation
@@ -1756,8 +1799,13 @@ struct MainV3TabView: View {
                     selection = index
                 } label: {
                     VStack(spacing: 4) {
-                        Image(systemName: tabs[index].symbol)
-                            .font(.system(size: 19, weight: selection == index ? .bold : .medium))
+                        if index == 4 {
+                            V49StudentAvatar(raw: app.avatarURL, revision: app.avatarRevision,
+                                             cachedUserID: app.user?.id ?? 0, size: 23)
+                        } else {
+                            Image(systemName: tabs[index].symbol)
+                                .font(.system(size: 19, weight: selection == index ? .bold : .medium))
+                        }
                         Text(tabs[index].title)
                             .font(.system(size: 10, weight: selection == index ? .bold : .medium))
                             .lineLimit(1)
@@ -2522,6 +2570,7 @@ struct V3FocusView: View {
 // MARK: - Contest & seasonal ranking
 
 struct V3ContestView: View {
+    @EnvironmentObject var app: AppSession
     @State private var contest: JSON = [:]
     @State private var season: JSON = [:]
     @State private var loading = true
@@ -2555,7 +2604,12 @@ struct V3ContestView: View {
     private var myRankCard: some View {
         MurshidCard {
             HStack(spacing: 14) {
-                Image(systemName: "person.crop.circle.badge.checkmark").font(.largeTitle).foregroundStyle(Color.murshidBlue)
+                V49StudentAvatar(
+                    raw: jString((contest["mine"] as? JSON)?["avatar_url"], default: app.avatarURL),
+                    revision: app.avatarRevision,
+                    cachedUserID: app.user?.id ?? 0,
+                    size: 54
+                )
                 VStack(alignment: .leading, spacing: 5) {
                     Text("مركزك الحالي").font(.subheadline).foregroundStyle(.secondary)
                     if let mine = contest["mine"] as? JSON {
@@ -2563,6 +2617,11 @@ struct V3ContestView: View {
                         Text("\(jInt(mine["xp"])) نقطة · \(jInt(mine["correct"])) إجابة صحيحة").font(.caption).foregroundStyle(.secondary)
                     } else {
                         Text("ابدأ الإجابة لتدخل الترتيب").font(.headline)
+                    }
+                    let endAt = jString((contest["config"] as? JSON)?["end_at"])
+                    if !endAt.isEmpty {
+                        Label("الإغلاق: \(endAt) بتوقيت بغداد", systemImage: "calendar")
+                            .font(.caption2).foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
@@ -2583,6 +2642,7 @@ struct V3ContestView: View {
                     MurshidCard {
                         HStack(spacing: 12) {
                             Text("#\(jInt(row[rankKey]))").font(.headline.monospacedDigit()).foregroundStyle(Color.murshidBlue).frame(width: 42)
+                            V49StudentAvatar(raw: jString(row["avatar_url"]), size: 38)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(jString(row["name"])).font(.headline)
                                 if !jString(row["grade"]).isEmpty { Text(jString(row["grade"])).font(.caption).foregroundStyle(.secondary) }
@@ -2691,7 +2751,7 @@ struct V3SubjectRow: View {
         if name.contains("فيزياء") { return "atom" }
         if name.contains("كيمي") { return "flask.fill" }
         if name.contains("أحياء") { return "leaf.fill" }
-        if name.contains("إنك") || name.contains("انك") || name.contains("فرنسي") { return "globe" }
+        if name.contains("إنك") || name.contains("انك") { return "globe" }
         if name.contains("إسلام") || name.contains("اسلام") { return "book.closed.fill" }
         if name.contains("تاريخ") || name.contains("اجتماع") || name.contains("جغراف") { return "map.fill" }
         return "book.closed.fill"
