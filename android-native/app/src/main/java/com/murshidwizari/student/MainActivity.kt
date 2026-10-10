@@ -156,6 +156,18 @@ class MainActivity : Activity() {
         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     }
 
+    private fun fetchForm(path: String, data: Map<String, String>, done: (JSONObject) -> Unit) {
+        jobs.execute {
+            val result = try { api.postForm(path, data) } catch (_: Exception) {
+                JSONObject().put("ok", false).put("message", "تعذر الاتصال بالخادم.")
+            }
+            main.post {
+                if (!result.optBoolean("ok")) message(result.optString("message", "تعذر تنفيذ الطلب."))
+                done(result)
+            }
+        }
+    }
+
     private fun loginScreen() {
         activeScreen = "login"
         base("منصة المرشد الوزاري")
