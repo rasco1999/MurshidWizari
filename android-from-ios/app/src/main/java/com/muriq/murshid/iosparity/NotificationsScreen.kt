@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.muriq.murshid.iosparity.notifications.NoticeDelivery
 import com.muriq.murshid.iosparity.notifications.StudentNotice
+import com.muriq.murshid.iosparity.ui.*
 
 /** Entire inbox is fetched from the student's authenticated server session. */
 @Composable
