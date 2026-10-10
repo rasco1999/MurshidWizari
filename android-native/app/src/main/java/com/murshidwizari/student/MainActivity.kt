@@ -38,6 +38,7 @@ class MainActivity : Activity() {
     private var questionIndex = 0
     private var busyAnswer = false
     private var submissionUncertain = false
+    private var activeScreen = "login"
     private var subscribed = false
     private var night = false
     private val prefs by lazy { getSharedPreferences("native_preferences", MODE_PRIVATE) }
@@ -73,7 +74,7 @@ class MainActivity : Activity() {
         }
         scroll.addView(root)
         setContentView(scroll)
-        if (showBack) button("‹ الرجوع", secondary = true) { showHome(homepage) }
+        if (showBack) button("‹ الرجوع", secondary = true) { navigateBack() }
         title(title)
     }
     private fun title(text: String) {
@@ -156,6 +157,7 @@ class MainActivity : Activity() {
     }
 
     private fun loginScreen() {
+        activeScreen = "login"
         base("منصة المرشد الوزاري")
         line("رحلتك نحو التفوق تبدأ هنا")
         caption("تسجيل الدخول إلى حساب الطالب")
@@ -200,6 +202,7 @@ class MainActivity : Activity() {
     }
 
     private fun recoverScreen() {
+        activeScreen = "recover"
         base("استعادة الحساب", showBack = false)
         line("استعادة الحساب تتم عبر إجراءات التحقق الرسمية الخاصة بالموقع.")
         button("فتح استعادة الحساب في المتصفح") { external("https://www.mur-iq.com/auth.php") }
@@ -207,6 +210,7 @@ class MainActivity : Activity() {
     }
 
     private fun registerScreen() {
+        activeScreen = "register"
         base("إنشاء حساب جديد")
         val name = input("الاسم الثلاثي الكامل")
         val email = input("البريد الإلكتروني")
@@ -257,6 +261,7 @@ class MainActivity : Activity() {
         homepage = response; csrf = response.optString("csrf", csrf)
         student = response.optJSONObject("user") ?: JSONObject()
         subscribed = response.optBoolean("subscribed")
+        activeScreen = "home"
         base("المرشد الوزاري")
         line("مرحباً، " + student.optString("name", "الطالب"), true)
         caption("الصف الدراسي: " + student.optString("grade"))
@@ -308,6 +313,7 @@ class MainActivity : Activity() {
     }
 
     private fun subjectsScreen(predictions: Boolean = false) {
+        activeScreen = "subjects"
         base(if (predictions) "المرشحات الوزارية" else "المواد الدراسية", true)
         val subjects = homepage.optJSONArray("subjects") ?: JSONArray()
         for (i in 0 until subjects.length()) {
@@ -323,7 +329,8 @@ class MainActivity : Activity() {
         topicsSubjectId = subjectId; topicsSubjectName = subjectName
         fetch("mobile/topics.php?subject_id=" + subjectId) { response ->
             if (!response.optBoolean("ok")) return@fetch
-            base(subjectName, true)
+            activeScreen = "topics"
+        base(subjectName, true)
             val topics = response.optJSONArray("topics") ?: JSONArray()
             for (i in 0 until topics.length()) {
                 val topic = topics.optJSONObject(i) ?: continue
@@ -351,6 +358,7 @@ class MainActivity : Activity() {
     }
 
     private fun renderQuestion() {
+        activeScreen = "exam"
         base(chapterName, true)
         if (examQuestions.length() == 0) {
             line("لا توجد أسئلة في هذا الموضوع.")
@@ -390,11 +398,12 @@ class MainActivity : Activity() {
                 (question.optJSONArray("options")?.length() ?: 0) > 0 -> {
                     val options = question.optJSONArray("options") ?: JSONArray()
                     for (i in 0 until options.length()) {
-                        val option = options.optJSONObject(i) ?: continue
-                        val chosen = option.optString("text")
+                        val option = options.optJSONObject(i)
+                        val chosen = option?.optString("text") ?: options.optString(i)
+                        val optionId = option?.optInt("id") ?: 0
                         button(chosen, secondary = true) {
                             AlertDialog.Builder(this).setMessage("اعتماد الإجابة: " + chosen + "؟")
-                                .setPositiveButton("إرسال الإجابة") { _, _ -> sendAnswer(question, chosen, option.optInt("id")) }
+                                .setPositiveButton("إرسال الإجابة") { _, _ -> sendAnswer(question, chosen, optionId) }
                                 .setNegativeButton("إلغاء", null).show()
                         }
                     }
@@ -421,6 +430,7 @@ class MainActivity : Activity() {
 
     private fun sendAnswer(question: JSONObject, answer: String, optionId: Int) {
         if (busyAnswer) return
+        if (question.optBoolean("submitted")) { message("تم تسجيل إجابة هذا السؤال بالفعل."); return }
         if (answer.isBlank()) { message("اكتب الإجابة أولاً."); return }
         if (csrf.isEmpty()) { message("انتهت الجلسة، حدّث الصفحة."); return }
         if (submissionUncertain) {
@@ -754,10 +764,18 @@ class MainActivity : Activity() {
         }
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        if (homepage.optBoolean("ok")) showHome(homepage) else loginScreen()
+    private fun navigateBack() {
+        when (activeScreen) {
+            "exam" -> topicsScreen(topicsSubjectId, topicsSubjectName)
+            "topics" -> subjectsScreen()
+            "subjects" -> showHome(homepage)
+            "login" -> finish()
+            else -> if (homepage.optBoolean("ok")) showHome(homepage) else loginScreen()
+        }
     }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() { navigateBack() }
 
     override fun onDestroy() {
         jobs.shutdownNow()
