@@ -454,7 +454,7 @@ private fun RecoveryScreen() {
         SectionTitle("الحساب", "استعادة كلمة المرور",
             "استخدم إجراء استعادة الحساب الرسمي للتحقق من ملكية البريد أو الهاتف.")
         PrimaryAction("فتح استعادة الحساب") {
-            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.mur-iq.com/auth.php")))
+            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.mur-iq.com/forgot-password.php")))
         }
     }
 }
