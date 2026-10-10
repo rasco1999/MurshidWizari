@@ -685,6 +685,45 @@ class MainActivity : Activity() {
         }
     }
 
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != 301 || resultCode != RESULT_OK) return
+        val selected = data?.data ?: return
+        val mime = contentResolver.getType(selected)
+        if (mime !in setOf("image/jpeg", "image/png")) {
+            message("اختر صورة JPG أو PNG.")
+            return
+        }
+        jobs.execute {
+            val bytes = try {
+                contentResolver.openInputStream(selected)?.use { stream ->
+                    val output = java.io.ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    var size = 0
+                    while (true) {
+                        val n = stream.read(buffer)
+                        if (n < 0) break
+                        size += n
+                        if (size > 3_000_000) break
+                        output.write(buffer, 0, n)
+                    }
+                    if (size > 3_000_000) null else output.toByteArray()
+                }
+            } catch (_: Exception) { null }
+            val response = if (bytes == null)
+                JSONObject().put("ok", false).put("message", "تعذر قراءة الصورة أو حجمها أكبر من 3 ميغابايت.")
+            else try { api.uploadAvatar(csrf, if (mime == "image/png") "avatar.png" else "avatar.jpg", mime, bytes) }
+            catch (_: Exception) { JSONObject().put("ok", false).put("message", "تعذر رفع الصورة. حاول مجدداً.") }
+            main.post {
+                if (response.optBoolean("ok")) {
+                    message(response.optString("message", "تم تحديث الصورة الشخصية."))
+                    accountScreen()
+                } else message(response.optString("message", "تعذر رفع الصورة."))
+            }
+        }
+    }
+
     private fun accountScreen() {
         fetch("mobile/account.php") { response ->
             if (!response.optBoolean("ok")) return@fetch
@@ -694,6 +733,13 @@ class MainActivity : Activity() {
             line("الاسم: " + profile.optString("name"), true)
             line("معرّف الطالب: " + profile.optInt("id"))
             caption("حالة الصورة: " + response.optString("avatar_status", "غير محددة"))
+            button("رفع صورة شخصية") {
+                val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                    type = "image/*"
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                }
+                startActivityForResult(Intent.createChooser(intent, "اختر صورة شخصية"), 301)
+            }
             button("حذف الصورة الشخصية", secondary = true) {
                 AlertDialog.Builder(this).setTitle("حذف الصورة")
                     .setMessage("هل تريد إزالة صورتك الشخصية؟")
