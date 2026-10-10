@@ -92,6 +92,10 @@ class MainActivity : Activity() {
     private var checkoutReturnPending = false
     private var recoveryBusy = false
     private var recoverReturnScreen = "login"
+    private var focusMinutes = 25
+    private var focusBusy = false
+    private var focusDeadline = 0L
+    private var focusTicker: Runnable? = null
     private val prefs by lazy { getSharedPreferences("native_preferences", MODE_PRIVATE) }
     // Identical brand palette to the SwiftUI ThemeV34 definitions.
     private val gold = Color.rgb(245,184,61)
@@ -675,6 +679,9 @@ class MainActivity : Activity() {
         button("المفضلة") { favoritesScreen() }
         button("راجع أخطاءك") { reviewScreen() }
         button("خطة الدراسة") { studyPlanScreen() }
+        button("ابحث عن سؤال") { questionSearchScreen() }
+        button("سجل الاختبارات") { attemptHistoryScreen() }
+        button("جلسة تركيز") { focusScreen() }
         button("غيّر جو • قصص") { storiesScreen() }
         button("الدعم والمراسلات") { supportScreen() }
         button("إعلان مدرسة", secondary = true) { schoolAdScreen() }
@@ -1536,6 +1543,7 @@ class MainActivity : Activity() {
     private fun notificationsScreen() {
         fetch("mobile/notifications.php") { response ->
             if (!response.optBoolean("ok")) return@fetch
+            activeScreen = "notifications"
             base("الإشعارات", true)
             val items = response.optJSONArray("items") ?: JSONArray()
             caption("غير المقروءة: " + response.optInt("unread", 0))
@@ -1546,7 +1554,9 @@ class MainActivity : Activity() {
             }
             for (i in 0 until items.length()) {
                 val item = items.optJSONObject(i) ?: continue
-                line(item.optString("title") + "\n" + item.optString("body"))
+                val read = item.optBoolean("is_read") || item.optInt("is_read") == 1
+                line((if (read) "" else "● ") + item.optString("title") + "\n" + item.optString("body"))
+                if (item.optString("created_at").isNotBlank()) caption(item.optString("created_at"))
             }
             if (items.length() == 0) caption("لا توجد إشعارات.")
         }
@@ -1684,15 +1694,232 @@ class MainActivity : Activity() {
     private fun reviewScreen() {
         fetch("mobile/review.php") { response ->
             if (!response.optBoolean("ok")) return@fetch
+            activeScreen = "review"
             base("مراجعة الأخطاء", true)
+            val weak = response.optJSONArray("weak") ?: JSONArray()
+            if (weak.length() > 0) {
+                line("المواضيع التي تحتاج تركيزاً", true)
+                for (i in 0 until weak.length()) {
+                    val item = weak.optJSONObject(i) ?: continue
+                    line(item.optString("chapter") + " • " + item.optInt("rate") + "%", true)
+                    caption(item.optString("subject") + " • أخطاء: " + item.optInt("wrong") +
+                        " من " + item.optInt("total"))
+                }
+                line("آخر الأخطاء", true)
+            }
             val items = response.optJSONArray("mistakes") ?: JSONArray()
             for (i in 0 until items.length()) {
                 val item = items.optJSONObject(i) ?: continue
                 line(item.optString("question_text"))
                 caption("الإجابة الصحيحة: " + item.optString("correct_answer"))
                 caption("التوضيح: " + item.optString("explanation"))
+                caption(item.optString("subject_name") + " • " + item.optString("chapter_name"))
             }
             if (items.length() == 0) caption("لا توجد أخطاء مسجلة.")
+            button("تحديث المراجعة", secondary = true) { reviewScreen() }
+        }
+    }
+
+    private fun questionSearchScreen() {
+        activeScreen = "question_search"
+        base("البحث في الأسئلة", true)
+        caption("اكتب حرفين على الأقل للبحث في الأسئلة والمواضيع.")
+        val query = input("ابحث في الأسئلة والمواضيع")
+        val search = button("بحث") {}
+        search.setOnClickListener {
+            val value = query.text.toString().trim()
+            if (value.length < 2) { message("اكتب حرفين على الأقل."); return@setOnClickListener }
+            search.isEnabled = false
+            val path = "api/search.php?q=" + URLEncoder.encode(value, "UTF-8")
+            fetch(path) { response ->
+                if (activeScreen != "question_search") return@fetch
+                search.isEnabled = true
+                if (!response.optBoolean("ok")) return@fetch
+                // Replace only earlier search results, keeping the query field editable.
+                val results = response.optJSONArray("results") ?: JSONArray()
+                val savedQuery = query.text.toString()
+                renderQuestionSearchResults(savedQuery, results)
+            }
+        }
+    }
+
+    private fun renderQuestionSearchResults(queryText: String, results: JSONArray) {
+        activeScreen = "question_search"
+        base("البحث في الأسئلة", true)
+        val query = input("ابحث في الأسئلة والمواضيع").apply { setText(queryText) }
+        button("بحث") {
+            val next = query.text.toString().trim()
+            if (next.length < 2) { message("اكتب حرفين على الأقل."); return@button }
+            val path = "api/search.php?q=" + URLEncoder.encode(next, "UTF-8")
+            fetch(path) { response ->
+                if (activeScreen == "question_search" && response.optBoolean("ok"))
+                    renderQuestionSearchResults(next, response.optJSONArray("results") ?: JSONArray())
+            }
+        }
+        line("نتائج البحث", true)
+        if (results.length() == 0) caption("لا توجد نتائج مطابقة.")
+        for (i in 0 until results.length()) {
+            val result = results.optJSONObject(i) ?: continue
+            caption(result.optString("type"))
+            line(result.optString("title"), true)
+            if (result.optString("meta").isNotBlank()) caption(result.optString("meta"))
+        }
+    }
+
+    private fun attemptHistoryScreen() {
+        activeScreen = "attempt_history"
+        base("سجل الاختبارات", true)
+        line("جارٍ تحميل المحاولات السابقة…")
+        fetch("mobile/practice.php?history=1") { response ->
+            if (activeScreen != "attempt_history") return@fetch
+            base("سجل الاختبارات", true)
+            if (!response.optBoolean("ok")) {
+                line("تعذر تحميل سجل الاختبارات.")
+                button("إعادة المحاولة") { attemptHistoryScreen() }
+                return@fetch
+            }
+            val rows = response.optJSONArray("history") ?: JSONArray()
+            if (rows.length() == 0) caption("لا توجد محاولات. ستظهر اختباراتك المخصصة المكتملة هنا.")
+            for (i in 0 until rows.length()) {
+                val row = rows.optJSONObject(i) ?: continue
+                line(row.optString("title"), true)
+                caption(row.optString("subject_name") + " • " + row.optString("completed_at"))
+                val score = row.optDouble("score", 0.0).toInt()
+                caption("النتيجة: $score% • " + row.optInt("correct") + " / " + row.optInt("total_questions"))
+            }
+            button("تحديث المحاولات", secondary = true) { attemptHistoryScreen() }
+        }
+    }
+
+    private fun focusKey(suffix: String): String = "study_focus_${student.optInt("id", 0)}_$suffix"
+
+    private fun stopFocusTicker() {
+        focusTicker?.let(main::removeCallbacks)
+        focusTicker = null
+    }
+
+    private fun confirmFocusRetry(action: String, proceed: () -> Unit) {
+        if (prefs.getString(focusKey("uncertain"), "") != action) { proceed(); return }
+        AlertDialog.Builder(this).setTitle("تحقق قبل إعادة الإرسال")
+            .setMessage("حالة الطلب السابق غير مؤكدة بسبب الاتصال. تحقق أولاً من سجلك أو من فريق الدعم؛ فقد يكون الخادم نفّذه. هل تأكدت وتريد إعادة الإرسال يدوياً؟")
+            .setPositiveButton("أعد الإرسال بعد التحقق") { _, _ -> proceed() }
+            .setNegativeButton("إلغاء", null).show()
+    }
+
+    private fun focusScreen(status: String = "") {
+        stopFocusTicker()
+        activeScreen = "focus"
+        focusMinutes = prefs.getInt(focusKey("minutes"), focusMinutes)
+        focusDeadline = prefs.getLong(focusKey("deadline"), 0L)
+        base("جلسة التركيز", true)
+        line("وقت هادئ لدراستك", true)
+        caption("اختر 25 أو 45 أو 60 دقيقة، وسنسجل نشاطك على الخادم بعد إنهاء الجلسة.")
+        val clock = TextView(this).apply {
+            textSize = 40f; gravity = Gravity.CENTER; typeface = Typeface.DEFAULT_BOLD
+            setTextColor(accent)
+            setPadding(dp(8), dp(24), dp(8), dp(24))
+            background = shape(surface)
+        }
+        root.addView(clock, LinearLayout.LayoutParams(-1, -2))
+        gap()
+        fun tick() {
+            val seconds = if (focusDeadline > 0L)
+                StudyRules.remainingFocusSeconds(focusDeadline, System.currentTimeMillis())
+            else focusMinutes * 60
+            clock.text = "%02d:%02d".format(java.util.Locale.US, seconds / 60, seconds % 60)
+        }
+        tick()
+        if (focusDeadline > 0L) {
+            caption("الجلسة نشطة. يمكنك الخروج والعودة دون فقدان وقتها.")
+            if (StudyRules.remainingFocusSeconds(focusDeadline, System.currentTimeMillis()) == 0)
+                line("اكتمل الوقت! احفظ الجلسة لتسجيل دقائقك.")
+            val finish = button("إنهاء الجلسة وحفظها") {}
+            finish.isEnabled = !focusBusy
+            finish.setOnClickListener {
+                if (focusBusy) return@setOnClickListener
+                confirmFocusRetry("finish") {
+                focusBusy = true
+                finish.isEnabled = false
+                fetch("mobile/study-session.php", JSONObject().put("csrf", csrf)
+                    .put("action", "finish")) { result ->
+                    focusBusy = false
+                    if (result.optBoolean("ok")) {
+                        prefs.edit().remove(focusKey("deadline")).remove(focusKey("minutes"))
+                            .remove(focusKey("uncertain")).apply()
+                        focusDeadline = 0L
+                        if (activeScreen == "focus")
+                            focusScreen("أحسنت! تم تسجيل " + result.optInt("minutes") + " دقيقة في نشاطك الدراسي.")
+                        refreshFocusStats()
+                    } else if (result.optBoolean("network_error")) {
+                        prefs.edit().putString(focusKey("uncertain"), "finish").apply()
+                        if (activeScreen == "focus")
+                            focusScreen("حالة الحفظ غير مؤكدة. تحقق من نشاطك أو تواصل مع الدعم قبل إرسال الطلب ثانية.")
+                    } else if (activeScreen == "focus") focusScreen(result.optString("message", "لم تُحفظ الجلسة."))
+                }
+                }
+            }
+        } else {
+            caption("المدة")
+            val choices = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+            for (minutes in listOf(25, 45, 60)) {
+                val button = makeButton("$minutes دقيقة", secondary = minutes != focusMinutes) {
+                    if (!focusBusy) {
+                        focusMinutes = minutes
+                        prefs.edit().putInt(focusKey("minutes"), minutes).apply()
+                        focusScreen()
+                    }
+                }
+                choices.addView(button, LinearLayout.LayoutParams(0, dp(52), 1f).apply {
+                    marginStart = dp(2); marginEnd = dp(2)
+                })
+            }
+            root.addView(choices)
+            gap(14)
+            val start = button("ابدأ جلسة التركيز") {}
+            start.isEnabled = !focusBusy
+            start.setOnClickListener {
+                if (focusBusy || !StudyRules.validFocusMinutes(focusMinutes)) return@setOnClickListener
+                confirmFocusRetry("start") {
+                focusBusy = true
+                start.isEnabled = false
+                fetch("mobile/study-session.php", JSONObject().put("csrf", csrf)
+                    .put("action", "start").put("planned", focusMinutes)) { result ->
+                    focusBusy = false
+                    if (result.optBoolean("ok")) {
+                        focusDeadline = System.currentTimeMillis() + focusMinutes * 60_000L
+                        prefs.edit().putLong(focusKey("deadline"), focusDeadline)
+                            .putInt(focusKey("minutes"), focusMinutes)
+                            .remove(focusKey("uncertain")).apply()
+                        if (activeScreen == "focus") focusScreen("بدأت الجلسة. ركّز على هدف واحد.")
+                    } else if (result.optBoolean("network_error")) {
+                        prefs.edit().putString(focusKey("uncertain"), "start").apply()
+                        if (activeScreen == "focus")
+                            focusScreen("حالة بدء الجلسة غير مؤكدة. لا تكرر الطلب قبل التحقق من الدعم.")
+                    } else if (activeScreen == "focus") focusScreen(result.optString("message", "تعذر بدء جلسة التركيز."))
+                }
+                }
+            }
+        }
+        if (status.isNotBlank()) line(status)
+        else if (prefs.getString(focusKey("uncertain"), "").orEmpty().isNotEmpty())
+            line("هناك طلب جلسة غير مؤكد. تحقق من النشاط أو مع الدعم قبل إعادة الإرسال.")
+        button("مراسلات الدعم", secondary = true) { supportScreen() }
+        if (focusDeadline > 0L) {
+            val ticker = object : Runnable {
+                override fun run() {
+                    if (activeScreen != "focus" || isFinishing || isDestroyed) return
+                    tick()
+                    main.postDelayed(this, 1000L)
+                }
+            }
+            focusTicker = ticker
+            main.postDelayed(ticker, 1000L)
+        }
+    }
+
+    private fun refreshFocusStats() {
+        fetch("mobile/bootstrap.php", showError = false) { response ->
+            if (response.optBoolean("ok")) applyBootstrap(response)
         }
     }
 
@@ -2170,6 +2397,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        stopFocusTicker()
         jobs.shutdownNow()
         super.onDestroy()
     }

@@ -27,6 +27,8 @@ Use a dedicated **non-production student test account** and an administrator-app
 - [ ] Create a 1-day/5-question and a 365-day/500-question study plan; confirm correct POST schema, persisted list and safe recovery after POST timeout (no duplicate creation).
 - [ ] Send a school-advertisement request (school/text/duration), check that the internal support inbox contains exactly one structured message and that uncertain submissions are not repeated.
 - [ ] Verify correct answers/explanations and server-side unfavorite removal in saved questions, including after returning to the screen.
+- [ ] Search Arabic terms through `api/search.php`, inspect weak-topic rates and unread notifications; verify the actual response field names, dates, and new results after refreshing.
+- [ ] Start, background, restore and finish 25/45/60-minute focus sessions; compare server activity/XP, check manual reconciliation after dropped responses, and inspect recorded custom-exam history.
 - [ ] Exercise registration, recovery, notifications, favorites, support, privacy/deletion flow and every remaining native iOS action.
 
 ## Device, connection and visual tests

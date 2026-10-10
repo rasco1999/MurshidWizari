@@ -31,4 +31,14 @@ class StudyRulesTest {
         assertTrue(message.contains("عدد الأيام: 12"))
         assertTrue(message.contains("الطالب المرسل: طالب"))
     }
+
+    @Test fun focusUsesIosDurationsAndAbsoluteDeadline() {
+        assertTrue(StudyRules.validFocusMinutes(25))
+        assertTrue(StudyRules.validFocusMinutes(45))
+        assertTrue(StudyRules.validFocusMinutes(60))
+        assertFalse(StudyRules.validFocusMinutes(30))
+        assertEquals(1500, StudyRules.remainingFocusSeconds(1_500_000L, 0L))
+        assertEquals(1, StudyRules.remainingFocusSeconds(1_500_000L, 1_499_001L))
+        assertEquals(0, StudyRules.remainingFocusSeconds(1_500_000L, 1_500_001L))
+    }
 }

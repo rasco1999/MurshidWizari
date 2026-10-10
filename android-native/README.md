@@ -17,6 +17,8 @@
 - Interactive study plans (`mobile/study-plan.php`): list saved plans and create a server-backed plan with native day/target steppers matching iOS bounds; network-ambiguous creation is not automatically repeated.
 - Native school-advertisement request: school name, full ad text, 1–90-day stepper, confirmation, then an internal support message sent to `mobile/support.php`, with no repeated POST on ambiguous failure.
 - Favorite-question list now includes correct answers and explanations and allows removing an item through the existing question-tools endpoint.
+- Search queries to `api/search.php` now render actual matching question/topic results; review includes weak-topic rates and counts; notifications show unread state/timestamps.
+- Server-backed custom-exam attempt history lists completed scores. Focus sessions use the real `mobile/study-session.php` start/finish requests, a wall-clock timer with 25/45/60-minute selections, account-scoped local recovery on return and explicit reconciliation of uncertain POSTs.
 - Live unauthenticated read-only server checks: `mobile/bootstrap.php` and `mobile/account.php` returned HTTP 401 as expected; `api/grades.php` returned HTTP 200 with grade JSON. These are **not** authenticated integration tests.
 - JVM regression tests for question quality, answer progression, challenge rules, account/network/recovery validation and study-plan/ad-request boundaries. GitHub Actions runs them before building the APK.
 - Correct Android back navigation and both object/string multiple-choice formats.

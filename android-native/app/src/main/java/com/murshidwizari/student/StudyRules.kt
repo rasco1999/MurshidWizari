@@ -23,4 +23,11 @@ internal object StudyRules {
             "الإعلان الكامل:\n${advertisement.trim()}\n" +
             "عدد الأيام: $days\n" +
             "الطالب المرسل: ${student.trim().ifBlank { "طالب" }}"
+
+    fun validFocusMinutes(minutes: Int): Boolean = minutes in setOf(25, 45, 60)
+
+    fun remainingFocusSeconds(deadlineMillis: Long, nowMillis: Long): Int {
+        val remaining = (deadlineMillis - nowMillis).coerceAtLeast(0L)
+        return ((remaining + 999L) / 1000L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    }
 }
