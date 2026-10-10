@@ -6,11 +6,14 @@ import android.content.res.Configuration
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.BitmapFactory
+import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.content.res.ColorStateList
 import android.net.Uri
+import android.media.ExifInterface
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -79,6 +82,7 @@ class MainActivity : Activity() {
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var sessionGeneration = 0
     private var avatarGeneration = 0
+    private var activeAvatar: java.lang.ref.WeakReference<ImageView>? = null
     private var paymentBusy = false
     private var paymentPlan = ""
     private var checkoutReturnPending = false
@@ -1138,41 +1142,92 @@ class MainActivity : Activity() {
         if (requestCode != 301 || resultCode != RESULT_OK) return
         val selected = data?.data ?: return
         val mime = contentResolver.getType(selected)
-        if (mime !in setOf("image/jpeg", "image/png")) {
-            message("اختر صورة JPG أو PNG.")
+        if (mime?.startsWith("image/") != true) {
+            message("اختر ملف صورة صالحاً.")
             return
         }
+        message("جارٍ تجهيز الصورة ورفعها…")
         val generation = sessionGeneration
         jobs.execute {
-            val bytes = try {
-                contentResolver.openInputStream(selected)?.use { stream ->
-                    val output = java.io.ByteArrayOutputStream()
-                    val buffer = ByteArray(8192)
-                    var size = 0
-                    while (true) {
-                        val n = stream.read(buffer)
-                        if (n < 0) break
-                        size += n
-                        if (size > 3_000_000) break
-                        output.write(buffer, 0, n)
-                    }
-                    if (size > 3_000_000) null else output.toByteArray()
-                }
-            } catch (_: Exception) { null }
+            val bytes = prepareAvatarJpeg(selected)
+            val preview = bytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
             val response = if (bytes == null)
-                JSONObject().put("ok", false).put("message", "تعذر قراءة الصورة أو حجمها أكبر من 3 ميغابايت.")
-            else try { api.uploadAvatar(csrf, if (mime == "image/png") "avatar.png" else "avatar.jpg", mime ?: "image/jpeg", bytes) }
-            catch (e: Exception) { JSONObject().put("ok", false).put("message", NetworkRules.message(e, true)) }
+                JSONObject().put("ok", false).put("message", "تعذر معالجة الصورة. اختر صورة أخرى بجودة مناسبة.")
+            else try { api.uploadAvatar(csrf, "avatar.jpg", "image/jpeg", bytes) }
+            catch (e: Exception) { JSONObject().put("ok", false).put("network_error", true)
+                .put("message", NetworkRules.message(e, true)) }
             main.post {
                 if (generation != sessionGeneration || isFinishing || isDestroyed) return@post
                 if (response.optBoolean("session_expired")) { expireSession(); return@post }
                 if (response.optBoolean("ok")) {
                     avatarGeneration++
+                    preview?.let { activeAvatar?.get()?.setImageBitmap(it) }
                     message(response.optString("message", "تم تحديث الصورة الشخصية."))
                     refreshAccountAfterMutation()
-                } else message(response.optString("message", "تعذر رفع الصورة."))
+                } else {
+                    message(response.optString("message", "تعذر رفع الصورة."))
+                    if (response.optBoolean("network_error")) accountScreen()
+                }
             }
         }
+    }
+
+    /** iOS converts PhotosPicker images to bounded JPEG; Android handles JPEG, PNG and decodable HEIC. */
+    private fun prepareAvatarJpeg(uri: Uri): ByteArray? {
+        return try {
+        val original = contentResolver.openInputStream(uri)?.use { stream ->
+            val output = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            var size = 0
+            while (true) {
+                val n = stream.read(buffer)
+                if (n < 0) break
+                size += n
+                if (size > 16_000_000) return null
+                output.write(buffer, 0, n)
+            }
+            output.toByteArray()
+        } ?: return null
+        val dimensions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(original, 0, original.size, dimensions)
+        if (dimensions.outWidth <= 0 || dimensions.outHeight <= 0) return null
+        var sample = 1
+        while (maxOf(dimensions.outWidth, dimensions.outHeight) / sample > 1440) sample *= 2
+        val bitmap = BitmapFactory.decodeByteArray(original, 0, original.size,
+            BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
+        val orientation = try {
+            contentResolver.openInputStream(uri)?.use { stream ->
+                ExifInterface(stream).getAttributeInt(ExifInterface.TAG_ORIENTATION,
+                    ExifInterface.ORIENTATION_NORMAL)
+            } ?: ExifInterface.ORIENTATION_NORMAL
+        } catch (_: Exception) { ExifInterface.ORIENTATION_NORMAL }
+        val matrix = Matrix().apply {
+            when (orientation) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> postRotate(90f)
+                ExifInterface.ORIENTATION_ROTATE_180 -> postRotate(180f)
+                ExifInterface.ORIENTATION_ROTATE_270 -> postRotate(270f)
+                ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> preScale(-1f, 1f)
+                ExifInterface.ORIENTATION_FLIP_VERTICAL -> preScale(1f, -1f)
+                ExifInterface.ORIENTATION_TRANSPOSE -> { preScale(-1f, 1f); postRotate(90f) }
+                ExifInterface.ORIENTATION_TRANSVERSE -> { preScale(-1f, 1f); postRotate(270f) }
+            }
+        }
+        val corrected = if (matrix.isIdentity) bitmap else
+            Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+        val maxDimension = maxOf(corrected.width, corrected.height)
+        val scaled = if (maxDimension <= 1440) corrected else {
+            val ratio = 1440f / maxDimension
+            Bitmap.createScaledBitmap(corrected, (corrected.width * ratio).toInt().coerceAtLeast(1),
+                (corrected.height * ratio).toInt().coerceAtLeast(1), true)
+        }
+        val output = java.io.ByteArrayOutputStream()
+        for (quality in intArrayOf(88, 76, 64)) {
+            output.reset()
+            if (scaled.compress(Bitmap.CompressFormat.JPEG, quality, output) && output.size() <= 3_000_000)
+                return output.toByteArray()
+        }
+        null
+        } catch (_: Exception) { null } catch (_: OutOfMemoryError) { null }
     }
 
     private fun accountProfileCard(profile: JSONObject, account: JSONObject) {
@@ -1200,6 +1255,7 @@ class MainActivity : Activity() {
             contentDescription = "الصورة الشخصية الحالية"
         }
         avatarColumn.addView(avatar, LinearLayout.LayoutParams(dp(78), dp(78)))
+        activeAvatar = java.lang.ref.WeakReference(avatar)
         fetchAvatarInto(avatar, account.optString("avatar_url"), account.optString("avatar_revision"))
         val photoChange = TextView(this).apply {
             text = "📷 تغيير الصورة"
@@ -1263,6 +1319,9 @@ class MainActivity : Activity() {
                         dialog.dismiss()
                         message("تم تحديث الاسم.")
                         refreshAccountAfterMutation()
+                    } else if (result.optBoolean("network_error")) {
+                        dialog.dismiss()
+                        accountScreen() // Re-read the one-time rename state before allowing another attempt.
                     }
                 }
             }
@@ -1807,6 +1866,9 @@ class MainActivity : Activity() {
                 gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             }
         }
+        // Only idle screens reflow their action grid; active exams/forms keep entered state.
+        if (activeScreen == "home" && homepage.optBoolean("ok")) showHome(homepage)
+        else if (activeScreen == "plans") plansScreen()
     }
 
     private fun inspectInternet() {
