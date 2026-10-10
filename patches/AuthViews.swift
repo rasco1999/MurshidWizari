@@ -990,7 +990,7 @@ struct RegisterView: View {
                         .disabled(loading || gradesLoading)
                         .opacity((loading || gradesLoading) ? 0.62 : 1)
 
-                        Text("نسخة iPhone 4.2 • Build 420")
+                        Text("نسخة iPhone 4.2.1 • Build 421")
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.tertiary)
                             .frame(maxWidth: .infinity, alignment: .center)
@@ -4389,7 +4389,7 @@ struct RegisterV3View: View {
 
                             navigationButtons(proxy: proxy)
 
-                            Text("نسخة iPhone 4.2 • Build 420")
+                            Text("نسخة iPhone 4.2.1 • Build 421")
                                 .font(.caption2.monospacedDigit())
                                 .foregroundStyle(.tertiary)
                                 .frame(maxWidth: .infinity, alignment: .center)
