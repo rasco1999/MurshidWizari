@@ -229,7 +229,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val response = api.get("mobile/exam.php?chapter_id=${item.id}")
                 questions = response.array("questions").map(QuizQuestion::from)
-                    .filter { it.id > 0 && it.text.isNotBlank() }
+                    .filter { it.id > 0 && QuestionPresentation.display(it.text).isNotBlank() }
                     .distinctBy { it.id }
                 answerResult = emptyMap()
                 questionIndex = questions.indexOfFirst { !it.submitted }.takeIf { it >= 0 } ?: 0

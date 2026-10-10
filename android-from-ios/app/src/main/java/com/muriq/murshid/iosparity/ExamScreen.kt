@@ -30,8 +30,11 @@ fun ExamScreen(vm: MurshidViewModel) {
     val questions = vm.questions
     if (questions.isEmpty()) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(15.dp)) {
-            EmptyPanel("لا توجد أسئلة متاحة", "قد يكون الرصيد المجاني انتهى أو لم تُنشر أسئلة لهذا الموضوع.")
-            PrimaryAction("الاشتراك") { vm.openFeature(Feature.SUBSCRIPTION) }
+            EmptyPanel("لا توجد أسئلة متاحة", "لا توجد أسئلة منشورة حالياً لهذا الموضوع، أو تعذر تحميلها من الخادم.")
+            SecondaryAction("العودة للمواضيع", vm::back)
+            if (vm.dashboard?.subscribed != true && vm.dashboard?.freeRemaining == 0) {
+                PrimaryAction("عرض الاشتراكات") { vm.openFeature(Feature.SUBSCRIPTION) }
+            }
         }
         return
     }
