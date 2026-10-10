@@ -37,6 +37,7 @@ class MainActivity : Activity() {
     private var examQuestions = JSONArray()
     private var questionIndex = 0
     private var busyAnswer = false
+    private var submissionUncertain = false
     private var subscribed = false
     private var night = false
     private val prefs by lazy { getSharedPreferences("native_preferences", MODE_PRIVATE) }
@@ -52,9 +53,10 @@ class MainActivity : Activity() {
         api = ApiClient(this)
         night = prefs.getBoolean("night", false)
         loginScreen()
-        // Restore only a user-approved encrypted remembered session, if available.
-        fetch("mobile/bootstrap.php", showError = false) { response ->
-            if (response.optBoolean("ok")) showHome(response)
+        if (api.hasRememberedSession()) {
+            fetch("mobile/bootstrap.php", showError = false) { response ->
+                if (response.optBoolean("ok")) showHome(response)
+            }
         }
     }
     private fun shape(color: Int, radius: Float = 20f): GradientDrawable =
@@ -167,7 +169,7 @@ class MainActivity : Activity() {
         root.addView(preview)
         val remember = CheckBox(this).apply { text = "تذكرني على هذا الجهاز"; setTextColor(textColor) }
         root.addView(remember)
-        val login = button("تسجيل الدخول") {
+        button("تسجيل الدخول") {
             val id = identifier.text.toString().trim()
             val pass = password.text.toString()
             if (id.isEmpty() || pass.isEmpty()) { message("أدخل البريد أو الهاتف وكلمة المرور."); return@button }
@@ -273,6 +275,7 @@ class MainActivity : Activity() {
         button("غيّر جو • قصص") { storiesScreen() }
         button("الدعم والمراسلات") { supportScreen() }
         button("تفعيل رمز الاشتراك") { redeemScreen() }
+        button("الباقات والأسعار") { plansScreen() }
         button("المرشحات", secondary = !subscribed) {
             if (subscribed) subjectsScreen(true) else message("المرشحات للمشتركين فقط.")
         }
@@ -287,6 +290,17 @@ class MainActivity : Activity() {
                 api.clear(); csrf = ""; student = JSONObject(); loginScreen()
             }
         }
+    }
+
+    private fun plansScreen() {
+        base("الاشتراكات", true)
+        caption("الدفع يتم عبر قنوات المنصة الرسمية.")
+        val plans = homepage.optJSONArray("plans") ?: JSONArray()
+        for (i in 0 until plans.length()) {
+            val plan = plans.optJSONObject(i) ?: continue
+            line(plan.optString("label") + " — " + plan.optInt("amount") + " دينار عراقي")
+        }
+        button("تفعيل رمز اشتراك") { redeemScreen() }
     }
 
     private fun refreshHome() {
@@ -329,6 +343,7 @@ class MainActivity : Activity() {
             if (!result.optBoolean("ok")) return@fetch
             csrf = result.optString("csrf", csrf)
             examQuestions = result.optJSONArray("questions") ?: JSONArray()
+            submissionUncertain = false
             questionIndex = 0
             while (questionIndex < examQuestions.length() && examQuestions.optJSONObject(questionIndex)?.optBoolean("submitted") == true) questionIndex++
             renderQuestion()
@@ -408,6 +423,10 @@ class MainActivity : Activity() {
         if (busyAnswer) return
         if (answer.isBlank()) { message("اكتب الإجابة أولاً."); return }
         if (csrf.isEmpty()) { message("انتهت الجلسة، حدّث الصفحة."); return }
+        if (submissionUncertain) {
+            message("تحقق من حالة الإجابة السابقة قبل إرسال إجابة جديدة.")
+            return
+        }
         busyAnswer = true
         val id = question.optInt("id")
         val stored = JSONObject().put("text", answer).put("selected_text", answer).put("submitted", true)
@@ -418,6 +437,14 @@ class MainActivity : Activity() {
         fetch("api/progress.php", data, showError = true) { result ->
             busyAnswer = false
             if (!result.optBoolean("ok")) {
+                if (!result.has("payment_required") && !result.has("session_expired")) {
+                    submissionUncertain = true
+                    AlertDialog.Builder(this).setTitle("التحقق من حفظ الإجابة")
+                        .setMessage("قد تكون الإجابة قد حُفظت رغم انقطاع الاتصال. حدّث الاختبار للتحقق قبل المحاولة مجدداً.")
+                        .setPositiveButton("التحقق الآن") { _, _ ->
+                            loadExam(chapterId, chapterName)
+                        }.setNegativeButton("لاحقاً", null).show()
+                }
                 if (result.optBoolean("payment_required")) {
                     AlertDialog.Builder(this).setTitle("انتهت الأسئلة المجانية")
                         .setMessage(result.optString("message", "اشترك لمتابعة الاختبارات."))
@@ -430,7 +457,11 @@ class MainActivity : Activity() {
             // Server is the only source of truth; record a submitted answer after its ack.
             val confirmed = grade != null
             if (!confirmed) {
-                message("لم يؤكد الخادم حفظ الإجابة. أعد فتح الاختبار للتحقق.")
+                submissionUncertain = true
+                AlertDialog.Builder(this).setTitle("لم يصل تأكيد الحفظ")
+                    .setMessage("سنقرأ الإجابة المحفوظة من الخادم قبل السماح بمحاولة أخرى.")
+                    .setPositiveButton("تحديث الاختبار") { _, _ -> loadExam(chapterId, chapterName) }
+                    .setCancelable(false).show()
                 return@fetch
             }
             question.put("submitted", true)
