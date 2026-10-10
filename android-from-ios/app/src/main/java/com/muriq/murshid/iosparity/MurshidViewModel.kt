@@ -203,6 +203,14 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
 
     fun selectTab(index: Int) {
         if (index !in 0..4) return
+        // Mirror the iOS subscriber-only predictions gate at navigation level.
+        // UI hiding alone must never be relied upon for access control.
+        if (index == 2 && dashboard?.subscribed != true) {
+            message = "المرشحات للمشتركين فقط. يمكنك الاطلاع على الباقات."
+            feature = Feature.SUBSCRIPTION
+            screen = Screen.FEATURE
+            return
+        }
         tab = index; screen = Screen.MAIN; clearMessage()
         if (index == 4) loadAccount()
     }
