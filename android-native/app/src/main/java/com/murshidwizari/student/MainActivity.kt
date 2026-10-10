@@ -37,6 +37,7 @@ class MainActivity : Activity() {
     private var chapterId = 0
     private var chapterName = ""
     private var examQuestions = JSONArray()
+    private val examIssues = HashMap<Int, String>()
     private var questionIndex = 0
     private var busyAnswer = false
     private var submissionUncertain = false
@@ -146,7 +147,7 @@ class MainActivity : Activity() {
             main.post {
                 if (showError && !result.optBoolean("ok")) {
                     if (result.optBoolean("session_expired")) {
-                        api.clear(); csrf = ""; loginScreen()
+                        api.clear(); csrf = ""; busyAnswer = false; submissionUncertain = false; loginScreen()
                         message("انتهت جلسة الدخول. سجّل الدخول مجدداً.")
                         return@post
                     }
@@ -516,14 +517,82 @@ class MainActivity : Activity() {
     private fun loadExam(id: Int, name: String) {
         chapterId = id; chapterName = name
         fetch("mobile/exam.php?chapter_id=" + id) { result ->
-            if (!result.optBoolean("ok")) return@fetch
+            if (!result.optBoolean("ok") || chapterId != id) return@fetch
             csrf = result.optString("csrf", csrf)
             examQuestions = result.optJSONArray("questions") ?: JSONArray()
             submissionUncertain = false
+            examIssues.clear()
+            val seen = HashSet<String>()
+            val seenIds = HashSet<Int>()
+            for (i in 0 until examQuestions.length()) {
+                val q = examQuestions.optJSONObject(i)
+                if (q == null) { examIssues[i] = "بيانات السؤال غير قابلة للقراءة."; continue }
+                val issue = auditQuestion(q)
+                val duplicateKey = ExamRules.answerKey(q.optString("text"))
+                examIssues[i] = when {
+                    issue != null -> issue
+                    !seenIds.add(q.optInt("id")) -> "معرّف هذا السؤال مكرر في الاختبار."
+                    duplicateKey.isNotBlank() && !seen.add(duplicateKey) -> "هذا السؤال مكرر ضمن الاختبار."
+                    else -> continue
+                }
+            }
             questionIndex = 0
-            while (questionIndex < examQuestions.length() && examQuestions.optJSONObject(questionIndex)?.optBoolean("submitted") == true) questionIndex++
+            while (questionIndex < examQuestions.length() &&
+                examQuestions.optJSONObject(questionIndex)?.let(::isSubmitted) == true) questionIndex++
             renderQuestion()
         }
+    }
+
+    private fun isSubmitted(question: JSONObject): Boolean =
+        ExamRules.knownBoolean(question.opt("submitted")) == true
+
+    private fun auditQuestion(q: JSONObject): String? {
+        val options = q.optJSONArray("options") ?: JSONArray()
+        val optionTexts = (0 until options.length()).map { i ->
+            options.optJSONObject(i)?.optString("text") ?: options.optString(i)
+        }
+        val items = q.optJSONArray("match_items") ?: JSONArray()
+        val type = q.optString("type")
+        val structure = q.optJSONObject(type)
+        val stages = structure?.optJSONArray("stages") ?: JSONArray()
+        val stageNames = ArrayList<String>()
+        val required = ArrayList<String>()
+        var invalidChoice = false
+        for (i in 0 until stages.length()) {
+            val stage = stages.optJSONObject(i)
+            if (stage == null) { invalidChoice = true; continue }
+            val key = stage.optString("key")
+            stageNames.add(key)
+            if (stage.optString("kind") == "info" || stage.optBoolean("ungraded")) continue
+            if (stage.optString("kind") == "punnett") {
+                val cells = stage.optJSONArray("cells")
+                if (cells == null || cells.length() == 0) invalidChoice = true
+                for (j in 0 until (cells?.length() ?: 0)) required.add(key + "_" + j)
+            } else {
+                required.add(key)
+                if (stage.optString("kind") == "choice" && (stage.optJSONArray("options")?.length() ?: 0) < 2)
+                    invalidChoice = true
+            }
+        }
+        val english = q.optJSONObject("english_match")
+        val left = english?.optJSONObject("left")
+        val right = english?.optJSONObject("right")
+        val shape = ExamRules.Shape(
+            id = q.optInt("id"), text = q.optString("text"), type = type,
+            correctAnswer = q.optString("correct_answer"), options = optionTexts,
+            matchIds = (0 until items.length()).map { items.optJSONObject(it)?.optInt("id") ?: 0 },
+            matchWords = (0 until items.length()).map { items.optJSONObject(it)?.optString("mad_word") ?: "" },
+            englishLeft = left?.keys()?.asSequence()?.map { key ->
+                if (left?.optString(key).isNullOrBlank()) "" else key
+            }?.toList() ?: emptyList(),
+            englishRight = right?.keys()?.asSequence()?.map { key ->
+                if (right?.optString(key).isNullOrBlank()) "" else key
+            }?.toList() ?: emptyList(),
+            stages = stageNames, requiredStageKeys = required,
+            invalidStageChoices = invalidChoice,
+            hasEnglishDefinition = q.has("english_match") && !q.isNull("english_match")
+        )
+        return ExamRules.issue(shape)
     }
 
     private fun renderQuestion() {
@@ -534,28 +603,55 @@ class MainActivity : Activity() {
             return
         }
         if (questionIndex >= examQuestions.length()) {
-            line("أكملت عرض أسئلة هذا الموضوع. أحسنت!", true)
+            val total = examQuestions.length()
+            val submitted = (0 until total).count { index ->
+                examQuestions.optJSONObject(index)?.let(::isSubmitted) == true
+            }
+            val correct = (0 until total).count { index ->
+                val answer = examQuestions.optJSONObject(index)?.optJSONObject("answer")
+                answer != null && ExamRules.knownBoolean(answer.opt("correct")) == true
+            }
+            val graded = (0 until total).count { index ->
+                val answer = examQuestions.optJSONObject(index)?.optJSONObject("answer")
+                answer != null && ExamRules.knownBoolean(answer.opt("correct")) != null
+            }
+            line("نتيجة الموضوع: $submitted من $total سؤالاً محلولاً، والصحيح $correct من $graded إجابات مؤكدة التصحيح.", true)
+            if (submitted < total) caption("بعض الأسئلة لم تُحلّ بعد. راجعها قبل إنهاء الموضوع.")
+            button("مراجعة جميع الأسئلة") { questionIndex = 0; renderQuestion() }
             button("طلب أسئلة جديدة") { questionRequest() }
             button("عودة إلى المواضيع") { topicsScreen(topicsSubjectId, topicsSubjectName) }
             return
         }
-        val question = examQuestions.optJSONObject(questionIndex) ?: return
+        val question = examQuestions.optJSONObject(questionIndex)
+        if (question == null) {
+            line("تعذر قراءة بيانات السؤال. حدّث الاختبار ثم أبلغ الإدارة إن استمر الخلل.")
+            button("تحديث الأسئلة") { loadExam(chapterId, chapterName) }
+            if (questionIndex > 0) button("السؤال السابق", secondary = true) { questionIndex--; renderQuestion() }
+            return
+        }
         val id = question.optInt("id")
-        val submitted = question.optBoolean("submitted")
+        val submitted = isSubmitted(question)
         caption("السؤال " + (questionIndex+1) + " من " + examQuestions.length() + " • وزاري")
         line(question.optString("text"), true)
         if (!question.isNull("meaning_word") && question.optString("meaning_word").isNotBlank())
             caption("المفردة: " + question.optString("meaning_word"))
         val previous = question.optJSONObject("answer")
         if (submitted) {
-            val correct = previous?.optBoolean("correct") == true
-            line(if (correct) "✓ إجابتك صحيحة" else "إجابتك مسجلة")
-            caption("الإجابة المسجلة: " + (previous?.optString("text") ?: ""))
-            caption("الإجابة النموذجية: " + question.optString("correct_answer"))
-            caption("الشرح: " + question.optString("explanation"))
-            button("السؤال التالي") { questionIndex++; renderQuestion() }
+            val correct = ExamRules.knownBoolean(previous?.opt("correct"))
+            line(when (correct) { true -> "✓ إجابتك صحيحة"; false -> "إجابتك غير صحيحة"; null -> "تم حفظ إجابتك" })
+            val text = previous?.optString("text")?.takeIf { it.isNotBlank() }
+                ?: previous?.optString("selected_text").orEmpty()
+            if (text.isNotBlank()) caption("الإجابة المسجلة: " + text)
+            val correctAnswer = question.optString("correct_answer")
+            caption("الإجابة النموذجية: " + correctAnswer.ifBlank { "غير متاحة من الخادم" })
+            caption("الشرح: " + ExamRules.explanation(question.optString("explanation"), correctAnswer))
         } else {
-            when {
+            val issue = examIssues[questionIndex]
+            if (issue != null) {
+                line("هذا السؤال يحتاج إلى تصحيح في محتوى الخادم: $issue")
+                caption("لن تُخصم محاولة مجانية لأن إرسال الإجابة معطّل لهذا السؤال.")
+                button("تحديث بيانات السؤال") { loadExam(chapterId, chapterName) }
+            } else when {
                 question.optJSONObject("english_match") != null ->
                     englishMatchQuestion(question)
                 question.optString("type") == "calculation" ->
@@ -564,16 +660,15 @@ class MainActivity : Activity() {
                     stagesQuestion(question, "genetics")
                 question.optString("type") == "match" ->
                     tajweedQuestion(question)
-                (question.optJSONArray("options")?.length() ?: 0) > 0 -> {
-                    val options = question.optJSONArray("options") ?: JSONArray()
+                (question.optJSONArray("options")?.length() ?: 0) > 0 || question.optString("type") == "true_false" -> {
+                    val serverOptions = question.optJSONArray("options") ?: JSONArray()
+                    val options = if (serverOptions.length() > 0) serverOptions else JSONArray().put("صح").put("خطأ")
                     for (i in 0 until options.length()) {
                         val option = options.optJSONObject(i)
                         val chosen = option?.optString("text") ?: options.optString(i)
                         val optionId = option?.optInt("id") ?: 0
                         button(chosen, secondary = true) {
-                            AlertDialog.Builder(this).setMessage("اعتماد الإجابة: " + chosen + "؟")
-                                .setPositiveButton("إرسال الإجابة") { _, _ -> sendAnswer(question, chosen, optionId) }
-                                .setNegativeButton("إلغاء", null).show()
+                            sendAnswer(question, chosen, optionId)
                         }
                     }
                 }
@@ -586,11 +681,22 @@ class MainActivity : Activity() {
             }
         }
         gap(15)
-        button(if (question.optBoolean("favorite")) "إزالة من المفضلة" else "إضافة للمفضلة", secondary = true) {
+        if (questionIndex > 0) button("السؤال السابق", secondary = true) {
+            if (!busyAnswer) { questionIndex--; renderQuestion() }
+        }
+        if (submitted) button(if (questionIndex == examQuestions.length() - 1) "عرض النتيجة" else "السؤال التالي") {
+            val next = ExamRules.nextIndex(questionIndex, examQuestions.length(), submitted, busyAnswer, submissionUncertain)
+            if (next != questionIndex) { questionIndex = next; renderQuestion() }
+        }
+        lateinit var favoriteButton: Button
+        favoriteButton = button(if (question.optBoolean("favorite")) "إزالة من المفضلة" else "إضافة للمفضلة", secondary = true) {
             val action = if (question.optBoolean("favorite")) "unfavorite" else "favorite"
             val body = JSONObject().put("csrf", csrf).put("question_id", id).put("action", action)
             fetch("api/question-tools.php", body) { result ->
-                if (result.optBoolean("ok")) { question.put("favorite", result.optBoolean("favorite")); renderQuestion() }
+                if (result.optBoolean("ok")) {
+                    question.put("favorite", result.optBoolean("favorite"))
+                    favoriteButton.text = if (question.optBoolean("favorite")) "إزالة من المفضلة" else "إضافة للمفضلة"
+                }
             }
         }
         button("الإبلاغ عن مشكلة في السؤال", secondary = true) { reportQuestion(id) }
@@ -599,7 +705,8 @@ class MainActivity : Activity() {
 
     private fun sendAnswer(question: JSONObject, answer: String, optionId: Int) {
         if (busyAnswer) return
-        if (question.optBoolean("submitted")) { message("تم تسجيل إجابة هذا السؤال بالفعل."); return }
+        if (isSubmitted(question)) { message("تم تسجيل إجابة هذا السؤال بالفعل."); return }
+        if (examIssues[questionIndex] != null) { message("يجب إصلاح بيانات السؤال قبل إرسال إجابته."); return }
         if (answer.isBlank()) { message("اكتب الإجابة أولاً."); return }
         if (csrf.isEmpty()) { message("انتهت الجلسة، حدّث الصفحة."); return }
         if (submissionUncertain) {
@@ -608,11 +715,14 @@ class MainActivity : Activity() {
         }
         busyAnswer = true
         val id = question.optInt("id")
+        val sentIndex = questionIndex
+        val sentChapterId = chapterId
         val stored = JSONObject().put("text", answer).put("selected_text", answer).put("submitted", true)
         if (optionId > 0) stored.put("selected", optionId)
         val all = JSONObject().put(id.toString(), stored)
         val data = JSONObject().put("csrf", csrf).put("chapter_id", chapterId)
-            .put("question_index", questionIndex + 1).put("answers", all).put("completed", false)
+            .put("question_index", sentIndex + 1).put("answers", all)
+            .put("completed", sentIndex == examQuestions.length() - 1)
         fetch("api/progress.php", data, showError = true) { result ->
             busyAnswer = false
             if (!result.optBoolean("ok")) {
@@ -644,15 +754,25 @@ class MainActivity : Activity() {
                 return@fetch
             }
             question.put("submitted", true)
-            question.put("answer", JSONObject().put("text",answer).put("correct",grade.optBoolean("is_correct")))
-            val explanation = grade.optString("explanation", question.optString("explanation"))
-            val correctAnswer = grade.optString("correct_answer", question.optString("correct_answer"))
+            val savedAnswer = JSONObject().put("text", answer).put("selected_text", answer)
+            ExamRules.knownBoolean(grade.opt("is_correct"))?.let { savedAnswer.put("correct", it) }
+            question.put("answer", savedAnswer)
+            val explanation = grade.optString("explanation").ifBlank { question.optString("explanation") }
+            val correctAnswer = grade.optString("correct_answer").ifBlank { question.optString("correct_answer") }
             question.put("explanation", explanation)
             question.put("correct_answer", correctAnswer)
-            renderQuestion()
-            AlertDialog.Builder(this).setTitle(if (grade.optBoolean("is_correct")) "إجابة صحيحة ✓" else "راجع إجابتك")
-                .setMessage("الإجابة: " + correctAnswer + "\n\n" + explanation)
-                .setPositiveButton("حسناً", null).show()
+            if (activeScreen == "exam" && sentChapterId == chapterId && questionIndex == sentIndex) {
+                renderQuestion()
+                val feedback = when (ExamRules.knownBoolean(grade.opt("is_correct"))) {
+                    true -> "إجابة صحيحة ✓"
+                    false -> "راجع إجابتك"
+                    null -> "تم حفظ الإجابة"
+                }
+                AlertDialog.Builder(this).setTitle(feedback)
+                    .setMessage("الإجابة النموذجية: " + correctAnswer.ifBlank { "غير متاحة" } +
+                        "\n\n" + ExamRules.explanation(explanation, correctAnswer))
+                    .setPositiveButton("حسناً", null).show()
+            }
         }
     }
 
@@ -665,8 +785,10 @@ class MainActivity : Activity() {
             val stage = stages.optJSONObject(i) ?: continue
             val key = stage.optString("key", "step" + i)
             caption(stage.optString("label", key))
-            if (stage.optString("kind") == "info") {
-                line(stage.optString("value")); continue
+            if (stage.optString("kind") == "info" || stage.optBoolean("ungraded")) {
+                val info = stage.optString("value")
+                if (info.isNotBlank()) line(info)
+                continue
             }
             if (stage.optString("kind") == "punnett") {
                 val cells = stage.optJSONArray("cells") ?: JSONArray()
@@ -739,16 +861,14 @@ class MainActivity : Activity() {
         val right = definition.optJSONObject("right") ?: JSONObject()
         val keys = ArrayList<String>()
         val choices = ArrayList<String>()
-        val rightKeys = right.keys()
+        val rightKeys = right.keys().asSequence().toList().sortedWith(compareBy({ it.toIntOrNull() ?: Int.MAX_VALUE }, { it }))
         choices.add("اختر الوصل"); keys.add("")
-        while (rightKeys.hasNext()) {
-            val key = rightKeys.next()
+        for (key in rightKeys) {
             keys.add(key); choices.add(key + " : " + right.optString(key))
         }
         val pairFields = ArrayList<Pair<String, Spinner>>()
-        val leftKeys = left.keys()
-        while (leftKeys.hasNext()) {
-            val key = leftKeys.next()
+        val leftKeys = left.keys().asSequence().toList().sortedWith(compareBy({ it.toIntOrNull() ?: Int.MAX_VALUE }, { it }))
+        for (key in leftKeys) {
             caption(key + " : " + left.optString(key))
             val spinner = Spinner(this)
             spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, choices)
@@ -757,9 +877,11 @@ class MainActivity : Activity() {
         }
         button("تسليم التوصيلات") {
             val lines = ArrayList<String>()
+            val used = HashSet<String>()
             for ((key, spinner) in pairFields) {
                 val selected = keys.getOrNull(spinner.selectedItemPosition).orEmpty()
                 if (selected.isBlank()) { message("أكمل جميع التوصيلات أولاً."); return@button }
+                if (!used.add(selected)) { message("لا يمكن وصل خيار واحد بأكثر من عبارة."); return@button }
                 lines.add(key + "-" + selected)
             }
             sendAnswer(question, lines.joinToString(", "), 0)
