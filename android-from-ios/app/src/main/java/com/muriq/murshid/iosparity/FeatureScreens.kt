@@ -282,6 +282,10 @@ private fun GenericFeatureScreen(vm: MurshidViewModel) {
                     Text("ملخص أدائك", fontWeight = FontWeight.Bold)
                     Text("المستوى العام: ${insights.num("accuracy", 0)}%")
                     Text("عدد الإجابات: ${insights.num("answered", 0)}")
+                    LinearProgressIndicator(
+                        progress = { insights.num("accuracy", 0).coerceIn(0, 100) / 100f },
+                        modifier = Modifier.fillMaxWidth(), color = MurshidBlue
+                    )
                 }
             }
         }
