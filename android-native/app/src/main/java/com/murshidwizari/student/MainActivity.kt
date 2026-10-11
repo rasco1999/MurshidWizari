@@ -588,7 +588,7 @@ class MainActivity : Activity() {
             scaleType = ImageView.ScaleType.CENTER_CROP
             contentDescription = "الصورة الشخصية"
         }
-        view.setImageResource(R.drawable.ic_murshid)
+        view.setImageResource(R.drawable.ic_avatar_placeholder)
         root.addView(view, LinearLayout.LayoutParams(dp(88), dp(88)).apply {
             gravity = Gravity.CENTER_HORIZONTAL
             bottomMargin = dp(12)
@@ -643,7 +643,7 @@ class MainActivity : Activity() {
             ).apply { cornerRadius = dp(28).toFloat() }
         }
         val emblem = ImageView(this).apply {
-            setImageResource(R.drawable.ic_murshid)
+            setImageResource(R.drawable.ic_avatar_placeholder)
             scaleType = ImageView.ScaleType.FIT_CENTER
             background = GradientDrawable().apply {
                 setColor(Color.WHITE)
