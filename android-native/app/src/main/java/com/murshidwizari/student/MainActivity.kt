@@ -2,6 +2,11 @@ package com.murshidwizari.student
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.TimePickerDialog
+import android.Manifest
+import android.content.pm.PackageManager
+import android.hardware.fingerprint.FingerprintManager
+import android.hardware.biometrics.BiometricPrompt
 import android.content.res.Configuration
 import android.content.Intent
 import android.graphics.Color
@@ -22,6 +27,8 @@ import android.os.Bundle
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.CancellationSignal
+import android.os.SystemClock
 import android.text.InputType
 import android.text.InputFilter
 import android.text.Editable
@@ -38,6 +45,7 @@ import org.json.JSONObject
 import java.net.URLEncoder
 import java.net.URL
 import java.util.concurrent.Executors
+import java.util.concurrent.Executor
 
 /** 100% Android native UI: no WebView, no embedded website, no hardcoded secrets. */
 class MainActivity : Activity() {
@@ -87,6 +95,11 @@ class MainActivity : Activity() {
     private var achievementFilter = "all"
     private var night = false
     private var instructionsReturnScreen = "login"
+    private var biometricAuthInProgress = false
+    private var biometricOverlay: FrameLayout? = null
+    private var biometricLastSuccessAt = 0L
+    private var biometricBackgroundAt = 0L
+    private var reminderPermissionPending = false
     private var screenFrame: FrameLayout? = null
     private var homeInsights = JSONObject()
     private var homeWeekly = JSONObject()
@@ -162,6 +175,146 @@ class MainActivity : Activity() {
             fetch("mobile/bootstrap.php", showError = false) { response ->
                 if (response.optBoolean("ok")) showHome(response)
             }
+        }
+    }
+
+    /** iOS V31 uses actual Face ID, not a cosmetic switch; Android verifies a real device biometric. */
+    private fun deviceBiometricAvailable(): Boolean {
+        if (Build.VERSION.SDK_INT >= 28) return true // The platform prompt verifies enrollment.
+        val fingerprint = getSystemService(Context.FINGERPRINT_SERVICE) as? FingerprintManager
+        return fingerprint?.isHardwareDetected == true && fingerprint.hasEnrolledFingerprints()
+    }
+
+    private fun authenticateBiometric(reason: String, onResult: (Boolean) -> Unit) {
+        if (biometricAuthInProgress) return
+        if (!deviceBiometricAvailable()) {
+            message("لا توجد بصمة وجه أو إصبع مهيأة في إعدادات الجهاز.")
+            onResult(false)
+            return
+        }
+        biometricAuthInProgress = true
+        var finished = false
+        fun finish(success: Boolean) {
+            if (finished) return
+            finished = true
+            biometricAuthInProgress = false
+            if (success) {
+                biometricLastSuccessAt = SystemClock.elapsedRealtime()
+                biometricBackgroundAt = 0L
+                prefs.edit().remove("biometric_background_at").apply()
+            }
+            onResult(success)
+        }
+        try {
+            val cancellation = CancellationSignal()
+            if (Build.VERSION.SDK_INT >= 28) {
+                val executor = Executor { command -> runOnUiThread(command) }
+                val prompt = BiometricPrompt.Builder(this)
+                    .setTitle("المرشد الوزاري")
+                    .setSubtitle(reason)
+                    .setNegativeButton("إلغاء", executor) { _, _ -> cancellation.cancel() }
+                    .build()
+                prompt.authenticate(cancellation, executor, object : BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                        finish(true)
+                    }
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        finish(false)
+                    }
+                })
+            } else {
+                val fingerprint = getSystemService(Context.FINGERPRINT_SERVICE) as FingerprintManager
+                val guide = AlertDialog.Builder(this).setTitle("تأكيد بصمة الإصبع")
+                    .setMessage("ضع إصبعك على مستشعر البصمة لفتح المرشد الوزاري.")
+                    .setNegativeButton("إلغاء") { _, _ -> cancellation.cancel(); finish(false) }
+                    .create()
+                guide.setOnCancelListener { cancellation.cancel(); finish(false) }
+                guide.show()
+                fingerprint.authenticate(null, cancellation, 0, object : FingerprintManager.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(result: FingerprintManager.AuthenticationResult) {
+                        guide.dismiss()
+                        finish(true)
+                    }
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        guide.dismiss()
+                        finish(false)
+                    }
+                }, main)
+            }
+        } catch (_: Exception) {
+            finish(false)
+            message("تعذر استخدام البصمة. تحقق من إعدادات الأمان في جهازك.")
+        }
+    }
+
+    private fun showBiometricLock() {
+        if (biometricOverlay != null || biometricAuthInProgress) return
+        val parent = findViewById<FrameLayout>(android.R.id.content)
+        val overlay = FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            isClickable = true
+            isFocusable = true
+            contentDescription = "المرشد الوزاري مقفل إلى حين نجاح التحقق بالبصمة"
+        }
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(24), dp(24), dp(24), dp(24))
+            addView(IosGlyphView(this@MainActivity, "lock", blue),
+                LinearLayout.LayoutParams(dp(58), dp(58)).apply { bottomMargin = dp(20) })
+            addView(uiText("التطبيق مقفل", 24f, true, Color.WHITE).apply { gravity = Gravity.CENTER })
+            addView(uiText("استخدم بصمة الوجه أو الإصبع للعودة إلى حسابك.",
+                15f, tint = Color.LTGRAY).apply { gravity = Gravity.CENTER },
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14) })
+            addView(makeButton("فتح باستخدام البصمة") { unlock() },
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(24) })
+        }
+        overlay.addView(panel, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER))
+        parent.addView(overlay, FrameLayout.LayoutParams(-1, -1))
+        biometricOverlay = overlay
+        unlock()
+    }
+
+    private fun unlock() {
+        if (biometricOverlay == null) return
+        authenticateBiometric("افتح المرشد الوزاري باستخدام البصمة") { success ->
+            if (success) {
+                val parent = biometricOverlay?.parent as? FrameLayout
+                parent?.removeView(biometricOverlay)
+                biometricOverlay = null
+            } else message("لم يتم فتح التطبيق. استخدم زر فتح بالبصمة للمحاولة مجددًا.")
+        }
+    }
+
+    private fun setStudyReminder(enabled: Boolean) {
+        if (!enabled) {
+            DailyStudyReminder.disable(this)
+            accountScreen()
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            reminderPermissionPending = true
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), DailyStudyReminder.requestCode)
+            return
+        }
+        val hour = prefs.getInt("study_reminder_hour", 19)
+        val minute = prefs.getInt("study_reminder_minute", 0)
+        if (DailyStudyReminder.enable(this, hour, minute)) {
+            message("تم تفعيل تذكير الدراسة اليومي.")
+        } else message("اسمح بإشعارات التطبيق من إعدادات الجهاز لتفعيل التذكير.")
+        accountScreen()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>,
+                                             grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != DailyStudyReminder.requestCode || !reminderPermissionPending) return
+        reminderPermissionPending = false
+        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) setStudyReminder(true)
+        else {
+            message("لم يتم تفعيل التذكير دون إذن الإشعارات.")
+            if (activeScreen == "account") accountScreen()
         }
     }
     private fun shape(color: Int, radius: Float = dp(22).toFloat()): GradientDrawable =
@@ -2820,6 +2973,31 @@ class MainActivity : Activity() {
         })
     }
 
+    private fun accountSwitch(card: LinearLayout, title: String, symbol: String,
+                              checked: Boolean): Switch {
+        if (card.childCount > 0) card.addView(View(this).apply {
+            setBackgroundColor(if (night) Color.rgb(52,52,55) else Color.rgb(235,235,239))
+        }, LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(3); bottomMargin = dp(3) })
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = dp(54)
+        }
+        row.addView(IosGlyphView(this, symbol, textColor),
+            LinearLayout.LayoutParams(dp(23), dp(23)).apply { marginEnd = dp(12) })
+        row.addView(uiText(title, 16f), LinearLayout.LayoutParams(0, -2, 1f))
+        val toggle = Switch(this).apply {
+            isChecked = checked
+            contentDescription = title
+        }
+        row.addView(toggle)
+        card.addView(row, LinearLayout.LayoutParams(-1, -2).apply {
+            topMargin = dp(9); bottomMargin = dp(9)
+        })
+        return toggle
+    }
+
     private fun accountScreen() {
         activeScreen = "account"
         base("حسابي", tab = "account")
@@ -2878,23 +3056,58 @@ class MainActivity : Activity() {
             val services = uiCard()
             if (response.optBoolean("can_change_name")) accountSetting(services, "تغيير الاسم",
                 "متاح مرة واحدة", "person") { promptRename(profile.optString("name")) }
-            accountSetting(services, "طلب إعلان مدرسة", "أرسل الطلب مباشرة إلى الإدارة", "bell") { schoolAdScreen() }
             accountSetting(services, "الإشعارات", "الرسائل الواردة من المنصة", "bell") { notificationsScreen() }
             accountSetting(services, "خدمة العملاء", "محادثة مباشرة مع الدعم", "person") { supportScreen() }
-            accountSetting(services, "غيّر جو", "رسائل وقصص قصيرة", "sparkle") { storiesScreen() }
-            accountSetting(services, "تعليمات استخدام المنصة", "كيف تبدأ وتستفيد من المنصة", "book") {
-                instructionsReturnScreen = "account"
-                instructionsScreen()
-            }
             addUiCard(services, bottom = 16)
 
             sectionHeader("الأمان والتذكير", "خيارات خاصة بجهازك", "lock")
             val security = uiCard()
+            val lockToggle = accountSwitch(security, "قفل حقيقي ببصمة الجهاز", "lock",
+                prefs.getBoolean("biometric_lock", false))
+            val biometricAvailable = deviceBiometricAvailable()
+            if (!biometricAvailable) {
+                lockToggle.isEnabled = false
+                security.addView(uiText("البصمة غير متاحة أو غير مهيأة من إعدادات الجهاز.",
+                    12f, tint = mutedText))
+            }
+            var editingLockSwitch = false
+            lockToggle.setOnCheckedChangeListener { _, selected ->
+                if (editingLockSwitch) return@setOnCheckedChangeListener
+                if (!selected) {
+                    prefs.edit().putBoolean("biometric_lock", false).remove("biometric_background_at").apply()
+                    message("تم إيقاف قفل البصمة.")
+                } else {
+                    editingLockSwitch = true
+                    lockToggle.isChecked = false
+                    editingLockSwitch = false
+                    authenticateBiometric("أكد بصمة الجهاز لتفعيل قفل المرشد الوزاري") { success ->
+                        if (success) {
+                            prefs.edit().putBoolean("biometric_lock", true)
+                                .remove("biometric_background_at").apply()
+                            editingLockSwitch = true
+                            lockToggle.isChecked = true
+                            editingLockSwitch = false
+                            message("تم تفعيل قفل البصمة. سيُطلب بعد العودة للتطبيق من الخلفية.")
+                        } else message("لم يتم تفعيل قفل البصمة.")
+                    }
+                }
+            }
+            val reminderToggle = accountSwitch(security, "تذكير دراسة يومي", "bell",
+                prefs.getBoolean("study_reminder", false))
+            reminderToggle.setOnCheckedChangeListener { _, selected -> setStudyReminder(selected) }
+            if (prefs.getBoolean("study_reminder", false)) {
+                val hour = prefs.getInt("study_reminder_hour", 19)
+                val minute = prefs.getInt("study_reminder_minute", 0)
+                val localTime = String.format(java.util.Locale.US, "%02d:%02d", hour, minute)
+                accountSetting(security, "وقت التذكير", localTime, "timer") {
+                    TimePickerDialog(this, { _, h, m ->
+                        if (DailyStudyReminder.enable(this, h, m)) accountScreen()
+                        else message("تعذر حفظ التذكير. تحقق من إذن الإشعارات.")
+                    }, hour, minute, true).show()
+                }
+            }
             accountSetting(security, "استعادة / تغيير كلمة المرور", "تأكيد الهوية لحماية حسابك", "lock") {
                 recoverScreen()
-            }
-            accountSetting(security, "تحديث بيانات الحساب", "الاسم والصورة والاشتراك", "check") {
-                refreshAccountAfterMutation()
             }
             addUiCard(security, bottom = 16)
 
@@ -4596,6 +4809,18 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        if (prefs.getBoolean("biometric_lock", false) && !biometricAuthInProgress &&
+            biometricOverlay == null && ::api.isInitialized && api.hasRememberedSession()) {
+            val recorded = prefs.getLong("biometric_background_at", 0L)
+            val elapsed = if (biometricBackgroundAt > 0L) {
+                SystemClock.elapsedRealtime() - biometricBackgroundAt
+            } else if (recorded > 0L) {
+                (System.currentTimeMillis() - recorded).coerceAtLeast(0L)
+            } else 0L
+            if (elapsed > 20_000L && SystemClock.elapsedRealtime() - biometricLastSuccessAt > 2_000L) {
+                showBiometricLock()
+            }
+        }
         if (checkoutReturnPending && activeScreen == "plans") {
             checkoutReturnPending = false
             val order = prefs.getInt(lastPaymentKey(), 0)
@@ -4604,6 +4829,10 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        if (prefs.getBoolean("biometric_lock", false) && !biometricAuthInProgress) {
+            biometricBackgroundAt = SystemClock.elapsedRealtime()
+            prefs.edit().putLong("biometric_background_at", System.currentTimeMillis()).apply()
+        }
         networkCallback?.let { callback ->
             try { connectivity?.unregisterNetworkCallback(callback) } catch (_: Exception) { }
         }
