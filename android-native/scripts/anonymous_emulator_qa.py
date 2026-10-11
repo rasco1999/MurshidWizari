@@ -14,6 +14,9 @@ import xml.etree.ElementTree as ET
 
 
 PACKAGE = "com.murshidwizari.student"
+# QA builds add an applicationId suffix, but MainActivity remains in the base
+# Kotlin namespace.  Keep the component's class name independent of PACKAGE.
+MAIN_ACTIVITY = "com.murshidwizari.student.MainActivity"
 DEVICE_XML = "/sdcard/murshid-anonymous-hierarchy.xml"
 BOUNDS = re.compile(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]")
 
@@ -167,7 +170,7 @@ def enter_login(width: int, height: int) -> None:
 def launch_native() -> None:
     for attempt in range(2):
         adb("shell", "am", "force-stop", PACKAGE)
-        adb("shell", "am", "start", "-n", f"{PACKAGE}/.MainActivity")
+        adb("shell", "am", "start", "-n", f"{PACKAGE}/{MAIN_ACTIVITY}")
         try:
             wait_for("تعلّم بتركيز. تقدّم بثقة.")
             return
