@@ -54,12 +54,26 @@ class Handler(BaseHTTPRequestHandler):
 
 def input_text(node,value):
  ui.tap_node(node);ui.adb('shell','input','text',value)
+def visible_login_fields():
+ # Some freshly booted API-26 emulators briefly replace the app hierarchy
+ # while the IME or launcher is settling. Wait for the *native* two-field form.
+ last=[]
+ for attempt in range(18):
+  tree,_=ui.ui_tree()
+  fields=[n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText']
+  if len(fields)>=2: return fields
+  last=ui.visible_texts(tree)
+  launcher=ui.find(tree,"Pixel Launcher isn't responding")
+  close=ui.find(tree,"Close app")
+  if launcher is not None and close is not None:
+   ui.tap_node(close)
+   print('RECOVER emulator Pixel Launcher dialog before fixture login',flush=True)
+  time.sleep(1)
+ raise AssertionError(f'Expected native login fields after waiting, found {last!r}')
 def login_field(index,value):
  # Hide the keyboard between inputs: opening it scrolls/resizes the native
  # form, so coordinates cached before typing the first field become stale.
- tree,_=ui.ui_tree()
- fields=[n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText']
- if len(fields)<2: raise AssertionError(f'Expected two login inputs, found {len(fields)}')
+ fields=visible_login_fields()
  input_text(fields[index],value)
  back()
 def button(text): ui.tap_visible(text,393,852)
@@ -74,8 +88,7 @@ def main():
  ui.adb('shell','wm','size','393x852');ui.adb('shell','wm','density','160');ui.adb('shell','settings','put','system','font_scale','1.0')
  ui.launch_native();ui.enter_login(393,852)
  login_field(0,'student@example.test');login_field(1,'fixture-pass')
- tree,_=ui.ui_tree()
- fields=[n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText']
+ fields=visible_login_fields()
  assert fields[0].attrib.get('text')=='student@example.test',fields[0].attrib
  # Android masks password accessibility text on some API levels.
  assert fields[1].attrib.get('text') not in ('','أدخل كلمة المرور'),fields[1].attrib
