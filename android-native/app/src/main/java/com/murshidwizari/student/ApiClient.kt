@@ -21,7 +21,7 @@ import javax.crypto.spec.GCMParameterSpec
 
 /** HTTPS API client. Saves only AES-GCM encrypted session cookies, never passwords. */
 class ApiClient(context: Context) {
-    private val origin = URI("https://www.mur-iq.com/")
+    private val origin = URI(BuildConfig.API_ORIGIN)
     private val cookieManager = CookieManager(null, CookiePolicy.ACCEPT_ALL)
     private val prefs = context.getSharedPreferences("murshid_session", Context.MODE_PRIVATE)
     private val alias = "murshid_native_session_v1"
@@ -38,7 +38,7 @@ class ApiClient(context: Context) {
                     val value = obj.optString("value")
                     if (name.isBlank() || value.isBlank()) continue
                     cookieManager.cookieStore.add(origin, HttpCookie(name, value).apply {
-                        domain = "www.mur-iq.com"; path = "/"; secure = true
+                        domain = origin.host; path = "/"; secure = origin.scheme == "https"
                     })
                 }
                 remember = true

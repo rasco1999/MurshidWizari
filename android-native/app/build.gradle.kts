@@ -12,7 +12,8 @@ val productionSigningReady = listOf(productionStore, productionStorePassword, pr
 android {
     namespace = "com.murshidwizari.student"
     compileSdk = 35
-    defaultConfig { applicationId = "com.murshidwizari.student"; minSdk = 26; targetSdk = 35; versionCode = 1; versionName = "0.1.0" }
+    buildFeatures { buildConfig = true }
+    defaultConfig { applicationId = "com.murshidwizari.student"; minSdk = 26; targetSdk = 35; versionCode = 49801; versionName = "4.8.18"; buildConfigField("String", "API_ORIGIN", "\"https://www.mur-iq.com/\"") }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
     signingConfigs {
@@ -25,6 +26,17 @@ android {
     }
     buildTypes {
         getByName("release") { signingConfig = signingConfigs.findByName("production") }
+        create("qa") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".qa"
+            versionNameSuffix = "-qa"
+            buildConfigField("String", "API_ORIGIN", "\"http://127.0.0.1:8765/\"")
+        }
+        create("candidate") {
+            initWith(getByName("release"))
+            signingConfig = null
+            isDebuggable = false
+        }
     }
 }
 

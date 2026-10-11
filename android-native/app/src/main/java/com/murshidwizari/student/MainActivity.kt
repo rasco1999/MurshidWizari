@@ -54,6 +54,17 @@ class MainActivity : Activity() {
     private val main = Handler(Looper.getMainLooper())
     private lateinit var api: ApiClient
     private lateinit var root: LinearLayout
+    private lateinit var headerHost: LinearLayout
+    private var contentScroll: ScrollView? = null
+    private var selectedPredictionSubject = 0
+    private var predictionGeneration = 0
+    private var serviceTicker: Runnable? = null
+    private var appForeground = false
+    private var lastPopupPoll = 0L
+    private var popupChecking = false
+    private var currentAdDialog: AlertDialog? = null
+    private var examTextDraft = ""
+    private var examDraftQuestion = -1
     private var csrf = ""
     private var student = JSONObject()
     private var homepage = JSONObject()
@@ -177,7 +188,7 @@ class MainActivity : Activity() {
             systemNight)
         setTheme(if (night) R.style.MurshidDark else R.style.MurshidLight)
         showAcademicWelcome()
-        val minimumWelcomeMs = 1250L // iOS AcademicWelcomeView duration.
+        val minimumWelcomeMs = 3000L // v4.8.18 Build 498 cinematic welcome.
         val readyAt = SystemClock.elapsedRealtime() + minimumWelcomeMs
         if (api.hasRememberedSession()) {
             // Restore the encrypted session before replacing the welcome screen.
@@ -339,53 +350,64 @@ class MainActivity : Activity() {
     private fun contentWidth(): Int = VisualRules.contentWidthDp(resources.configuration.screenWidthDp)?.let(::dp) ?: -1
     private fun setupRoot(horizontalPadding: Int = 16, topPadding: Int = 16, tab: String? = null) {
         screenGeneration++
-        val scroll = ScrollView(this).apply { isFillViewport = true; setBackgroundColor(appColor); clipToPadding = false }
-        val examNavigation = tab == null && activeScreen == "exam"
-        if (Build.VERSION.SDK_INT >= 35 && tab == null && !examNavigation) {
-            // Android 15 enforces edge-to-edge: keep text and actions out of status/nav cutouts.
-            scroll.setOnApplyWindowInsetsListener { view, insets ->
-                val safe = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-                view.setPadding(safe.left, safe.top, safe.right, safe.bottom)
-                insets
-            }
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(appColor)
         }
+        headerHost = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(horizontalPadding), 0, dp(horizontalPadding), 0)
+        }
+        container.addView(headerHost, LinearLayout.LayoutParams(-1, -2))
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            setBackgroundColor(appColor)
+            clipToPadding = false
+        }
+        contentScroll = scroll
         screenFrame = FrameLayout(this)
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
-            setPadding(dp(horizontalPadding), dp(topPadding), dp(horizontalPadding), dp(32))
+            setPadding(dp(horizontalPadding), dp(topPadding), dp(horizontalPadding), dp(28))
         }
         screenFrame!!.addView(root, FrameLayout.LayoutParams(contentWidth(), -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         scroll.addView(screenFrame)
-        if (tab == null && !examNavigation) {
-            setContentView(scroll)
-        } else {
-            val container = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setBackgroundColor(appColor)
-            }
-            container.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        container.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        val examNavigation = tab == null && activeScreen == "exam"
+        if (tab != null || examNavigation) {
             val footer = if (tab != null) mainTabBar(tab) else examNavigationFooter()
-            container.addView(footer, LinearLayout.LayoutParams(-1, dp(if (tab != null) 58 else 66)))
-            if (Build.VERSION.SDK_INT >= 35) {
-                container.setOnApplyWindowInsetsListener { view, insets ->
-                    val safe = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-                    view.setPadding(safe.left, safe.top, safe.right, safe.bottom)
-                    insets
-                }
+            container.addView(footer, LinearLayout.LayoutParams(-1, dp(if (tab != null) 61 else 66)))
+            container.viewTreeObserver.addOnGlobalLayoutListener {
+                val visible = Rect()
+                container.getWindowVisibleDisplayFrame(visible)
+                val keyboard = container.rootView.height - visible.bottom > dp(150)
+                footer.visibility = if (keyboard) View.GONE else View.VISIBLE
             }
-            setContentView(container)
         }
+        if (Build.VERSION.SDK_INT >= 35) container.setOnApplyWindowInsetsListener { view, insets ->
+            val safe = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+            val keyboard = insets.getInsets(WindowInsets.Type.ime())
+            view.setPadding(safe.left, safe.top, safe.right, maxOf(safe.bottom, keyboard.bottom))
+            insets
+        }
+        setContentView(container)
     }
     private fun base(title: String, showBack: Boolean = false, tab: String? = null) {
         stopHomeHeroTicker()
-        window.statusBarColor = if (night) Color.BLACK else navy
+        window.statusBarColor = appColor
         window.navigationBarColor = appColor
+        window.decorView.systemUiVisibility = if (night) 0 else View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         setupRoot(topPadding = if (tab == null) 16 else 0, tab = tab)
         when {
             tab != null -> tabHeader(title, tab)
             showBack -> backHeader(title)
             else -> title(title)
+        }
+        if (tab != null || showBack) {
+            val header = root.getChildAt(0)
+            root.removeView(header)
+            headerHost.addView(header)
         }
     }
     private fun backHeader(title: String) {
@@ -435,8 +457,8 @@ class MainActivity : Activity() {
     private fun mainTabBar(active: String): View = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         layoutDirection = View.LAYOUT_DIRECTION_RTL
-        setBackgroundColor(surface)
-        elevation = dp(8).toFloat()
+        setBackgroundColor(if (night) Color.rgb(37,37,39) else Color.rgb(250,250,252))
+        elevation = dp(1).toFloat()
         for ((name, title, icon) in VisualRules.mainTabs) {
             val selected = active == name
             val color = if (selected) blue else mutedText
@@ -810,6 +832,9 @@ class MainActivity : Activity() {
             result.optBoolean("transport_uncertain"))
     private fun expireSession() {
         sessionGeneration++
+        serviceTicker?.let { main.removeCallbacks(it) }; serviceTicker = null
+        popupChecking = false; lastPopupPoll = 0L
+        currentAdDialog?.dismiss(); currentAdDialog = null
         api.clear()
         csrf = ""; student = JSONObject(); homepage = JSONObject(); subscribed = false
         homeInsightsLoaded = false; homeInsights = JSONObject(); homeWeekly = JSONObject()
@@ -899,48 +924,13 @@ class MainActivity : Activity() {
         }
     }
 
-    /** iOS 4.8.18 AcademicWelcomeView precedes both session recovery and guest navigation. */
+    /** Native rendering of the Build 498 three-second welcome. */
     private fun showAcademicWelcome() {
         activeScreen = "welcome"
-        window.statusBarColor = navy
-        window.navigationBarColor = navy
-        val background = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(dp(26), dp(36), dp(26), dp(26))
-            this.background = GradientDrawable(GradientDrawable.Orientation.TR_BL,
-                intArrayOf(navy, Color.rgb(10, 46, 97), blue))
-        }
-        background.addView(Space(this), LinearLayout.LayoutParams(1, 0, 1f))
-        val emblem = ImageView(this).apply {
-            setImageResource(R.drawable.ic_ios_v4818)
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            contentDescription = "منصة المرشد الوزاري"
-            alpha = 0f
-            scaleX = 0.78f
-            scaleY = 0.78f
-        }
-        background.addView(emblem, LinearLayout.LayoutParams(dp(190), dp(190)).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            bottomMargin = dp(20)
-        })
-        val title = uiText("منصة المرشد الوزاري", 30f, true, Color.WHITE).apply {
-            gravity = Gravity.CENTER
-            alpha = 0f
-        }
-        background.addView(title)
-        val subtitle = uiText("ابدأ بثقة • تعلّم بذكاء • تقدّم كل يوم", 15f,
-            tint = Color.rgb(218, 230, 249)).apply { gravity = Gravity.CENTER; alpha = 0f }
-        background.addView(subtitle, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
-        background.addView(Space(this), LinearLayout.LayoutParams(1, 0, 1f))
-        val footer = uiText("✓ منهجك الوزاري في مكان واحد", 13f, true,
-            Color.rgb(202, 217, 236)).apply { gravity = Gravity.CENTER; alpha = 0f }
-        background.addView(footer, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(30) })
-        setContentView(background)
-        emblem.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(650).start()
-        title.animate().alpha(1f).setStartDelay(250).setDuration(550).start()
-        subtitle.animate().alpha(1f).setStartDelay(250).setDuration(550).start()
-        footer.animate().alpha(1f).setStartDelay(250).setDuration(550).start()
+        window.statusBarColor = Color.rgb(5,16,34)
+        window.navigationBarColor = Color.rgb(5,16,34)
+        window.decorView.systemUiVisibility = 0
+        setContentView(CinematicWelcomeView(this))
     }
 
     /** GuestLandingView: the iPhone's first unauthenticated screen, including its live navigation. */
@@ -1392,6 +1382,157 @@ class MainActivity : Activity() {
         button("العودة لتسجيل الدخول", secondary = true) { loginScreen() }
     }
 
+    private fun boundRecoveryScreen() {
+        recoverReturnScreen = "account"
+        activeScreen = "bound_recovery"
+        base("كلمة المرور", true)
+        caption("استعادة آمنة لبيانات حسابك الحالي")
+        val generation = screenGeneration
+        fetch("mobile/bound-password-recovery.php") { result ->
+            if (activeScreen != "bound_recovery" || screenGeneration != generation) return@fetch
+            if (!result.optBoolean("ok")) {
+                button("إعادة المحاولة") { boundRecoveryScreen() }
+                return@fetch
+            }
+            caption("تُرسل الاستعادة إلى وسيلة التواصل المسجلة في حسابك فقط. لا يمكن تعديل الوجهة من هنا.")
+            val contacts = result.optJSONObject("contacts") ?: JSONObject()
+            val group = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
+            var selected = ""
+            for (channel in listOf("email", "phone")) {
+                val contact = contacts.optJSONObject(channel) ?: continue
+                val value = contact.optString("value")
+                if (value.isBlank()) continue
+                val available = contact.optBoolean("enabled")
+                val choice = RadioButton(this).apply {
+                    id = View.generateViewId()
+                    text = (if (channel == "email") "البريد الإلكتروني المسجل" else "رقم WhatsApp المسجل") +
+                        "\n" + value + if (available) "" else "\nهذه الوسيلة غير مؤكدة أو غير مفعلة حالياً"
+                    setTextColor(textColor); textSize = 15f
+                    setPadding(dp(12), dp(16), dp(12), dp(16))
+                    isEnabled = available
+                    setOnClickListener { selected = channel }
+                }
+                group.addView(choice)
+                if (available && selected.isEmpty()) { selected = channel; choice.isChecked = true }
+            }
+            root.addView(group)
+            if (group.childCount == 0) caption("لا توجد وسيلة تواصل مرتبطة بحسابك. تواصل مع الدعم.")
+            val send = button("إرسال إلى وسيلة الحساب المسجلة") {}
+            send.isEnabled = selected.isNotEmpty() && !recoveryBusy
+            send.setOnClickListener {
+                if (recoveryBusy || selected.isEmpty()) return@setOnClickListener
+                recoveryBusy = true; send.isEnabled = false
+                fetch("mobile/bound-password-recovery.php", JSONObject().put("csrf", csrf).put("channel", selected)) { reply ->
+                    recoveryBusy = false
+                    if (activeScreen != "bound_recovery" || generation != screenGeneration) return@fetch
+                    if (reply.optBoolean("ok")) {
+                        if (reply.optString("channel") == "phone") phoneResetScreen(reply.optString("phone_token"))
+                        else caption(reply.optString("message", "تم إرسال رابط الاستعادة إلى بريد حسابك."))
+                    } else send.isEnabled = true
+                }
+            }
+        }
+    }
+
+    private fun startSessionServices() {
+        if (!appForeground || !::api.isInitialized || csrf.isBlank() || student.optInt("id") <= 0 || serviceTicker != null) return
+        serviceTicker = object : Runnable {
+            override fun run() {
+                if (!appForeground || csrf.isBlank() || isDestroyed) { serviceTicker = null; return }
+                fetch("api/session-heartbeat.php", showError = false) { }
+                if (SystemClock.elapsedRealtime() - lastPopupPoll > 180000L || lastPopupPoll == 0L) pollSchoolAd()
+                main.postDelayed(this, 60000L)
+            }
+        }.also { main.post(it) }
+    }
+
+    private fun pollSchoolAd() {
+        if (popupChecking || currentAdDialog != null || activeScreen in setOf("exam", "practice_exam", "daily_challenge") || biometricOverlay != null) return
+        lastPopupPoll = SystemClock.elapsedRealtime()
+        popupChecking = true
+        fetch("mobile/school-ad-popup.php", showError = false) { response ->
+            val ads = response.optJSONArray("ads") ?: JSONArray()
+            fun claim(index: Int) {
+                if (!appForeground || index >= ads.length() || activeScreen in setOf("exam", "practice_exam", "daily_challenge") || biometricOverlay != null) {
+                    popupChecking = false; return
+                }
+                val ad = ads.optJSONObject(index)
+                if (ad == null || ad.optInt("id") <= 0 || ad.optInt("slot", -1) < 0 || ad.optString("school").isBlank()) {
+                    claim(index + 1); return
+                }
+                fetch("mobile/school-ad-popup.php", JSONObject().put("csrf", csrf).put("id", ad.optInt("id"))
+                    .put("slot", ad.optInt("slot")), showError = false) { claimed ->
+                    if (claimed.optBoolean("shown") && appForeground && biometricOverlay == null) {
+                        popupChecking = false
+                        currentAdDialog = AlertDialog.Builder(this).setTitle(ad.optString("school"))
+                            .setMessage(ad.optString("text"))
+                            .setPositiveButton("إغلاق الإعلان", null).create().also { dialog ->
+                                dialog.setOnDismissListener { currentAdDialog = null }
+                                dialog.show()
+                            }
+                    } else claim(index + 1)
+                }
+            }
+            claim(0)
+        }
+    }
+
+    private fun questionNote(questionId: Int) {
+        val generation = screenGeneration
+        fetch("mobile/question-notes.php?question_id=$questionId") { result ->
+            if (!result.optBoolean("ok") || generation != screenGeneration) return@fetch
+            val field = EditText(this).apply {
+                setText(result.optString("note")); hint = "مثال: راجع هذه القاعدة قبل الامتحان"
+                minLines = 4; gravity = Gravity.TOP or Gravity.RIGHT
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                setTextColor(textColor)
+            }
+            val dialog = AlertDialog.Builder(this).setTitle("ملاحظتي الخاصة").setView(field)
+                .setPositiveButton("حفظ", null).setNegativeButton("إغلاق", null).create()
+            dialog.setOnShowListener {
+                val save = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                save.setOnClickListener {
+                    save.isEnabled = false
+                    fetch("mobile/question-notes.php", JSONObject().put("csrf", csrf)
+                        .put("question_id", questionId).put("note", field.text.toString())) { reply ->
+                        if (reply.optBoolean("ok")) dialog.dismiss() else save.isEnabled = true
+                    }
+                }
+            }
+            dialog.show()
+        }
+    }
+
+    private fun contestInstructionsScreen() {
+        activeScreen = "contest_instructions"
+        base("تعليمات التحدي", true)
+        val generation = screenGeneration
+        caption("جارٍ تحميل القواعد وموعد الإغلاق…")
+        fetch("mobile/contest-instructions.php") { result ->
+            if (activeScreen != "contest_instructions" || generation != screenGeneration) return@fetch
+            root.removeAllViews()
+            if (!result.optBoolean("ok")) {
+                caption("تعذر تحديث تعليمات التحدي.")
+                button("إعادة المحاولة") { contestInstructionsScreen() }
+                return@fetch
+            }
+            sectionHeader("تحدي المليون", "جائزة المركز الأول: ${result.optInt("prize_iqd", 1000000)} د.ع", "trophy")
+            caption("الإغلاق: " + result.optString("end_at", "يُحدد من الإدارة") + " · بتوقيت بغداد")
+            for (key in listOf("rules", "points")) {
+                val items = result.optJSONArray(key) ?: JSONArray()
+                for (i in 0 until items.length()) {
+                    val item = items.optJSONObject(i) ?: continue
+                    addUiCard(uiCard().apply {
+                        addView(uiText(item.optString(if (key == "rules") "title" else "value"), 17f, true, blue))
+                        addView(uiText(item.optString(if (key == "rules") "text" else "description"), 15f))
+                    })
+                }
+            }
+            caption(result.optString("points_note"))
+            caption(result.optString("footer_note"))
+        }
+    }
+
     private fun recoverScreen() {
         if (activeScreen != "recover" && activeScreen != "phone_reset")
             recoverReturnScreen = if (activeScreen == "account") "account" else "login"
@@ -1572,6 +1713,7 @@ class MainActivity : Activity() {
         applyBootstrap(response)
         activeScreen = "home"
         base("المرشد الوزاري", tab = "home")
+        startSessionServices()
 
         val greeting = student.optString("name", "طالبنا").trim().split(' ').firstOrNull().orEmpty()
         val stats = response.optJSONObject("stats") ?: JSONObject()
@@ -2103,54 +2245,139 @@ class MainActivity : Activity() {
         })
     }
 
-    /** The current iPhone navigation gives predictions their own tab, not a quick-tool shortcut. */
     private fun predictionsTabScreen() {
         activeScreen = "predictions_tab"
         base("المرشحات", tab = "predictions")
-        val hero = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutDirection = View.LAYOUT_DIRECTION_RTL
-            setPadding(dp(20), dp(22), dp(20), dp(22))
-            background = GradientDrawable(GradientDrawable.Orientation.TR_BL,
-                intArrayOf(navy, blue)).apply { cornerRadius = dp(26).toFloat() }
-            addView(uiText("الدور الأول · المرشحات الوزارية", 14f, true, gold))
-            addView(uiText("المرشحات الوزارية", 27f, true, Color.WHITE),
-                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        val hero = uiCard().apply {
+            background = GradientDrawable(GradientDrawable.Orientation.TR_BL, intArrayOf(navy, blue))
+                .apply { cornerRadius = dp(22).toFloat() }
+            addView(uiText("الدور الأول • 2027", 13f, true, gold))
+            addView(uiText("المرشحات الوزارية", 28f, true, Color.WHITE),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
             addView(uiText("مراجعة مرتبة اعتمادًا على السنوات السابقة وتكرار الموضوع وتوثيق الأسئلة.",
-                15f, tint = Color.argb(220, 255, 255, 255)),
+                15f, tint = Color.argb(220,255,255,255)),
                 LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         }
         addUiCard(hero, bottom = 14)
         addUiCard(uiCard().apply {
             addView(uiText("المرشحات احتمالات للمراجعة وليست ضمانًا لورود السؤال، ولا تغني عن المنهج.",
                 13f, tint = mutedText))
-        }, bottom = 12)
-        sectionHeader("اختر المادة", "انتقل إلى قائمة أسئلة المادة", "predictions-target")
+        }, bottom = 16)
+        if (!subscribed) {
+            addUiCard(uiCard().apply {
+                addView(iconBubble("lock", 52, gold))
+                addView(uiText("المرشحات متاحة للمشتركين", 20f, true))
+                addView(uiText("فعّل اشتراكك للوصول إلى مرشحات موادك وإجاباتها.", 14f, tint = mutedText))
+            })
+            button("عرض الباقات والاشتراك") { plansScreen() }
+            return
+        }
         val subjects = homepage.optJSONArray("subjects") ?: JSONArray()
+        if (subjects.length() == 0) { caption("لا توجد مواد متاحة حاليًا."); return }
+        if ((0 until subjects.length()).none { subjects.optJSONObject(it)?.optInt("id") == selectedPredictionSubject })
+            selectedPredictionSubject = subjects.optJSONObject(0)?.optInt("id") ?: 0
+        val chips = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
         for (i in 0 until subjects.length()) {
             val subject = subjects.optJSONObject(i) ?: continue
             val id = subject.optInt("id")
-            val name = subject.optString("name")
-            addUiCard(uiRow(name, if (subscribed) "المرشحات الوزارية" else "متاح للمشتركين", "book") {
-                if (subscribed) predictionsScreen(id, name) else plansScreen()
-            })
+            chips.addView(uiText(subject.optString("name"), 14f, true,
+                if (id == selectedPredictionSubject) Color.WHITE else blue).apply {
+                gravity = Gravity.CENTER
+                minimumHeight = dp(44)
+                setPadding(dp(18), dp(10), dp(18), dp(10))
+                background = shape(if (id == selectedPredictionSubject) blue else surface, dp(22).toFloat())
+                setOnClickListener { selectedPredictionSubject = id; predictionsTabScreen() }
+            }, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(8) })
         }
-        if (subjects.length() == 0) addUiCard(uiCard().apply {
-            addView(uiText("لم تصل المواد من الخادم بعد. حدّث بياناتك وحاول مرة أخرى.", 14f,
-                tint = mutedText))
-        })
+        root.addView(HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            addView(chips)
+        }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(16) })
+        val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(rows)
+        rows.addView(uiText("جارٍ تحميل المرشحات…", 14f, tint = mutedText))
+        val request = ++predictionGeneration
+        val screen = screenGeneration
+        fetch("mobile/predictions.php?subject_id=$selectedPredictionSubject", showError = false) { result ->
+            if (activeScreen != "predictions_tab" || screen != screenGeneration || request != predictionGeneration) return@fetch
+            rows.removeAllViews()
+            if (!result.optBoolean("ok")) {
+                rows.addView(uiText(result.optString("message", "تعذر تحميل المرشحات."), 14f, tint = mutedText))
+                rows.addView(makeButton("إعادة المحاولة") { predictionsTabScreen() })
+                return@fetch
+            }
+            val predictions = result.optJSONArray("predictions") ?: JSONArray()
+            rows.addView(uiText("المرشحات • ${predictions.length()} سؤال", 18f, true),
+                LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+            if (predictions.length() == 0) rows.addView(uiText("لا توجد مرشحات لهذه المادة حاليًا.", 14f, tint = mutedText))
+            for (i in 0 until predictions.length()) {
+                val item = predictions.optJSONObject(i) ?: continue
+                val card = uiCard()
+                card.addView(uiText(item.optString("chapter_name"), 12f, true, blue))
+                card.addView(uiText(item.optString("question_text"), 17f, true),
+                    LinearLayout.LayoutParams(-1,-2).apply { topMargin = dp(10) })
+                card.addView(uiText("درجة الترشيح: ${item.optString("prediction_score")} • الثقة: ${item.optString("confidence")}",
+                    12f, tint = mutedText), LinearLayout.LayoutParams(-1,-2).apply { topMargin = dp(10) })
+                val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+                val answer = item.optString("correct_answer")
+                if (answer.isNotBlank()) {
+                    details.addView(uiText("الإجابة النموذجية", 14f, true, Color.rgb(52,199,89)))
+                    details.addView(uiText(answer, 16f))
+                }
+                val explanation = item.optString("explanation")
+                if (explanation.isNotBlank()) {
+                    details.addView(uiText("التوضيح", 14f, true, blue))
+                    details.addView(uiText(explanation, 15f, tint = mutedText))
+                }
+                val reveal = uiText("عرض الإجابة والتوضيح⌄", 14f, true, blue).apply {
+                    minimumHeight = dp(44); gravity = Gravity.CENTER_VERTICAL
+                    setOnClickListener {
+                        details.visibility = if (details.visibility == View.GONE) View.VISIBLE else View.GONE
+                        text = if (details.visibility == View.VISIBLE) "إخفاء الإجابة⌃" else "عرض الإجابة والتوضيح⌄"
+                    }
+                }
+                card.addView(reveal); card.addView(details)
+                rows.addView(card, LinearLayout.LayoutParams(-1,-2).apply { bottomMargin = dp(12) })
+            }
+        }
     }
 
-    /** Native, functional ad-request entry until the iPhone ads feed contract is verified. */
     private fun advertisementsTabScreen() {
         activeScreen = "ads_tab"
         base("الإعلانات", tab = "ads")
-        sectionHeader("إعلانات المدارس", "تواصل مع إدارة المنصة", "ads-megaphone")
-        addUiCard(uiRow("طلب إعلان مدرسة", "أرسل اسم المدرسة ونص الإعلان ومدته إلى الإدارة",
-            "ads-megaphone") { schoolAdScreen() }, bottom = 16)
-        addUiCard(uiRow("خدمة العملاء", "تواصل مع الإدارة بشأن إعلانك", "person") {
-            supportScreen()
-        })
+        val screen = screenGeneration
+        fun renderAds(data: JSONObject) {
+            root.removeAllViews()
+            sectionHeader("إعلانات المدارس", "آخر الإعلانات المنشورة", "ads-megaphone")
+            val ads = data.optJSONArray("ads") ?: JSONArray()
+            var shown = 0
+            for (i in 0 until ads.length()) {
+                val ad = ads.optJSONObject(i) ?: continue
+                if (!ad.optBoolean("active", true) || ad.optString("school").isBlank() || ad.optString("text").isBlank()) continue
+                shown++
+                val card = uiCard()
+                card.addView(uiText(ad.optString("school"), 19f, true, blue))
+                card.addView(uiText(ad.optString("text"), 16f),
+                    LinearLayout.LayoutParams(-1,-2).apply { topMargin = dp(12) })
+                addUiCard(card, bottom = 14)
+            }
+            if (shown == 0) addUiCard(uiCard().apply {
+                addView(iconBubble("ads-megaphone", 54, blue))
+                addView(uiText("لا توجد إعلانات حاليًا", 20f, true))
+                addView(uiText("ستظهر إعلانات المدارس هنا عند نشرها.", 14f, tint = mutedText))
+            })
+        }
+        renderAds(homepage)
+        fetch("mobile/bootstrap.php", showError = false) { result ->
+            if (result.optBoolean("ok")) {
+                applyBootstrap(result)
+                if (activeScreen == "ads_tab" && screenGeneration == screen) renderAds(result)
+            }
+        }
     }
 
     private fun successTabScreen() {
@@ -2707,6 +2934,7 @@ class MainActivity : Activity() {
             return
         }
         val id = question.optInt("id")
+        if (examDraftQuestion != id) { examDraftQuestion = id; examTextDraft = "" }
         val submitted = isSubmitted(question)
         examProgressHeader()
         examQuestionCard(question)
@@ -2748,6 +2976,12 @@ class MainActivity : Activity() {
                 }
                 else -> {
                     val field = input("اكتب إجابتك هنا", multiline = true)
+                    field.setText(examTextDraft)
+                    field.addTextChangedListener(object : TextWatcher {
+                        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { examTextDraft = s?.toString().orEmpty() }
+                        override fun afterTextChanged(s: Editable?) = Unit
+                    })
                     button("تصحيح الإجابة") {
                         sendAnswer(question, field.text.toString().trim(), 0)
                     }
@@ -2766,6 +3000,7 @@ class MainActivity : Activity() {
                 }
             }
         }
+        button("ملاحظتي الخاصة", secondary = true) { questionNote(id) }
         button("الإبلاغ عن مشكلة في السؤال", secondary = true) { reportQuestion(id) }
         button(if (examFromSearch) "العودة إلى نتائج البحث" else "العودة للمواضيع", secondary = true) { leaveExam() }
     }
@@ -3278,14 +3513,9 @@ class MainActivity : Activity() {
             accountProfileCard(profile, response)
 
             val subscription = uiRow(if (subscribed) "الاشتراك" else "افتح كامل المنصة",
-                if (subscribed) "اشتراكك مفعّل حاليًا."
+                if (subscribed) "اشتراكك مفعّل حاليًا • متبقٍ ${response.optInt("subscription_days_remaining")} يوم"
                 else "الدفع خارجي ولا نطلب رقمًا إضافيًا من هنا.", "check") { plansScreen() }
             addUiCard(subscription, bottom = 16)
-            val days = response.optInt("subscription_days_remaining", -1)
-            if (subscribed && days >= 0) addUiCard(uiCard().apply {
-                addView(uiText("متبقٍ من الاشتراك: $days يوم", 13f, tint = mutedText))
-            }, bottom = 16)
-
             val activationCard = uiCard()
             activationCard.addView(uiText("تفعيل الاشتراك بكود", 17f, true, blue))
             activationCard.addView(uiText(
@@ -3369,17 +3599,9 @@ class MainActivity : Activity() {
                 }
             }
             accountSetting(security, "استعادة / تغيير كلمة المرور", "تأكيد الهوية لحماية حسابك", "lock") {
-                recoverScreen()
+                boundRecoveryScreen()
             }
             addUiCard(security, bottom = 16)
-
-            sectionHeader("المظهر", "اختر الشكل المريح لك", "moon")
-            addUiCard(uiRow(if (night) "الوضع الداكن" else "الوضع الفاتح", "التبديل بين المظهرين", if (night) "sun" else "moon") {
-                night = !night
-                prefs.edit().putBoolean("night", night).apply()
-                setTheme(if (night) R.style.MurshidDark else R.style.MurshidLight)
-                accountScreen()
-            }, bottom = 16)
 
             sectionHeader("إدارة الحساب", "خيارات حساسة", "lock")
             val management = uiCard()
@@ -3411,11 +3633,6 @@ class MainActivity : Activity() {
             }
             addUiCard(management, bottom = 16)
 
-            val info = uiCard()
-            info.addView(uiText("منصة المرشد الوزاري", 17f, true))
-            info.addView(uiText("تطبيق Android أصلي مرتبط مباشرة بحسابك في المنصة.", 13f, tint = mutedText),
-                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
-            addUiCard(info, bottom = 8)
             button("سياسة الخصوصية", secondary = true) { external("https://www.mur-iq.com/privacy.php") }
             button("شروط الاستخدام", secondary = true) { external("https://www.mur-iq.com/terms.php") }
         }
@@ -4928,6 +5145,7 @@ class MainActivity : Activity() {
                 renderContest()
             }
         }
+        button("تعليمات التحدي", secondary = true) { contestInstructionsScreen() }
         button("شارك في تحدي اليوم") { openCompetition("daily_challenge") }
         button("اجمع نقاطاً بحل الأسئلة") { subjectsScreen() }
         button("تابع إنجازاتك") { openCompetition("achievements") }
@@ -5017,7 +5235,9 @@ class MainActivity : Activity() {
             return
         }
         when (activeScreen) {
-            "phone_reset" -> recoverScreen()
+            "bound_recovery" -> accountScreen()
+            "contest_instructions" -> loadContest()
+            "phone_reset" -> if (recoverReturnScreen == "account") boundRecoveryScreen() else recoverScreen()
             "recover" -> if (recoverReturnScreen == "account") accountScreen() else loginScreen()
             "practice_exam" -> { stopPracticeTicker(); practiceBuilderScreen() }
             "practice_result" -> attemptHistoryScreen()
@@ -5108,6 +5328,8 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        appForeground = true
+        startSessionServices()
         if (prefs.getBoolean("biometric_lock", false) && !biometricAuthInProgress &&
             biometricOverlay == null && ::api.isInitialized && api.hasRememberedSession()) {
             val recorded = prefs.getLong("biometric_background_at", 0L)
@@ -5128,6 +5350,9 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        appForeground = false
+        serviceTicker?.let { main.removeCallbacks(it) }
+        serviceTicker = null
         if (prefs.getBoolean("biometric_lock", false) && !biometricAuthInProgress) {
             biometricBackgroundAt = SystemClock.elapsedRealtime()
             prefs.edit().putLong("biometric_background_at", System.currentTimeMillis()).apply()
@@ -5143,6 +5368,8 @@ class MainActivity : Activity() {
         stopHomeHeroTicker()
         stopFocusTicker()
         stopPracticeTicker()
+        serviceTicker?.let { main.removeCallbacks(it) }
+        currentAdDialog?.dismiss()
         heroJobs.shutdownNow()
         jobs.shutdownNow()
         super.onDestroy()
