@@ -96,9 +96,12 @@ def tap_visible(text: str, width: int, height: int):
         if node is not None:
             match = BOUNDS.fullmatch(node.attrib.get("bounds", ""))
             if match is not None:
-                _, top, _, bottom = map(int, match.groups())
-                # UIAutomator can expose partly clipped buttons over the system navbar.
-                if top >= 24 and bottom <= height - 32:
+                left, top, right, bottom = map(int, match.groups())
+                # The app's fixed 5-tab bar reaches 24dp above the display
+                # bottom on some API levels. Test the actual tap *centre*,
+                # not the outer edge of its visible accessibility bounds.
+                if (24 <= (top + bottom) // 2 <= height - 24 and
+                        0 <= (left + right) // 2 <= width):
                     tap_node(node)
                     return
         # Scroll the native login form to reach buttons below the viewport.
