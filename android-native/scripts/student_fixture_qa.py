@@ -50,6 +50,14 @@ class Handler(BaseHTTPRequestHandler):
 
 def input_text(node,value):
  ui.tap_node(node);ui.adb('shell','input','text',value)
+def login_field(index,value):
+ # Hide the keyboard between inputs: opening it scrolls/resizes the native
+ # form, so coordinates cached before typing the first field become stale.
+ tree,_=ui.ui_tree()
+ fields=[n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText']
+ if len(fields)<2: raise AssertionError(f'Expected two login inputs, found {len(fields)}')
+ input_text(fields[index],value)
+ back()
 def button(text): ui.tap_visible(text,393,852)
 def back(): ui.adb('shell','input','keyevent','KEYCODE_BACK');time.sleep(.6)
 def screenshot(out,name):
@@ -61,8 +69,13 @@ def main():
  ui.adb('reverse','tcp:8765','tcp:8765');ui.adb('install','-r','android-native/app/build/outputs/apk/qa/app-qa.apk')
  ui.adb('shell','wm','size','393x852');ui.adb('shell','wm','density','160');ui.adb('shell','settings','put','system','font_scale','1.0')
  ui.launch_native();ui.enter_login(393,852)
- tree,_=ui.ui_tree();fields=[n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText']
- input_text(fields[0],'student@example.test');input_text(fields[1],'fixture-pass');back();button('دخول')
+ login_field(0,'student@example.test');login_field(1,'fixture-pass')
+ tree,_=ui.ui_tree()
+ fields=[n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText']
+ assert fields[0].attrib.get('text')=='student@example.test',fields[0].attrib
+ # Android masks password accessibility text on some API levels.
+ assert fields[1].attrib.get('text') not in ('','أدخل كلمة المرور'),fields[1].attrib
+ button('دخول')
  ui.wait_for('حسابي');screenshot(args.output,'student-home-light')
  button('الإعلانات');ui.wait_for('مدرسة افتراضية');screenshot(args.output,'student-ads')
  button('المرشحات');ui.wait_for('مرشح فحص افتراضي');screenshot(args.output,'student-predictions')
