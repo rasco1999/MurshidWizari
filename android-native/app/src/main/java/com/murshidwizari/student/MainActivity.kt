@@ -572,6 +572,9 @@ class MainActivity : Activity() {
         }
     }
     private fun message(text: String) = Toast.makeText(this, text, Toast.LENGTH_LONG).show()
+    private fun needsMutationReconciliation(result: JSONObject): Boolean =
+        NetworkRules.requiresReconciliation(result.optBoolean("network_error"),
+            result.optBoolean("transport_uncertain"))
     private fun expireSession() {
         sessionGeneration++
         api.clear()
@@ -607,7 +610,8 @@ class MainActivity : Activity() {
         val generation = sessionGeneration
         jobs.execute {
             val result = try { api.postForm(path, data) } catch (e: Exception) {
-                JSONObject().put("ok", false).put("message", NetworkRules.message(e, true))
+                JSONObject().put("ok", false).put("network_error", true)
+                    .put("message", NetworkRules.message(e, true))
             }
             main.post {
                 if (generation != sessionGeneration || isFinishing || isDestroyed) return@post
@@ -1013,7 +1017,7 @@ class MainActivity : Activity() {
                     message(result.optString("message", "تم إنشاء الحساب."))
                     pendingVerificationRemember = false
                     verifyPrompt(result)
-                } else if (result.optBoolean("network_error")) {
+                } else if (needsMutationReconciliation(result)) {
                     create.text = "حالة التسجيل غير مؤكدة"
                     message("قد يكون الحساب أُنشئ. حاول تسجيل الدخول أو استعادة كلمة المرور قبل إعادة التسجيل.")
                 } else { create.isEnabled = true; create.text = "إنشاء الحساب" }
@@ -2113,7 +2117,7 @@ class MainActivity : Activity() {
                     refreshAccountAfterMutation()
                 } else {
                     message(response.optString("message", "تعذر رفع الصورة."))
-                    if (response.optBoolean("network_error")) accountScreen()
+                    if (needsMutationReconciliation(response)) accountScreen()
                 }
             }
         }
@@ -2269,7 +2273,7 @@ class MainActivity : Activity() {
                         dialog.dismiss()
                         message("تم تحديث الاسم.")
                         refreshAccountAfterMutation()
-                    } else if (result.optBoolean("network_error")) {
+                    } else if (needsMutationReconciliation(result)) {
                         dialog.dismiss()
                         accountScreen() // Re-read the one-time rename state before allowing another attempt.
                     }
@@ -2363,6 +2367,10 @@ class MainActivity : Activity() {
                     .setPositiveButton("نعم") { _, _ ->
                         fetchForm("mobile/avatar.php", mapOf("csrf" to csrf, "remove" to "1")) { result ->
                             if (result.optBoolean("ok")) { avatarGeneration++; refreshAccountAfterMutation() }
+                            else if (needsMutationReconciliation(result)) {
+                                message("حالة حذف الصورة غير مؤكدة. سنعيد قراءة بيانات الحساب قبل أي محاولة أخرى.")
+                                accountScreen()
+                            }
                         }
                     }.setNegativeButton("إلغاء", null).show()
             }
@@ -2405,6 +2413,10 @@ class MainActivity : Activity() {
                         fetch("mobile/account.php", JSONObject().put("csrf", csrf)
                             .put("action", "cancel_delete")) { result ->
                             if (result.optBoolean("ok")) accountScreen()
+                            else if (needsMutationReconciliation(result)) {
+                                message("حالة إلغاء الطلب غير مؤكدة. تحقق من حالة الخصوصية المحدثة.")
+                                accountScreen()
+                            }
                         }
                     }.setNegativeButton("رجوع", null).show()
             }
@@ -2422,6 +2434,10 @@ class MainActivity : Activity() {
                                 .put("action", "request_delete")
                                 .put("confirmation", "حذف حسابي")) { result ->
                                 if (result.optBoolean("ok")) accountScreen()
+                                else if (needsMutationReconciliation(result)) {
+                                    message("حالة طلب الحذف غير مؤكدة. تحقق من حالة الخصوصية قبل المحاولة مجدداً.")
+                                    accountScreen()
+                                }
                             }
                         }.setNegativeButton("إلغاء", null).show()
                 }
@@ -2519,7 +2535,7 @@ class MainActivity : Activity() {
                     val updated = result.optJSONArray("plans")
                     if (updated != null) renderStudyPlans(updated, "تم إنشاء الخطة.")
                     else studyPlanScreen()
-                } else if (result.optBoolean("network_error")) {
+                } else if (needsMutationReconciliation(result)) {
                     create.text = "حالة الإنشاء غير مؤكدة"
                     message("قد يكون الخادم أنشأ الخطة. افحص خططك قبل محاولة إنشائها مجدداً.")
                 } else {
@@ -2567,7 +2583,7 @@ class MainActivity : Activity() {
                             advertisement.setText("")
                             send.text = "تم إرسال الطلب"
                             message("تم إرسال طلب الإعلان إلى الإدارة بنجاح.")
-                        } else if (result.optBoolean("network_error")) {
+                        } else if (needsMutationReconciliation(result)) {
                             send.text = "حالة الإرسال غير مؤكدة"
                             message("قد يكون الطلب وصل. تحقق من مراسلات الدعم قبل إرساله ثانية.")
                         } else {
@@ -2753,7 +2769,7 @@ class MainActivity : Activity() {
                         if (activeScreen == "focus")
                             focusScreen("أحسنت! تم تسجيل " + result.optInt("minutes") + " دقيقة في نشاطك الدراسي.")
                         refreshFocusStats()
-                    } else if (result.optBoolean("network_error")) {
+                    } else if (needsMutationReconciliation(result)) {
                         prefs.edit().putString(focusKey("uncertain"), "finish").apply()
                         if (activeScreen == "focus")
                             focusScreen("حالة الحفظ غير مؤكدة. تحقق من نشاطك أو تواصل مع الدعم قبل إرسال الطلب ثانية.")
@@ -2794,7 +2810,7 @@ class MainActivity : Activity() {
                             .putInt(focusKey("minutes"), focusMinutes)
                             .remove(focusKey("uncertain")).apply()
                         if (activeScreen == "focus") focusScreen("بدأت الجلسة. ركّز على هدف واحد.")
-                    } else if (result.optBoolean("network_error")) {
+                    } else if (needsMutationReconciliation(result)) {
                         prefs.edit().putString(focusKey("uncertain"), "start").apply()
                         if (activeScreen == "focus")
                             focusScreen("حالة بدء الجلسة غير مؤكدة. لا تكرر الطلب قبل التحقق من الدعم.")
@@ -2933,7 +2949,7 @@ class MainActivity : Activity() {
                         practiceSessionId = 0
                         if (activeScreen == "practice_builder") loadPracticeSession(id)
                     } else if (activeScreen == "practice_builder") {
-                        val ambiguous = result.optBoolean("network_error") ||
+                        val ambiguous = needsMutationReconciliation(result) ||
                             (result.optBoolean("ok") && result.optInt("session_id") <= 0)
                         if (ambiguous) prefs.edit().putBoolean(practiceKey("uncertain_create"), true).apply()
                         renderPracticeBuilder(if (ambiguous)
@@ -3152,7 +3168,7 @@ class MainActivity : Activity() {
                 refreshFocusStats()
                 if (activeScreen == "practice_exam") renderPracticeResult(response)
             } else {
-                val ambiguous = response.optBoolean("network_error") ||
+                val ambiguous = needsMutationReconciliation(response) ||
                     (response.optBoolean("ok") && (!response.has("score") || !response.has("total")))
                 practiceUncertain = ambiguous
                 if (ambiguous) prefs.edit().putBoolean(practiceKey("uncertain_finish"), true).apply()
@@ -3288,7 +3304,7 @@ class MainActivity : Activity() {
                     submit.isEnabled = true
                     submit.text = "إرسال اقتراح آخر"
                     message("وصل اقتراحك إلى فريق المحتوى. تابعه في طلباتك.")
-                } else if (response.optBoolean("network_error")) {
+                } else if (needsMutationReconciliation(response)) {
                     submit.text = "حالة الإرسال غير مؤكدة"
                     message("تحقق من طلباتك قبل إرسال السؤال ثانية؛ فقد يكون وصل بالفعل.")
                 } else {

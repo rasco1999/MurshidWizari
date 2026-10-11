@@ -90,14 +90,17 @@ class ApiClient(context: Context) {
             if (remember) saveCookies()
             if (status in 300..399) {
                 return JSONObject().put("ok", false).put("message", "أعاد الخادم توجيه الطلب. تأكد من الاتصال.")
+                    .put("transport_uncertain", payload != null)
             }
             val stream = if (status >= 400) conn.errorStream else conn.inputStream
             val raw = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText().take(3_000_000) } ?: ""
-            val response = try { JSONObject(raw) } catch (_: Exception) {
-                JSONObject().put("ok", false).put("message", if (status >= 400) "خطأ من الخادم (" + status + ")" else "استجابة غير متوقعة من الخادم.")
-            }
+            val parsed = try { JSONObject(raw) } catch (_: Exception) { null }
+            val response = parsed ?: JSONObject().put("ok", false)
+                .put("message", if (status >= 400) "خطأ من الخادم (" + status + ")" else "استجابة غير متوقعة من الخادم.")
             if (status !in 200..299) response.put("ok", false)
             if (status == 401 && safePath != "api/login.php") response.put("session_expired", true)
+            if (payload != null && NetworkRules.uncertainHttpMutation(status, parsed != null))
+                response.put("transport_uncertain", true)
             return response
         } finally { conn.disconnect() }
     }
@@ -130,14 +133,17 @@ class ApiClient(context: Context) {
             val status = conn.responseCode
             cookieManager.put(origin, conn.headerFields)
             if (remember) saveCookies()
-            if (status in 300..399) return JSONObject().put("ok", false).put("message", "أعاد الخادم توجيه الطلب.")
+            if (status in 300..399) return JSONObject().put("ok", false)
+                .put("message", "أعاد الخادم توجيه الطلب.").put("transport_uncertain", true)
             val stream = if (status >= 400) conn.errorStream else conn.inputStream
             val raw = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText().take(3_000_000) } ?: ""
-            val result = try { JSONObject(raw) } catch (_: Exception) {
-                JSONObject().put("ok", false).put("message", "استجابة غير متوقعة من الخادم (" + status + ").")
-            }
+            val parsed = try { JSONObject(raw) } catch (_: Exception) { null }
+            val result = parsed ?: JSONObject().put("ok", false)
+                .put("message", "استجابة غير متوقعة من الخادم (" + status + ").")
             if (status !in 200..299) result.put("ok", false)
             if (status == 401) result.put("session_expired", true)
+            if (NetworkRules.uncertainHttpMutation(status, parsed != null))
+                result.put("transport_uncertain", true)
             return result
         } finally { conn.disconnect() }
     }
@@ -174,13 +180,16 @@ class ApiClient(context: Context) {
             if (remember) saveCookies()
             if (status in 300..399)
                 return JSONObject().put("ok", false).put("message", "أعاد الخادم توجيه الطلب.")
+                    .put("transport_uncertain", true)
             val stream = if (status >= 400) conn.errorStream else conn.inputStream
             val raw = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText().take(1_000_000) } ?: ""
-            val result = try { JSONObject(raw) } catch (_: Exception) {
-                JSONObject().put("ok", false).put("message", "استجابة غير متوقعة من الخادم (" + status + ").")
-            }
+            val parsed = try { JSONObject(raw) } catch (_: Exception) { null }
+            val result = parsed ?: JSONObject().put("ok", false)
+                .put("message", "استجابة غير متوقعة من الخادم (" + status + ").")
             if (status !in 200..299) result.put("ok", false)
             if (status == 401) result.put("session_expired", true)
+            if (NetworkRules.uncertainHttpMutation(status, parsed != null))
+                result.put("transport_uncertain", true)
             return result
         } finally { conn.disconnect() }
     }
