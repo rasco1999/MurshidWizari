@@ -648,8 +648,8 @@ class MainActivity : Activity() {
 
     private fun subjectSymbol(name: String): String = when {
         name.contains("رياض") -> "chart"
-        name.contains("فيزياء") -> "sparkle"
-        name.contains("كيمي") -> "sparkle"
+        name.contains("فيزياء") -> "atom"
+        name.contains("كيمي") -> "flask"
         name.contains("أحياء") -> "heart"
         name.contains("إنك") || name.contains("انك") -> "book"
         else -> "book"

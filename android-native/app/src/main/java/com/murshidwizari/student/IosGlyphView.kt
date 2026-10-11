@@ -29,6 +29,30 @@ class IosGlyphView(context: Context, private val symbol: String, private val tin
             canvas.drawPath(p, ink)
         }
         when (symbol) {
+            "atom" -> {
+                canvas.save()
+                for (angle in intArrayOf(0, 60, 120)) {
+                    canvas.save()
+                    canvas.rotate(angle.toFloat(), 12f, 12f)
+                    canvas.drawOval(2.5f, 8f, 21.5f, 16f, ink)
+                    canvas.restore()
+                }
+                ink.style = Paint.Style.FILL
+                canvas.drawCircle(12f, 12f, 1.55f, ink)
+                ink.style = Paint.Style.STROKE
+                canvas.restore()
+            }
+            "flask" -> {
+                path(9f, 2f, 15f, 2f)
+                val vessel = Path().apply {
+                    moveTo(10f, 2f); lineTo(10f, 9.5f)
+                    lineTo(4f, 19.2f); quadTo(2.5f, 22f, 6f, 22f)
+                    lineTo(18f, 22f); quadTo(21.5f, 22f, 20f, 19.2f)
+                    lineTo(14f, 9.5f); lineTo(14f, 2f)
+                }
+                canvas.drawPath(vessel, ink)
+                path(7f, 16f, 17f, 16f)
+            }
             "instagram" -> {
                 canvas.drawRoundRect(3f, 3f, 21f, 21f, 5f, 5f, ink)
                 canvas.drawCircle(12f, 12f, 4.4f, ink)
