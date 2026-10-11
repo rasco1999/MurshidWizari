@@ -2014,7 +2014,7 @@ class MainActivity : Activity() {
                 layoutDirection = View.LAYOUT_DIRECTION_RTL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(14), dp(4), dp(14), dp(4))
-                minHeight = dp(54)
+                minimumHeight = dp(54)
                 background = shape(if (night) Color.rgb(48, 48, 51) else Color.rgb(235, 235, 239),
                     dp(15).toFloat())
                 isClickable = true
