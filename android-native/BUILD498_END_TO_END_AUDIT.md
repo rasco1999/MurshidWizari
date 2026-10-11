@@ -49,9 +49,9 @@ Legend: `A` = matched in Android source and exercised by a controlled emulator; 
 
 ## What was actually verified on Android
 
-- The previous native build and four-API emulator matrix at commit `73c2d87` both finished successfully: Actions runs `38136997307` and `38136997340`.
-- The emulator uses Android API 26, 29, 33 and 35 with a synthetic local student fixture. It exercises login, all five tabs, topic exam, server-confirmed grading, report/retry, note persistence, result page and account recovery. This test fixture **is not** a production student account.
-- Current follow-up changes add background-welcome replay, safe logout handling, and explicit rejection-then-confirmed-logout assertions. The new build/matrix results must pass before the next APK can be considered tested.
+- The improved native build at commit `13b62e18917791ed856c45bb04b4a3c4e3504fb5` **passed** compilation and unit tests (Actions run `38140898473`), including the production-origin debug APK artifact signed with an Android test/debug key.
+- The **entire four-API emulator matrix passed** at the same commit: Android API 26, 29, 33 and 35 (Actions run `38140898498`; four successful jobs). Android 8, 10, 13 and 15 were thus exercised with synthetic local fixtures, not real student accounts.
+- The matrix covers login, all five tabs, background-return welcome replay, topic exam, server-confirmed grading, rejected-answer retry, note persistence, text answers, result page, account recovery, configuration loading, rejection-then-confirmed logout and final guest screen. These checks are *not* a substitute for live-backend and side-by-side iPhone testing.
 - The Android launcher uses the exact extracted iPhone 120px icon PNG bytes. Android system masks and iOS SpringBoard display can still differ.
 - Android UI uses native Kotlin Views/Canvas, not a WebView. Android's Arabic font and self-drawn glyphs are not bitwise-identical to Apple's SF Arabic and SF Symbols.
 
