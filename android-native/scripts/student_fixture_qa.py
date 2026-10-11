@@ -7,7 +7,7 @@ import anonymous_emulator_qa as ui
 
 USER={'id':900001,'name':'طالب فحص افتراضي','grade':'السادس العلمي','grade_id':1,'email':'student@example.test','can_edit_name':True}
 SUBJECTS=[{'id':1,'name':'الرياضيات'},{'id':2,'name':'اللغة العربية'}]
-STATE={'notes':{},'answers':{},'calls':[]}
+STATE={'notes':{},'answers':{},'calls':[],'reject_once':False}
 BOOT={'ok':True,'csrf':'synthetic-csrf','user':USER,'subscribed':True,'free_remaining':15,'free_limit':15,'subjects':SUBJECTS,'stats':{},'ads':[{'id':1,'school':'مدرسة افتراضية','text':'إعلان محلي للتحقق من عرض الإعلانات','active':True}]}
 QUESTIONS=[{'id':101,'text':'ما حاصل جمع اثنين وثلاثة؟','type':'mcq','options':[{'id':1,'text':'خمسة'},{'id':2,'text':'ستة'}],'correct_answer':'خمسة','explanation':'نجمع اثنين مع ثلاثة فيكون الناتج خمسة.','submitted':False}, {'id':102,'text':'اكتب ناتج أربعة زائد أربعة.','type':'text','correct_answer':'8','explanation':'أربعة مضافاً إليها أربعة تساوي ثمانية.','submitted':False}]
 class Handler(BaseHTTPRequestHandler):
@@ -31,12 +31,16 @@ class Handler(BaseHTTPRequestHandler):
   elif path=='/mobile/exam.php':
    data={'ok':True,'csrf':'synthetic-csrf','subscribed':True,'questions':[{**q,**({'submitted':True,'answer':STATE['answers'][str(q['id'])]} if str(q['id']) in STATE['answers'] else {})} for q in QUESTIONS]}
   elif path=='/api/progress.php':
-   grades={}
-   for key,answer in body['answers'].items():
-    q=next(q for q in QUESTIONS if str(q['id'])==key); correct=answer['text']==q['correct_answer']
-    STATE['answers'][key]={**answer,'correct':correct}
-    grades[key]={'is_correct':correct,'correct_answer':q['correct_answer'],'explanation':q['explanation']}
-   data={'ok':True,'grades':grades,'subscribed':True,'free_remaining':15}
+   if STATE['reject_once']:
+    STATE['reject_once']=False
+    data={'ok':False,'message':'رفض مؤكد للتجربة: الإجابة لم تُحفظ.'}
+   else:
+    grades={}
+    for key,answer in body['answers'].items():
+     q=next(q for q in QUESTIONS if str(q['id'])==key); correct=answer['text']==q['correct_answer']
+     STATE['answers'][key]={**answer,'correct':correct}
+     grades[key]={'is_correct':correct,'correct_answer':q['correct_answer'],'explanation':q['explanation']}
+    data={'ok':True,'grades':grades,'subscribed':True,'free_remaining':15}
   elif path=='/mobile/question-notes.php':
    key=str(body.get('question_id',qs.get('question_id',[''])[0]))
    if self.command=='POST': STATE['notes'][key]=body['note']
@@ -102,7 +106,20 @@ def main():
  button('التالي ›');ui.wait_for('اكتب ناتج أربعة زائد أربعة.');screenshot(args.output,'student-text-question')
  assert len(STATE['answers'])==1,'Opening/navigating questions must not submit answers'
  assert sum(1 for m,p in STATE['calls'] if p=='/api/progress.php')==1,'Exactly one grading request'
- args.output.joinpath('fixture-results.json').write_text(json.dumps({'passed':True,'grading_requests':1,'note_roundtrip':True,'synthetic_only':True},indent=2))
+ tree,_=ui.ui_tree();field=next(n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText')
+ input_text(field,'8');back()
+ # A definitive application-level rejection must leave the form retryable.
+ # This is not a timeout: uncertain submissions must still be reconciled.
+ STATE['reject_once']=True
+ button('تصحيح الإجابة');time.sleep(1)
+ assert '102' not in STATE['answers'],'Rejected answer must not be counted'
+ button('تصحيح الإجابة');ui.wait_for('إجابة صحيحة');screenshot(args.output,'student-text-question-graded')
+ button('عرض النتيجة ›');ui.wait_for('نتيجة الموضوع');screenshot(args.output,'student-exam-summary')
+ tree,_=ui.ui_tree()
+ assert not any('السؤال التالي' in n.attrib.get('content-desc','') for n in tree.iter('node')), (
+  'Completed exam must not leave an inactive navigation footer')
+ assert sum(1 for m,p in STATE['calls'] if p=='/api/progress.php')==3,'One rejection plus two accepted answers'
+ args.output.joinpath('fixture-results.json').write_text(json.dumps({'passed':True,'grading_requests':3,'rejected_then_retryable':True,'summary_without_footer':True,'note_roundtrip':True,'synthetic_only':True},indent=2))
  print('PASS synthetic authenticated UI and grading semantics',flush=True)
  server.shutdown()
 if __name__=='__main__': main()
