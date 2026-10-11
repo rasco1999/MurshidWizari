@@ -1485,11 +1485,22 @@ class MainActivity : Activity() {
         activeScreen = "tests"
         base("الاختبارات", tab = "tests")
         val intro = uiCard()
-        intro.addView(uiText("اختباراتك", 12f, true, blue))
-        intro.addView(uiText("اختر المادة وابدأ بثقة", 23f, true),
-            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
-        intro.addView(uiText("المواضيع مرتبة حسب المنهج، وتقدمك محفوظ داخل حسابك.", 15f, tint = mutedText),
-            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        val introRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        introRow.addView(iconBubble("checklist", 54), LinearLayout.LayoutParams(dp(54), dp(54)).apply {
+            marginEnd = dp(14)
+        })
+        val introLabels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        introLabels.addView(uiText("اختباراتك", 12f, true, blue))
+        introLabels.addView(uiText("اختر المادة وابدأ بثقة", 22f, true),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
+        introLabels.addView(uiText("المواضيع مرتبة حسب المنهج، وتقدمك محفوظ داخل حسابك.",
+            14f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+        introRow.addView(introLabels, LinearLayout.LayoutParams(0, -2, 1f))
+        intro.addView(introRow)
         addUiCard(intro, bottom = 14)
         val search = EditText(this).apply {
             hint = "ابحث عن مادة"
@@ -1512,7 +1523,29 @@ class MainActivity : Activity() {
                 val name = subject.optString("name")
                 if (!name.contains(text.trim(), ignoreCase = true)) continue
                 shown++
-                addUiCard(uiRow(name, "المواضيع والاختبارات", subjectSymbol(name)) {
+                val number = i + 1
+                val card = uiCard()
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    layoutDirection = View.LAYOUT_DIRECTION_RTL
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+                row.addView(FrameLayout(this).apply {
+                    background = shape(if (night) Color.rgb(29,39,56) else Color.rgb(231,239,254),
+                        dp(13).toFloat())
+                    addView(uiText(number.toString(), 20f, true, blue).apply {
+                        gravity = Gravity.CENTER
+                    }, FrameLayout.LayoutParams(-1, -1))
+                }, LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(13) })
+                val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                labels.addView(uiText(name, 17f, true))
+                labels.addView(uiText("المواضيع والاختبارات", 12f, tint = mutedText),
+                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+                row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
+                row.addView(IosGlyphView(this, "chevron", mutedText),
+                    LinearLayout.LayoutParams(dp(16), dp(16)))
+                card.addView(row)
+                addUiCard(tappable(card, name) {
                     topicsScreen(subject.optInt("id"), name)
                 }, rows)
             }
@@ -1793,6 +1826,16 @@ class MainActivity : Activity() {
             activeScreen = "topics"
             base(subjectName, true)
             val topics = response.optJSONArray("topics") ?: JSONArray()
+            val search = EditText(this).apply {
+                hint = "ابحث عن موضوع"
+                textSize = 16f
+                setSingleLine(true)
+                setTextColor(textColor)
+                setHintTextColor(mutedText)
+                setPadding(dp(14), dp(12), dp(14), dp(12))
+                background = shape(surface, dp(14).toFloat())
+            }
+            root.addView(search, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
             val intro = uiCard()
             intro.addView(uiText(subjectName, 12f, true, blue))
             intro.addView(uiText("اختر الموضوع", 23f, true),
@@ -1800,26 +1843,76 @@ class MainActivity : Activity() {
             intro.addView(uiText("شاهد تقدمك وعدد الأسئلة قبل البدء.", 15f, tint = mutedText),
                 LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
             addUiCard(intro, bottom = 14)
-            for (i in 0 until topics.length()) {
-                val topic = topics.optJSONObject(i) ?: continue
-                val count = topic.optInt("count")
-                val name = topic.optString("name")
-                val metric = homeInsights.optJSONArray("chapters")?.let { chapters ->
-                    (0 until chapters.length()).mapNotNull { chapters.optJSONObject(it) }
-                        .firstOrNull { it.optInt("id") == topic.optInt("id") }
+            val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            root.addView(rows)
+            fun filterTopics(query: String) {
+                rows.removeAllViews()
+                var shown = 0
+                for (i in 0 until topics.length()) {
+                    val topic = topics.optJSONObject(i) ?: continue
+                    val count = topic.optInt("count")
+                    val name = topic.optString("name")
+                    if (!name.contains(query.trim(), ignoreCase = true)) continue
+                    shown++
+                    // The current home-insights contract exposes coverage for a
+                    // subset of chapters under daily_topics, not chapters.
+                    val metrics = homeInsights.optJSONArray("daily_topics")
+                    val metric = metrics?.let { chapters ->
+                        (0 until chapters.length()).mapNotNull { chapters.optJSONObject(it) }
+                            .firstOrNull { it.optInt("id") == topic.optInt("id") }
+                    }
+                    val coverage = (metric?.optInt("coverage") ?: 0).coerceIn(0, 100)
+                    val state = when {
+                        metric == null -> "التقدم غير متاح"
+                        coverage >= 100 -> "مكتمل"
+                        coverage > 0 -> "قيد التقدم"
+                        else -> "لم يبدأ"
+                    }
+                    val card = uiCard()
+                    val row = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        layoutDirection = View.LAYOUT_DIRECTION_RTL
+                        gravity = Gravity.CENTER_VERTICAL
+                    }
+                    row.addView(iconBubble("file", 48), LinearLayout.LayoutParams(dp(48), dp(48)).apply {
+                        marginEnd = dp(12)
+                    })
+                    val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                    labels.addView(uiText(name, 17f, true))
+                    labels.addView(uiText("$count سؤال", 12f, tint = mutedText),
+                        LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+                    row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
+                    row.addView(uiText(state, 12f, true, if (coverage > 0) blue else mutedText))
+                    row.addView(IosGlyphView(this, "chevron", mutedText),
+                        LinearLayout.LayoutParams(dp(15), dp(15)).apply { marginStart = dp(7) })
+                    card.addView(row)
+                    if (coverage > 0) {
+                        card.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+                            max = 100
+                            progress = coverage
+                            progressTintList = ColorStateList.valueOf(blue)
+                            progressBackgroundTintList = ColorStateList.valueOf(
+                                if (night) Color.rgb(57,57,60) else Color.rgb(222,224,230))
+                        }, LinearLayout.LayoutParams(-1, dp(4)).apply { topMargin = dp(12) })
+                        card.addView(uiText("$coverage% من الموضوع", 12f, tint = mutedText),
+                            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
+                    }
+                    addUiCard(tappable(card, name) {
+                        if (count > 0) loadExam(topic.optInt("id"), name)
+                        else message("لم تتم إضافة أسئلة لهذا الموضوع بعد.")
+                    }, rows, bottom = 12)
                 }
-                val coverage = metric?.optInt("coverage") ?: 0
-                val progress = when {
-                    coverage >= 100 -> "مكتمل"
-                    coverage > 0 -> "قيد التقدم · $coverage%"
-                    else -> "لم يبدأ"
-                }
-                addUiCard(uiRow(name, "$count سؤال · $progress", "book") {
-                    if (count > 0) loadExam(topic.optInt("id"), name) else message("لم تتم إضافة أسئلة لهذا الموضوع بعد.")
-                }, bottom = 12)
+                if (shown == 0) rows.addView(uiText(
+                    if (topics.length() == 0) "لم تُضف مواضيع بعد." else "لم نجد موضوعًا مطابقًا للبحث.",
+                    15f, tint = mutedText))
             }
-            if (topics.length() == 0) addUiCard(uiCard().apply {
-                addView(uiText("لم تُضف مواضيع بعد.", 15f, tint = mutedText))
+            filterTopics("")
+            search.addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                    filterTopics(s?.toString().orEmpty())
+                }
+                override fun afterTextChanged(s: Editable?) {}
             })
         }
     }
@@ -1905,10 +1998,6 @@ class MainActivity : Activity() {
         }
         val english = q.optJSONObject("english_match")
         val left = english?.optJSONObject("left")
-        val right = english?.optJSONObject("right")
-        val shape = ExamRules.Shape(
-            id = q.optInt("id"), text = q.optString("text"), type = type,
-            correctAnswer = q.optString("correct_answer"), options = optionTexts,
             matchIds = (0 until items.length()).map { items.optJSONObject(it)?.optInt("id") ?: 0 },
             matchWords = (0 until items.length()).map { items.optJSONObject(it)?.optString("mad_word") ?: "" },
             englishLeft = left?.keys()?.asSequence()?.map { key ->

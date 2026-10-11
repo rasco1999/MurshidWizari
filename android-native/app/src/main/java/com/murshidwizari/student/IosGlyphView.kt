@@ -216,6 +216,12 @@ class IosGlyphView(context: Context, private val symbol: String, private val tin
                 path(12f, 6f, 7f, 4f, 3f, 4f, 3f, 19f, 8f, 19f, 12f, 21f)
                 path(12f, 6f, 17f, 4f, 21f, 4f, 21f, 19f, 16f, 19f, 12f, 21f, 12f, 6f)
             }
+            "file" -> {
+                path(5f, 2f, 15f, 2f, 20f, 7f, 20f, 22f, 5f, 22f, 5f, 2f)
+                path(15f, 2f, 15f, 7f, 20f, 7f)
+                path(8f, 12f, 16f, 12f)
+                path(8f, 16f, 16f, 16f)
+            }
             "check" -> {
                 canvas.drawCircle(12f, 12f, 9f, ink)
                 path(7f, 12f, 10.5f, 15f, 17f, 9f)
