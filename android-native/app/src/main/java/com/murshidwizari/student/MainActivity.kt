@@ -50,6 +50,7 @@ class MainActivity : Activity() {
     private var homepage = JSONObject()
     private var topicsSubjectId = 0
     private var topicsSubjectName = ""
+    private var topicsReturnScreen = "home"
     private var chapterId = 0
     private var chapterName = ""
     private var examFromSearch = false
@@ -92,14 +93,17 @@ class MainActivity : Activity() {
     private var homeHeroIndex = 0
     private var homeHeroTicker: Runnable? = null
     private var homeHeroView: ImageView? = null
+    private var homeHeroContainer: FrameLayout? = null
     private var homeHeroFallback: TextView? = null
     private var homeHeroDots: LinearLayout? = null
     private val heroBitmaps = HashMap<Int, Bitmap>()
+    private val heroPending = HashSet<Int>()
     private val heroJobs = Executors.newFixedThreadPool(2)
     private var lastValidatedInternet: Boolean? = null
     private var connectivity: ConnectivityManager? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var sessionGeneration = 0
+    private var screenGeneration = 0
     private var avatarGeneration = 0
     private var activeAvatar: java.lang.ref.WeakReference<ImageView>? = null
     private var paymentBusy = false
@@ -157,6 +161,7 @@ class MainActivity : Activity() {
     private fun dp(size: Int): Int = (size * resources.displayMetrics.density).toInt()
     private fun contentWidth(): Int = VisualRules.contentWidthDp(resources.configuration.screenWidthDp)?.let(::dp) ?: -1
     private fun setupRoot(horizontalPadding: Int = 16, topPadding: Int = 16, tab: String? = null) {
+        screenGeneration++
         val scroll = ScrollView(this).apply { isFillViewport = true; setBackgroundColor(appColor); clipToPadding = false }
         if (Build.VERSION.SDK_INT >= 35 && tab == null) {
             // Android 15 enforces edge-to-edge: keep text and actions out of status/nav cutouts.
@@ -198,8 +203,30 @@ class MainActivity : Activity() {
         window.statusBarColor = navy
         window.navigationBarColor = appColor
         setupRoot(topPadding = if (tab == null) 16 else 0, tab = tab)
-        if (showBack) button("‹ الرجوع", secondary = true) { navigateBack() }
-        if (tab != null) tabHeader(title, tab) else title(title)
+        when {
+            tab != null -> tabHeader(title, tab)
+            showBack -> backHeader(title)
+            else -> title(title)
+        }
+    }
+    private fun backHeader(title: String) {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            minimumHeight = dp(48)
+        }
+        val back = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.HORIZONTAL
+            addView(IosGlyphView(this@MainActivity, "chevron", blue), LinearLayout.LayoutParams(dp(19), dp(19)))
+            addView(uiText("رجوع", 15f, tint = blue))
+        }
+        row.addView(tappable(back, "رجوع") { navigateBack() }, LinearLayout.LayoutParams(dp(72), dp(44)))
+        row.addView(uiText(title, 18f, true).apply { gravity = Gravity.CENTER },
+            LinearLayout.LayoutParams(0, -2, 1f))
+        row.addView(Space(this), LinearLayout.LayoutParams(dp(72), dp(1)))
+        root.addView(row, LinearLayout.LayoutParams(-1, dp(52)).apply { bottomMargin = dp(10) })
     }
     private fun tabHeader(title: String, tab: String) {
         val row = LinearLayout(this).apply {
@@ -360,7 +387,7 @@ class MainActivity : Activity() {
     }
 
     private fun uiTile(name: String, description: String, symbol: String, action: () -> Unit): View {
-        val card = uiCard().apply { minimumHeight = dp(152) }
+        val card = uiCard().apply { minimumHeight = dp(128) }
         card.addView(IosGlyphView(this, symbol, blue), LinearLayout.LayoutParams(dp(27), dp(27)).apply { bottomMargin = dp(8) })
         card.addView(uiText(name, 17f, true))
         card.addView(uiText(description, 12f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
@@ -1102,7 +1129,11 @@ class MainActivity : Activity() {
                 addView(uiText("مقترح لك · ${suggestion.optInt("coverage")}%", 13f, true, blue))
                 addView(uiText(title, 20f, true), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
                 addView(uiText(subjectName, 15f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
-            }, title) { topicsSubjectId = sid; topicsSubjectName = subjectName; loadExam(suggestion.optInt("id"), title) }
+            }, title) {
+                topicsReturnScreen = "home"
+                topicsSubjectId = sid; topicsSubjectName = subjectName
+                loadExam(suggestion.optInt("id"), title)
+            }
         } else {
             uiRow("ابدأ أول مراجعة", "اختر موضوعك وسنحفظ تقدمك تلقائيًا.", "check") {
                 if (sid > 0) topicsScreen(sid, subjectName) else subjectsScreen()
@@ -1132,6 +1163,7 @@ class MainActivity : Activity() {
             isClickable = true
             isFocusable = true
         }
+        homeHeroContainer = hero
         homeHeroView = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
         hero.addView(homeHeroView, FrameLayout.LayoutParams(-1, -1))
         homeHeroFallback = uiText(heroNames[homeHeroIndex], 23f, true, Color.WHITE).apply {
@@ -1177,6 +1209,7 @@ class MainActivity : Activity() {
         homeHeroIndex = ((index % heroNames.size) + heroNames.size) % heroNames.size
         val bitmap = heroBitmaps[homeHeroIndex]
         homeHeroView?.setImageBitmap(bitmap)
+        homeHeroContainer?.contentDescription = heroNames[homeHeroIndex]
         homeHeroFallback?.apply {
             text = heroNames[homeHeroIndex]
             visibility = if (bitmap == null) View.VISIBLE else View.GONE
@@ -1195,6 +1228,7 @@ class MainActivity : Activity() {
     }
 
     private fun loadHeroImage(index: Int) {
+        if (!heroPending.add(index)) return
         val url = "https://www.mur-iq.com/assets/img/hero/${heroSlugs[index]}.webp?v=20260928-v56"
         heroJobs.execute {
             val bitmap = try {
@@ -1219,9 +1253,12 @@ class MainActivity : Activity() {
                     }
                 } finally { connection.disconnect() }
             } catch (_: Exception) { null }
-            if (bitmap != null) main.post {
-                heroBitmaps[index] = bitmap
-                if (activeScreen == "home" && homeHeroIndex == index) showHeroSlide(index)
+            main.post {
+                heroPending.remove(index)
+                if (bitmap != null) {
+                    heroBitmaps[index] = bitmap
+                    if (activeScreen == "home" && homeHeroIndex == index) showHeroSlide(index)
+                }
             }
         }
     }
@@ -1476,21 +1513,43 @@ class MainActivity : Activity() {
     }
 
     private fun topicsScreen(subjectId: Int, subjectName: String) {
+        if (activeScreen != "exam" && activeScreen != "topics") topicsReturnScreen = activeScreen
         topicsSubjectId = subjectId; topicsSubjectName = subjectName
+        val expectedScreenGeneration = screenGeneration
         fetch("mobile/topics.php?subject_id=" + subjectId) { response ->
-            if (!response.optBoolean("ok")) return@fetch
+            if (!response.optBoolean("ok") || expectedScreenGeneration != screenGeneration ||
+                topicsSubjectId != subjectId) return@fetch
             activeScreen = "topics"
-        base(subjectName, true)
+            base(subjectName, true)
             val topics = response.optJSONArray("topics") ?: JSONArray()
+            val intro = uiCard()
+            intro.addView(uiText(subjectName, 12f, true, blue))
+            intro.addView(uiText("اختر الموضوع", 23f, true),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+            intro.addView(uiText("شاهد تقدمك وعدد الأسئلة قبل البدء.", 15f, tint = mutedText),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+            addUiCard(intro, bottom = 14)
             for (i in 0 until topics.length()) {
                 val topic = topics.optJSONObject(i) ?: continue
                 val count = topic.optInt("count")
                 val name = topic.optString("name")
-                button(name + " • " + count + " سؤال") {
-                    if (count > 0) loadExam(topic.optInt("id"), name) else message("لم تتم إضافة أسئلة لهذا الموضوع بعد.")
+                val metric = homeInsights.optJSONArray("chapters")?.let { chapters ->
+                    (0 until chapters.length()).mapNotNull { chapters.optJSONObject(it) }
+                        .firstOrNull { it.optInt("id") == topic.optInt("id") }
                 }
+                val coverage = metric?.optInt("coverage") ?: 0
+                val progress = when {
+                    coverage >= 100 -> "مكتمل"
+                    coverage > 0 -> "قيد التقدم · $coverage%"
+                    else -> "لم يبدأ"
+                }
+                addUiCard(uiRow(name, "$count سؤال · $progress", "book") {
+                    if (count > 0) loadExam(topic.optInt("id"), name) else message("لم تتم إضافة أسئلة لهذا الموضوع بعد.")
+                }, bottom = 12)
             }
-            if (topics.length() == 0) line("لم تُضف مواضيع بعد.")
+            if (topics.length() == 0) addUiCard(uiCard().apply {
+                addView(uiText("لم تُضف مواضيع بعد.", 15f, tint = mutedText))
+            })
         }
     }
 
@@ -1498,8 +1557,10 @@ class MainActivity : Activity() {
         examFromSearch = fromSearch
         examSearchTarget = if (fromSearch) targetText else ""
         chapterId = id; chapterName = name
+        val expectedScreenGeneration = screenGeneration
         fetch("mobile/exam.php?chapter_id=" + id) { result ->
-            if (!result.optBoolean("ok") || chapterId != id) return@fetch
+            if (!result.optBoolean("ok") || chapterId != id ||
+                expectedScreenGeneration != screenGeneration) return@fetch
             csrf = result.optString("csrf", csrf)
             examQuestions = result.optJSONArray("questions") ?: JSONArray()
             submissionUncertain = false
@@ -2115,7 +2176,7 @@ class MainActivity : Activity() {
                                symbol: String, action: () -> Unit) {
         if (card.childCount > 0) card.addView(View(this).apply {
             setBackgroundColor(if (night) Color.rgb(52,52,55) else Color.rgb(235,235,239))
-        }, LinearLayout.LayoutParams(-1, dp(1)).apply { marginTop = dp(3); marginBottom = dp(3) })
+        }, LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(3); bottomMargin = dp(3) })
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -3567,7 +3628,11 @@ class MainActivity : Activity() {
                 }
             }
             "exam" -> leaveExam()
-            "topics" -> subjectsScreen()
+            "topics" -> when (topicsReturnScreen) {
+                "home" -> showHome(homepage)
+                "tests" -> testsTabScreen()
+                else -> subjectsScreen()
+            }
             "subjects" -> showHome(homepage)
             "tests", "success" -> showHome(homepage)
             "account" -> showHome(homepage)
