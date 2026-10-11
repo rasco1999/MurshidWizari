@@ -40,6 +40,7 @@ import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowInsets
 import android.widget.*
 import org.json.JSONArray
