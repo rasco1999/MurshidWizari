@@ -400,7 +400,7 @@ class MainActivity : Activity() {
         val examNavigation = tab == null && activeScreen == "exam"
         if (tab != null || examNavigation) {
             val footer = if (tab != null) mainTabBar(tab) else examNavigationFooter()
-            container.addView(footer, LinearLayout.LayoutParams(-1, dp(if (tab != null) 61 else 66)))
+            container.addView(footer, LinearLayout.LayoutParams(-1, dp(if (tab != null) 61 else 82)))
             container.viewTreeObserver.addOnGlobalLayoutListener {
                 val visible = Rect()
                 container.getWindowVisibleDisplayFrame(visible)
@@ -536,25 +536,28 @@ class MainActivity : Activity() {
         orientation = LinearLayout.HORIZONTAL
         layoutDirection = View.LAYOUT_DIRECTION_RTL
         gravity = Gravity.CENTER_VERTICAL
-        setPadding(dp(16), dp(8), dp(16), dp(8))
-        setBackgroundColor(surface)
+        setPadding(dp(16), dp(12), dp(16), dp(12))
+        setBackgroundColor(if (night) Color.rgb(37,37,39) else Color.rgb(249,249,251))
         elevation = dp(8).toFloat()
         val hasQuestion = questionIndex < examQuestions.length()
         val submitted = examQuestions.optJSONObject(questionIndex)?.let(::isSubmitted) == true
         val canNext = hasQuestion && ExamRules.canAdvance(submitted, busyAnswer, submissionUncertain)
         val canPrevious = questionIndex > 0 && !busyAnswer
         val prev = uiText("‹ السابق", 16f, true, if (canPrevious) blue else mutedText).apply {
-            gravity = Gravity.CENTER_VERTICAL
+            gravity = Gravity.CENTER
+            background = shape(if (night) Color.BLACK else Color.WHITE, dp(14).toFloat())
+            alpha = if (canPrevious) 1f else 0.55f
             isEnabled = canPrevious
             if (canPrevious) setOnClickListener { questionIndex--; renderQuestion() }
             contentDescription = "السؤال السابق"
         }
-        addView(prev, LinearLayout.LayoutParams(0, -1, 1f))
-        addView(uiText("${(questionIndex + 1).coerceAtMost(examQuestions.length())}/${examQuestions.length()}",
-            15f, tint = mutedText).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(0, -1, 1f))
+        addView(prev, LinearLayout.LayoutParams(dp(104), -1))
+        addView(Space(this@MainActivity), LinearLayout.LayoutParams(0, dp(1), 1f))
         val next = uiText(if (questionIndex == examQuestions.length() - 1) "عرض النتيجة ›"
             else "التالي ›", 16f, true, if (canNext) blue else mutedText).apply {
-            gravity = Gravity.CENTER_VERTICAL or Gravity.END
+            gravity = Gravity.CENTER
+            background = shape(if (night) Color.BLACK else Color.WHITE, dp(14).toFloat())
+            alpha = if (canNext) 1f else 0.55f
             isEnabled = canNext
             if (canNext) setOnClickListener {
                 val index = ExamRules.nextIndex(questionIndex, examQuestions.length(), submitted, busyAnswer, submissionUncertain)
@@ -562,7 +565,7 @@ class MainActivity : Activity() {
             }
             contentDescription = "السؤال التالي"
         }
-        addView(next, LinearLayout.LayoutParams(0, -1, 1f))
+        addView(next, LinearLayout.LayoutParams(dp(104), -1))
     }
     private fun title(text: String) {
         root.addView(TextView(this).apply {
@@ -2854,6 +2857,9 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(3) })
         row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
         row.addView(uiText("${questionIndex + 1} / ${examQuestions.length()}", 15f, true).apply {
+            // Numeric fractions must keep the iOS 1 / 73 order inside RTL rows.
+            textDirection = View.TEXT_DIRECTION_LTR
+            gravity = Gravity.CENTER
             setPadding(dp(10), dp(6), dp(10), dp(6))
             background = shape(if (night) Color.rgb(29,39,56) else Color.rgb(231,239,254), dp(14).toFloat())
         })
