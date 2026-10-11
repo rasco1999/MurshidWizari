@@ -51,6 +51,8 @@ class MainActivity : Activity() {
     private var topicsSubjectId = 0
     private var topicsSubjectName = ""
     private var topicsReturnScreen = "home"
+    private var predictionsReturnScreen = "predictions_tab"
+    private var schoolAdReturnScreen = "home"
     private var chapterId = 0
     private var chapterName = ""
     private var examFromSearch = false
@@ -2870,6 +2872,7 @@ class MainActivity : Activity() {
     }
 
     private fun schoolAdScreen() {
+        if (activeScreen != "school_ad") schoolAdReturnScreen = activeScreen
         activeScreen = "school_ad"
         base("طلب إعلان مدرسة", true)
         caption("يرسل طلبك إلى إدارة المنصة، ويشمل اسم المدرسة والإعلان ومدة عرضه.")
@@ -3776,8 +3779,10 @@ class MainActivity : Activity() {
 
     private fun predictionsScreen(subjectId: Int, subject: String) {
         if (!subscribed) { message("المرشحات متاحة للمشتركين فقط."); return }
+        predictionsReturnScreen = if (activeScreen == "subjects") "subjects" else "predictions_tab"
+        activeScreen = "predictions_list"
         fetch("mobile/predictions.php?subject_id=" + subjectId) { response ->
-            if (!response.optBoolean("ok")) return@fetch
+            if (activeScreen != "predictions_list" || !response.optBoolean("ok")) return@fetch
             base("مرشحات " + subject, true)
             val predictions = response.optJSONArray("predictions") ?: JSONArray()
             for (i in 0 until predictions.length()) {
@@ -4279,6 +4284,13 @@ class MainActivity : Activity() {
                 else -> subjectsScreen()
             }
             "subjects" -> showHome(homepage)
+            "predictions_list" -> if (predictionsReturnScreen == "subjects") subjectsScreen(true)
+                else predictionsTabScreen()
+            "school_ad" -> when (schoolAdReturnScreen) {
+                "ads_tab" -> advertisementsTabScreen()
+                "account" -> accountScreen()
+                else -> showHome(homepage)
+            }
             "tests", "success", "predictions_tab", "ads_tab" -> showHome(homepage)
             "account" -> showHome(homepage)
             "plans" -> if (plansReturnScreen == "account") accountScreen() else showHome(homepage)
