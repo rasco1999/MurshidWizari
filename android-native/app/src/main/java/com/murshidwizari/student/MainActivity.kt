@@ -137,6 +137,7 @@ class MainActivity : Activity() {
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var sessionGeneration = 0
     private var screenGeneration = 0
+    private val avatarCache = android.util.LruCache<String, Bitmap>(8)
     private var avatarGeneration = 0
     private var activeAvatar: java.lang.ref.WeakReference<ImageView>? = null
     private var paymentBusy = false
@@ -191,12 +192,24 @@ class MainActivity : Activity() {
         val minimumWelcomeMs = 3000L // v4.8.18 Build 498 cinematic welcome.
         val readyAt = SystemClock.elapsedRealtime() + minimumWelcomeMs
         if (api.hasRememberedSession()) {
-            // Restore the encrypted session before replacing the welcome screen.
+            main.postDelayed({
+                if (activeScreen == "welcome") {
+                    activeScreen = "restoring"
+                    base("المرشد الوزاري")
+                    caption("جارٍ استعادة حسابك…")
+                }
+            }, minimumWelcomeMs)
             fetch("mobile/bootstrap.php", showError = false) { response ->
                 main.postDelayed({
-                    if (activeScreen == "welcome") {
+                    if (activeScreen == "welcome" || activeScreen == "restoring") {
                         if (response.optBoolean("ok")) showHome(response)
-                        else guestLandingScreen()
+                        else {
+                            activeScreen = "restore_error"
+                            base("استعادة الاتصال")
+                            caption(response.optString("message", "تعذر الاتصال الآن. بيانات جلستك محفوظة."))
+                            button("إعادة المحاولة") { refreshHome() }
+                            button("العودة لتسجيل الدخول", secondary = true) { loginScreen() }
+                        }
                     }
                 }, (readyAt - SystemClock.elapsedRealtime()).coerceAtLeast(0))
             }
@@ -482,7 +495,7 @@ class MainActivity : Activity() {
             }
             if (name == "account") {
                 // The owner's iPhone tab uses the circular gold Murshid emblem.
-                item.addView(ImageView(this@MainActivity).apply {
+                val tabAvatar = ImageView(this@MainActivity).apply {
                     setImageResource(R.drawable.ic_ios_v4818)
                     scaleType = ImageView.ScaleType.CENTER_CROP
                     background = GradientDrawable().apply {
@@ -490,7 +503,10 @@ class MainActivity : Activity() {
                         setColor(Color.WHITE)
                     }
                     clipToOutline = true
-                }, LinearLayout.LayoutParams(dp(27), dp(27)))
+                }
+                item.addView(tabAvatar, LinearLayout.LayoutParams(dp(27), dp(27)))
+                fetchAvatarInto(tabAvatar, student.optString("avatar_url").ifBlank { homepage.optString("avatar_url") },
+                    student.optString("avatar_revision").ifBlank { homepage.optString("avatar_revision") })
             } else {
                 item.addView(IosGlyphView(this@MainActivity, icon, color),
                     LinearLayout.LayoutParams(dp(23), dp(23)))
@@ -895,7 +911,8 @@ class MainActivity : Activity() {
 
     private fun fetchAvatarInto(view: ImageView, raw: String, revision: String) {
         val url = AccountRules.avatarUrl(raw, revision + "_" + avatarGeneration) ?: return
-        jobs.execute {
+        avatarCache.get(url)?.let { view.setImageBitmap(it); return }
+        heroJobs.execute {
             val bitmap = try {
                 val connection = URL(url).openConnection() as java.net.HttpURLConnection
                 connection.connectTimeout = 10000
@@ -920,6 +937,7 @@ class MainActivity : Activity() {
                     }
                 }.also { connection.disconnect() }
             } catch (_: Exception) { null }
+            if (bitmap != null) avatarCache.put(url, bitmap)
             main.post { if (bitmap != null && view.parent != null && !isDestroyed) view.setImageBitmap(bitmap) }
         }
     }
