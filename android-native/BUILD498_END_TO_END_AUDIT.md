@@ -32,6 +32,7 @@ Legend: `A` = matched in Android source and exercised by a controlled emulator; 
 | Registration & verification | `RegisterV3View`, `VerificationView`, phone/email recovery | `registerScreen`, `verificationScreen`, reset screens | B — live codes and edge cases pending |
 | Main tab shell | `MainV3TabView`: الرئيسية، الاختبارات، المرشحات، الإعلانات، حسابي | Native fixed five-tab bar, same destinations | A — tab touches tested on four emulator API levels |
 | Home | `V31HomeView`: hero carousel, insight cards, study shortcuts | Native welcome banner, hero, metrics, actions | B — dynamic layout/font parity pending |
+| Remote feature flags & update strip | iOS loads `mobile/app-config.php` and gates custom exam, daily challenge, submissions and history; iOS update banner reads an iOS release URL | Android now reads the same nested `features[code].enabled` values and rebuilds home shortcuts; Android-specific update delivery is not configured | B — gates require real server test; C — Android update feed still needed |
 | Subjects & chapters | `V3TestsView` / `V3TopicsView`, search, server progress | searchable subject/topic screens, IDs and insights | A — controlled data tested; live Android progress not verified |
 | Topic exam | `V3ExamView`: question forms, previous/next, explanations, saved answers | question cards, answer POST reconciliation, notes, nav | A — MCQ/text/rejection/retry in emulator; exotic types B |
 | Graded result | `V3ExamResultView`: score, correct/wrong, answered, time, follow-up | same result structure; confirmed grades counted | A — synthetic exam-result screenshot captured |
@@ -61,5 +62,6 @@ Legend: `A` = matched in Android source and exercised by a controlled emulator; 
 3. Test full authenticated Android workflow against a dedicated non-production student account (including verification codes, account name/avatar mutation, lessons, challenge, service requests, session 401/reconnect and logout).
 4. Confirm device push via an Android FCM app/server registration and delivery, plus reminder/biometric behaviours.
 5. Use a test gateway for subscription checkout, callback and status reconciliation; no real payment should be triggered as a visual test.
+6. Verify the now-wired server feature gates in a real Android session and configure a **separate Android update URL** before enabling any update banner; never offer the iOS IPA download as an Android upgrade.
 
 **Release decision:** A **debug-key test-signed APK may be privately installed for owner review**, as newly authorized. It is not a production-signed app, not a Play Store release, and not certified 100% visually/functionally equivalent. Do not promote it to release until the open checks above have concrete evidence.

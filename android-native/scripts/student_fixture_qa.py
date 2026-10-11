@@ -26,6 +26,7 @@ class Handler(BaseHTTPRequestHandler):
   elif path=='/mobile/bound-password-recovery.php':
    data={'ok':True,'contacts':{'email':{'value':'student@example.test','enabled':True},'phone':{'value':'','enabled':False}}}
   elif path=='/mobile/insights.php': data={'ok':True,'insights':{'chapters':[]},'weekly':{}}
+  elif path=='/mobile/app-config.php': data={'ok':True,'features':{'custom_exam':{'enabled':True},'daily_challenge':{'enabled':True},'student_question_submit':{'enabled':False},'attempt_history':{'enabled':True}},'release':{}}
   elif path=='/mobile/predictions.php': data={'ok':True,'predictions':[{'id':1,'question_text':'مرشح فحص افتراضي','question':'مرشح فحص افتراضي','text':'مرشح فحص افتراضي','correct_answer':'إجابة المرشح الافتراضي','explanation':'شرح المرشح الافتراضي','chapter_name':'موضوع الفحص','topic':'موضوع الفحص','probability':80}]}
   elif path=='/mobile/topics.php': data={'ok':True,'topics':[{'id':1,'name':'موضوع فحص افتراضي','count':2}]}
   elif path=='/mobile/exam.php':
@@ -107,6 +108,18 @@ def main():
  assert fields[1].attrib.get('text') not in ('','أدخل كلمة المرور'),fields[1].attrib
  button('دخول')
  ui.wait_for('حسابي');screenshot(args.output,'student-home-light')
+ # iPhone Build 498 replays its cinematic welcome after a real background
+ # visit longer than three seconds. Verify Android's overlay without killing
+ # the student's in-progress Activity or losing the authenticated session.
+ ui.adb('shell','input','keyevent','KEYCODE_HOME');time.sleep(3.5)
+ ui.adb('shell','am','start','-n',f'{ui.PACKAGE}/{ui.MAIN_ACTIVITY}')
+ resume_greeting='منصة المرشد الوزاري. أهلًا، طالب. تعلّم بثقة، واصنع مستقبلك'
+ ui.wait_for(resume_greeting,seconds=3)
+ screenshot(args.output,'student-welcome-after-background')
+ time.sleep(3.2)
+ tree,_=ui.ui_tree()
+ assert ui.find(tree,resume_greeting) is None,'Welcome overlay must disappear after playback'
+ ui.wait_for('حسابي')
  # Capture the reference iPhone's dark appearance as well as light Android.
  # The toggle is a native accessible header control, not a test-only shortcut.
  button('تبديل المظهر');ui.wait_for('حسابي');screenshot(args.output,'student-home-dark')
@@ -145,6 +158,7 @@ def main():
  assert not any('السؤال التالي' in n.attrib.get('content-desc','') for n in tree.iter('node')), (
   'Completed exam must not leave an inactive navigation footer')
  assert sum(1 for m,p in STATE['calls'] if p=='/api/progress.php')==3,'One rejection plus two accepted answers'
+ assert any(path=='/mobile/app-config.php' for _,path in STATE['calls']),'Home must request the same remote feature gates as iOS'
  # End-to-end exit: a rejected server logout must retain the active account;
  # the subsequently accepted logout must return to the exact guest landing.
  back();ui.wait_for('موضوع فحص افتراضي')
@@ -159,7 +173,7 @@ def main():
  button('تسجيل الخروج');ui.wait_for('مساحة تعلّمك')
  assert sum(1 for m,p in STATE['calls'] if p=='/mobile/logout.php')==2,'Confirmed logout must not repeat the request'
  screenshot(args.output,'student-logged-out')
- args.output.joinpath('fixture-results.json').write_text(json.dumps({'passed':True,'grading_requests':3,'rejected_then_retryable':True,'summary_without_footer':True,'note_roundtrip':True,'logout_reject_then_accept':True,'synthetic_only':True},indent=2))
+ args.output.joinpath('fixture-results.json').write_text(json.dumps({'passed':True,'grading_requests':3,'rejected_then_retryable':True,'summary_without_footer':True,'note_roundtrip':True,'welcome_replays_on_resume':True,'config_loaded':True,'logout_reject_then_accept':True,'synthetic_only':True},indent=2))
  print('PASS synthetic authenticated UI and grading semantics',flush=True)
  server.shutdown()
 if __name__=='__main__': main()

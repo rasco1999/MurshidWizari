@@ -71,6 +71,9 @@ class MainActivity : Activity() {
     private var csrf = ""
     private var student = JSONObject()
     private var homepage = JSONObject()
+    private var homeFeatureFlags = JSONObject()
+    private var homeMockExamHost: LinearLayout? = null
+    private var homeQuickToolsHost: LinearLayout? = null
     private var topicsSubjectId = 0
     private var topicsSubjectName = ""
     private var topicsReturnScreen = "home"
@@ -652,7 +655,8 @@ class MainActivity : Activity() {
         return frame to input
     }
 
-    private fun sectionHeader(name: String, subtitle: String, symbol: String) {
+    private fun sectionHeader(name: String, subtitle: String, symbol: String,
+                              parent: LinearLayout = root) {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
@@ -663,7 +667,7 @@ class MainActivity : Activity() {
         labels.addView(uiText(name, 20f, true))
         labels.addView(uiText(subtitle, 12f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(2) })
         row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
-        root.addView(row, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7); bottomMargin = dp(12) })
+        parent.addView(row, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7); bottomMargin = dp(12) })
     }
 
     private fun tappable(view: View, description: String, action: () -> Unit): View = view.apply {
@@ -877,6 +881,7 @@ class MainActivity : Activity() {
         currentAdDialog?.dismiss(); currentAdDialog = null
         api.clear()
         csrf = ""; student = JSONObject(); homepage = JSONObject(); subscribed = false
+        homeFeatureFlags = JSONObject()
         homeInsightsLoaded = false; homeInsights = JSONObject(); homeWeekly = JSONObject()
         busyAnswer = false; submissionUncertain = false; dailyBusy = false; dailyUncertain = false
         prefs.edit().remove("last_payment_order").apply()
@@ -1822,12 +1827,9 @@ class MainActivity : Activity() {
         root.addView(homeMetricHolder, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) })
         populateHomeMetrics()
 
-        sectionHeader("محاكاة الوزاري", "تدرّب على أجواء الامتحان الوزاري", "timer")
-        addUiCard(uiRow("ابدأ محاكاة الوزاري", "30 سؤالًا · 45 دقيقة", "timer") {
-            practiceCount = 30
-            practiceMinutes = 45
-            practiceBuilderScreen()
-        }, bottom = 16)
+        homeMockExamHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(homeMockExamHost, LinearLayout.LayoutParams(-1, -2))
+        renderHomeMockExam()
 
         sectionHeader("موادك", "اختر المادة ثم الموضوع", "book")
         val subjects = homepage.optJSONArray("subjects") ?: JSONArray()
@@ -1844,17 +1846,9 @@ class MainActivity : Activity() {
         populateNextStep()
 
         sectionHeader("أدواتك السريعة", "اختبارات ومراجعة وبحث ومساهمات", "sparkle")
-        val tiles = listOf(
-            uiTile("راجع أخطاءك", "مراجعة ذكية", "brain") { reviewScreen() },
-            uiTile("اختبار مخصص", "عدد · نوع · مؤقت", "sliders") { practiceBuilderScreen() },
-            uiTile("تحدي اليوم", "سؤال واحد كل 24 ساعة", "flame") { openCompetition("daily_challenge") },
-            uiTile("اقترح سؤالًا", "ساهم في البنك", "plus-bubble") { proposeQuestionScreen() },
-            uiTile("طلباتك", "تابع المراجعة", "tray") { myQuestionSubmissionsScreen() },
-            uiTile("سجل الاختبارات", "نتائجك السابقة", "history") { attemptHistoryScreen() },
-            uiTile("تحدي المليون", "ترتيب ونقاط", "trophy") { openCompetition("contest") },
-            uiTile("غيّر جو", "استراحة قصيرة", "sparkles") { storiesScreen() }
-        )
-        uiTwoColumnGrid(tiles)
+        homeQuickToolsHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(homeQuickToolsHost, LinearLayout.LayoutParams(-1, -2))
+        renderHomeQuickTools()
 
         sectionHeader("تعلّم من إجاباتك", "خطوة صغيرة بعد كل اختبار", "trend")
         val learningCard = uiCard()
@@ -1910,6 +1904,47 @@ class MainActivity : Activity() {
         if (pendingPractice > 0) button("متابعة الاختبار المخصص", secondary = true) { loadPracticeSession(pendingPractice) }
         if (!homeInsightsLoaded) loadHomeInsights()
         fetch("mobile/notifications.php", showError = false) { /* notification count is read on demand */ }
+        fetch("mobile/app-config.php", showError = false) { config ->
+            if (activeScreen != "home" || !config.optBoolean("ok")) return@fetch
+            homeFeatureFlags = config.optJSONObject("features") ?: JSONObject()
+            renderHomeMockExam()
+            renderHomeQuickTools()
+        }
+    }
+
+    /** iOS AppSession.featureEnabled uses `features[code].enabled`, defaulting to true. */
+    private fun homeFeatureEnabled(code: String): Boolean =
+        homeFeatureFlags.optJSONObject(code)?.optBoolean("enabled", true) ?: true
+
+    private fun renderHomeMockExam() {
+        val host = homeMockExamHost ?: return
+        host.removeAllViews()
+        if (!homeFeatureEnabled("custom_exam")) return
+        sectionHeader("محاكاة الوزاري", "تدرّب على أجواء الامتحان الوزاري", "timer", host)
+        addUiCard(uiRow("ابدأ محاكاة الوزاري", "30 سؤالًا · 45 دقيقة", "timer") {
+            practiceCount = 30
+            practiceMinutes = 45
+            practiceBuilderScreen()
+        }, parent = host, bottom = 16)
+    }
+
+    private fun renderHomeQuickTools() {
+        val host = homeQuickToolsHost ?: return
+        host.removeAllViews()
+        val tiles = mutableListOf<View>()
+        tiles.add(uiTile("راجع أخطاءك", "مراجعة ذكية", "brain") { reviewScreen() })
+        if (homeFeatureEnabled("custom_exam")) tiles.add(
+            uiTile("اختبار مخصص", "عدد · نوع · مؤقت", "sliders") { practiceBuilderScreen() })
+        if (homeFeatureEnabled("daily_challenge")) tiles.add(
+            uiTile("تحدي اليوم", "سؤال واحد كل 24 ساعة", "flame") { openCompetition("daily_challenge") })
+        if (homeFeatureEnabled("student_question_submit")) tiles.add(
+            uiTile("اقترح سؤالًا", "ساهم في البنك", "plus-bubble") { proposeQuestionScreen() })
+        tiles.add(uiTile("طلباتك", "تابع المراجعة", "tray") { myQuestionSubmissionsScreen() })
+        if (homeFeatureEnabled("attempt_history")) tiles.add(
+            uiTile("سجل الاختبارات", "نتائجك السابقة", "history") { attemptHistoryScreen() })
+        tiles.add(uiTile("تحدي المليون", "ترتيب ونقاط", "trophy") { openCompetition("contest") })
+        tiles.add(uiTile("غيّر جو", "استراحة قصيرة", "sparkles") { storiesScreen() })
+        uiTwoColumnGrid(tiles, host)
     }
 
     /** Owner-supplied iPhone home reference: blue greeting, circular avatar and three gold metrics. */
@@ -3778,6 +3813,7 @@ class MainActivity : Activity() {
                         fun clearAfterLogout() {
                             sessionGeneration++
                             api.clear(); csrf = ""; student = JSONObject()
+                            homeFeatureFlags = JSONObject()
                             homeInsightsLoaded = false; homeInsights = JSONObject(); homeWeekly = JSONObject()
                             guestLandingScreen()
                         }
