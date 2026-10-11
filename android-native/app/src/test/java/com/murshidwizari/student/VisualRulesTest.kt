@@ -6,6 +6,21 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VisualRulesTest {
+    @Test fun currentOwnerScreenshotsUseFiveRtlMainTabs() {
+        assertEquals(listOf("home", "tests", "predictions", "ads", "account"),
+            VisualRules.mainTabs.map { it.id })
+        assertEquals(listOf("الرئيسية", "الاختبارات", "المرشحات", "الإعلانات", "حسابي"),
+            VisualRules.mainTabs.map { it.title })
+        assertEquals(VisualRules.mainTabs.size, VisualRules.mainTabs.map { it.icon }.distinct().size)
+    }
+
+    @Test fun darkAppearanceFollowsSystemOnlyUntilUserOverridesIt() {
+        assertTrue(VisualRules.initialNight(null, true))
+        assertEquals(false, VisualRules.initialNight(null, false))
+        assertEquals(false, VisualRules.initialNight(false, true))
+        assertTrue(VisualRules.initialNight(true, false))
+    }
+
     @Test fun phoneGridStaysTwoColumnsLikeIos() {
         assertEquals(2, VisualRules.homeColumns())
         assertEquals(138, VisualRules.tileWidthDp(320))

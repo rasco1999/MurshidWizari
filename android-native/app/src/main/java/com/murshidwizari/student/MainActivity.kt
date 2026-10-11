@@ -149,7 +149,10 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         api = ApiClient(this)
-        night = prefs.getBoolean("night", false)
+        val systemNight = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+            Configuration.UI_MODE_NIGHT_YES
+        night = VisualRules.initialNight(if (prefs.contains("night")) prefs.getBoolean("night", false) else null,
+            systemNight)
         loginScreen()
         if (api.hasRememberedSession()) {
             fetch("mobile/bootstrap.php", showError = false) { response ->
@@ -203,7 +206,7 @@ class MainActivity : Activity() {
     }
     private fun base(title: String, showBack: Boolean = false, tab: String? = null) {
         stopHomeHeroTicker()
-        window.statusBarColor = navy
+        window.statusBarColor = if (night) Color.BLACK else navy
         window.navigationBarColor = appColor
         setupRoot(topPadding = if (tab == null) 16 else 0, tab = tab)
         when {
@@ -260,13 +263,7 @@ class MainActivity : Activity() {
         layoutDirection = View.LAYOUT_DIRECTION_RTL
         setBackgroundColor(surface)
         elevation = dp(8).toFloat()
-        val tabs = listOf(
-            Triple("home", "الرئيسية", "home-filled"),
-            Triple("tests", "الاختبارات", "checklist"),
-            Triple("success", "النجاح", "trend"),
-            Triple("account", "حسابي", "account-tab")
-        )
-        for ((name, title, icon) in tabs) {
+        for ((name, title, icon) in VisualRules.mainTabs) {
             val selected = active == name
             val color = if (selected) blue else mutedText
             val item = LinearLayout(this@MainActivity).apply {
@@ -281,7 +278,8 @@ class MainActivity : Activity() {
                     when (name) {
                         "home" -> showHome(homepage)
                         "tests" -> testsTabScreen()
-                        "success" -> successTabScreen()
+                        "predictions" -> predictionsTabScreen()
+                        "ads" -> advertisementsTabScreen()
                         "account" -> accountScreen()
                     }
                 }
@@ -289,7 +287,7 @@ class MainActivity : Activity() {
             item.addView(IosGlyphView(this@MainActivity, icon, color), LinearLayout.LayoutParams(dp(23), dp(23)))
             item.addView(TextView(this@MainActivity).apply {
                 text = title
-                textSize = 10.5f
+                textSize = 10f
                 setTextColor(color)
                 gravity = Gravity.CENTER
                 typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
@@ -1073,37 +1071,25 @@ class MainActivity : Activity() {
             total > 0 -> "كل إجابة اليوم تقرّبك أكثر من الدرجة التي تريدها."
             else -> "ابدأ بخطوة صغيرة اليوم، وسنبني تقدمك معك سؤالًا بعد سؤال."
         }
-        val welcome = uiCard()
-        val welcomeRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        welcomeRow.addView(iconBubble("graduation", 48), LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(13) })
-        val welcomeText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        welcomeText.addView(uiText("أهلًا، ${greeting.ifBlank { "طالبنا" }}", 20f, true))
-        welcomeText.addView(uiText(student.optString("grade"), 15f, tint = mutedText),
-            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
-        welcomeText.addView(uiText(motivation, 12f, tint = mutedText),
-            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
-        welcomeRow.addView(welcomeText, LinearLayout.LayoutParams(0, -2, 1f))
-        if (subscribed) welcomeRow.addView(IosGlyphView(this, "check", Color.rgb(42,172,91)),
-            LinearLayout.LayoutParams(dp(22), dp(22)))
-        welcome.addView(welcomeRow)
-        addUiCard(welcome, bottom = 16)
+        addHomeWelcomeBanner(greeting, accuracy, total, motivation)
 
         if (lastValidatedInternet == false) addUiCard(uiCard().apply {
             addView(uiText("لا يوجد اتصال بالإنترنت. ستُعرض البيانات المحفوظة متى كانت متاحة.", 13f, tint = gold))
         }, bottom = 16)
-        addHomeHeroSlider()
-
         val subscription = uiCard()
         subscription.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
             val glyph = if (subscribed) "check" else "trophy"
             addView(iconBubble(glyph, 46, if (subscribed) Color.rgb(42,172,91) else gold),
                 LinearLayout.LayoutParams(dp(46), dp(46)).apply { marginEnd = dp(12) })
             val labels = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL }
-            labels.addView(uiText(if (subscribed) "كل الأسئلة مفتوحة" else "رصيد التجربة المجانية", 17f, true))
-            labels.addView(uiText(if (subscribed) "اشتراكك فعّال — واصل التقدم بدون حدود الرصيد المجاني."
-                else "متبقي ${response.optInt("free_remaining")} من ${response.optInt("free_limit")} سؤال",
+            labels.addView(uiText(if (subscribed) "اشتراكك فعّال · جميع الأسئلة متاحة"
+                else "رصيد التجربة المجانية", 16f, true,
+                if (subscribed) Color.rgb(52,199,89) else textColor))
+            if (!subscribed) labels.addView(uiText(
+                "متبقي ${response.optInt("free_remaining")} من ${response.optInt("free_limit")} سؤال",
                 12f, tint = mutedText))
             addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
             if (!subscribed) addView(IosGlyphView(this@MainActivity, "chevron", mutedText),
@@ -1112,9 +1098,18 @@ class MainActivity : Activity() {
         if (subscribed) addUiCard(subscription, bottom = 16)
         else addUiCard(tappable(subscription, "الباقات والاشتراك") { plansScreen() }, bottom = 16)
 
+        addHomeHeroSlider()
+
         homeMetricHolder = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(homeMetricHolder, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) })
         populateHomeMetrics()
+
+        sectionHeader("محاكاة الوزاري", "تدرّب على أجواء الامتحان الوزاري", "timer")
+        addUiCard(uiRow("ابدأ محاكاة الوزاري", "30 سؤالًا · 45 دقيقة", "timer") {
+            practiceCount = 30
+            practiceMinutes = 45
+            practiceBuilderScreen()
+        }, bottom = 16)
 
         sectionHeader("موادك", "اختر المادة ثم الموضوع", "book")
         val subjects = homepage.optJSONArray("subjects") ?: JSONArray()
@@ -1157,6 +1152,85 @@ class MainActivity : Activity() {
         button("تحديث البيانات", secondary = true) { refreshHome() }
         if (!homeInsightsLoaded) loadHomeInsights()
         fetch("mobile/notifications.php", showError = false) { /* notification count is read on demand */ }
+    }
+
+    /** Owner-supplied iPhone home reference: blue greeting, circular avatar and three gold metrics. */
+    private fun addHomeWelcomeBanner(firstName: String, accuracy: Int, total: Int, motivation: String) {
+        val banner = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(dp(18), dp(19), dp(18), dp(19))
+            background = GradientDrawable(GradientDrawable.Orientation.TR_BL,
+                intArrayOf(navy, Color.rgb(35, 89, 180), blue)).apply {
+                cornerRadius = dp(28).toFloat()
+            }
+            elevation = dp(3).toFloat()
+        }
+        val identity = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val avatar = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            setImageResource(R.drawable.ic_avatar_placeholder)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.WHITE)
+            }
+            clipToOutline = true
+            contentDescription = "الصورة الشخصية"
+        }
+        identity.addView(avatar, LinearLayout.LayoutParams(dp(64), dp(64)).apply { marginEnd = dp(12) })
+        fetchAvatarInto(avatar, student.optString("avatar_url"), student.optString("avatar_revision"))
+        val identityLabels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        identityLabels.addView(uiText("أهلًا بك", 12f, tint = Color.argb(210,255,255,255)))
+        identityLabels.addView(uiText(firstName.ifBlank { "طالبنا" }, 23f, true, Color.WHITE),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(2) })
+        identityLabels.addView(uiText(student.optString("grade"), 14f, true, gold),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(3) })
+        identity.addView(identityLabels, LinearLayout.LayoutParams(0, -2, 1f))
+        val now = java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Baghdad"))
+        val time = String.format(java.util.Locale.US, "%02d:%02d", now.hour, now.minute)
+        identity.addView(uiText(time, 13f, true, Color.WHITE).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            background = GradientDrawable().apply {
+                setColor(Color.argb(30, 255,255,255))
+                cornerRadius = dp(12).toFloat()
+            }
+        })
+        banner.addView(identity)
+        banner.addView(uiText(motivation, 14f, tint = Color.argb(238,255,255,255)),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14); bottomMargin = dp(14) })
+        val statsRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        val metrics = listOf(
+            (total.toString() to "إجابة"),
+            ("$accuracy%" to "دقة الحل"),
+            ((if (subscribed) "مفعّل" else "تجريبي") to "الاشتراك")
+        )
+        metrics.forEachIndexed { index, (value, label) ->
+            val cell = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(4), dp(12), dp(4), dp(12))
+                background = shape(Color.argb(27,255,255,255), dp(14).toFloat())
+                addView(uiText(value, if (value.length > 5) 15f else 20f, true, gold).apply {
+                    gravity = Gravity.CENTER
+                })
+                addView(uiText(label, 11f, tint = Color.argb(212,255,255,255)).apply {
+                    gravity = Gravity.CENTER
+                }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+            }
+            statsRow.addView(cell, LinearLayout.LayoutParams(0, -2, 1f).apply {
+                if (index > 0) marginStart = dp(7)
+            })
+        }
+        banner.addView(statsRow)
+        addUiCard(banner, bottom = 16)
     }
 
     private fun populateHomeMetrics() {
@@ -1450,6 +1524,56 @@ class MainActivity : Activity() {
                 filterSubjects(s?.toString().orEmpty())
             }
             override fun afterTextChanged(s: Editable?) {}
+        })
+    }
+
+    /** The current iPhone navigation gives predictions their own tab, not a quick-tool shortcut. */
+    private fun predictionsTabScreen() {
+        activeScreen = "predictions_tab"
+        base("المرشحات", tab = "predictions")
+        val hero = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(dp(20), dp(22), dp(20), dp(22))
+            background = GradientDrawable(GradientDrawable.Orientation.TR_BL,
+                intArrayOf(navy, blue)).apply { cornerRadius = dp(26).toFloat() }
+            addView(uiText("الدور الأول · المرشحات الوزارية", 14f, true, gold))
+            addView(uiText("المرشحات الوزارية", 27f, true, Color.WHITE),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+            addView(uiText("مراجعة مرتبة اعتمادًا على السنوات السابقة وتكرار الموضوع وتوثيق الأسئلة.",
+                15f, tint = Color.argb(220, 255, 255, 255)),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        }
+        addUiCard(hero, bottom = 14)
+        addUiCard(uiCard().apply {
+            addView(uiText("المرشحات احتمالات للمراجعة وليست ضمانًا لورود السؤال، ولا تغني عن المنهج.",
+                13f, tint = mutedText))
+        }, bottom = 12)
+        sectionHeader("اختر المادة", "انتقل إلى قائمة أسئلة المادة", "predictions-target")
+        val subjects = homepage.optJSONArray("subjects") ?: JSONArray()
+        for (i in 0 until subjects.length()) {
+            val subject = subjects.optJSONObject(i) ?: continue
+            val id = subject.optInt("id")
+            val name = subject.optString("name")
+            addUiCard(uiRow(name, if (subscribed) "المرشحات الوزارية" else "متاح للمشتركين", "book") {
+                if (subscribed) predictionsScreen(id, name) else plansScreen()
+            })
+        }
+        if (subjects.length() == 0) addUiCard(uiCard().apply {
+            addView(uiText("لم تصل المواد من الخادم بعد. حدّث بياناتك وحاول مرة أخرى.", 14f,
+                tint = mutedText))
+        })
+    }
+
+    /** Native, functional ad-request entry until the iPhone ads feed contract is verified. */
+    private fun advertisementsTabScreen() {
+        activeScreen = "ads_tab"
+        base("الإعلانات", tab = "ads")
+        sectionHeader("إعلانات المدارس", "تواصل مع إدارة المنصة", "ads-megaphone")
+        addUiCard(uiRow("طلب إعلان مدرسة", "أرسل اسم المدرسة ونص الإعلان ومدته إلى الإدارة",
+            "ads-megaphone") { schoolAdScreen() }, bottom = 16)
+        addUiCard(uiRow("خدمة العملاء", "تواصل مع الإدارة بشأن إعلانك", "person") {
+            supportScreen()
         })
     }
 
@@ -1799,32 +1923,59 @@ class MainActivity : Activity() {
     }
 
     private fun examProgressHeader() {
+        val card = uiCard()
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
             gravity = Gravity.CENTER_VERTICAL
         }
-        row.addView(uiText(topicsSubjectName, 12f, tint = mutedText), LinearLayout.LayoutParams(0, -2, 1f))
-        row.addView(uiText("السؤال ${questionIndex + 1} من ${examQuestions.length()}", 12f, true))
-        root.addView(row, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5); bottomMargin = dp(9) })
-        root.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+        val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        labels.addView(uiText(topicsSubjectName, 13f, true, blue))
+        labels.addView(uiText(chapterName, 16f, true),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(3) })
+        row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
+        row.addView(uiText("${questionIndex + 1} / ${examQuestions.length()}", 15f, true).apply {
+            setPadding(dp(10), dp(6), dp(10), dp(6))
+            background = shape(if (night) Color.rgb(29,39,56) else Color.rgb(231,239,254), dp(14).toFloat())
+        })
+        card.addView(row)
+        card.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = examQuestions.length().coerceAtLeast(1)
             progress = questionIndex + 1
             progressTintList = ColorStateList.valueOf(blue)
             progressBackgroundTintList = ColorStateList.valueOf(if (night) Color.rgb(58,58,62) else Color.rgb(220,224,233))
-        }, LinearLayout.LayoutParams(-1, dp(6)).apply { bottomMargin = dp(16) })
-        if (!subscribed) addUiCard(uiCard().apply {
-            addView(uiText("المتبقي مجانًا: ${homepage.optInt("free_remaining")} سؤال", 12f, true, gold))
-        }, bottom = 14)
+        }, LinearLayout.LayoutParams(-1, dp(5)).apply { topMargin = dp(12); bottomMargin = dp(10) })
+        val bottom = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val answered = (0 until examQuestions.length()).count { index ->
+            examQuestions.optJSONObject(index)?.let(::isSubmitted) == true
+        }
+        bottom.addView(uiText("تمت الإجابة: $answered", 12f, tint = mutedText),
+            LinearLayout.LayoutParams(0, -2, 1f))
+        bottom.addView(uiText(if (subscribed) "✓ مشترك" else
+            "متبقٍ ${homepage.optInt("free_remaining")} سؤال مجاني", 12f, true,
+            if (subscribed) Color.rgb(52,199,89) else gold))
+        card.addView(bottom)
+        addUiCard(card, bottom = 14)
     }
 
     private fun examQuestionCard(question: JSONObject) {
         val card = uiCard()
+        val eyebrow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        eyebrow.addView(uiText("سؤال ${questionIndex + 1}", 12f, true, blue))
         val label = uiText("وزاري", 12f, true, blue).apply {
             setPadding(dp(8), dp(5), dp(8), dp(5))
             background = shape(Color.argb(26,45,108,223), dp(12).toFloat())
         }
-        card.addView(label, LinearLayout.LayoutParams(-2, -2))
+        eyebrow.addView(label, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(7) })
+        card.addView(eyebrow)
         card.addView(uiText(question.optString("text"), 20f, true),
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(11) })
         addUiCard(card, bottom = 16)
@@ -2464,6 +2615,34 @@ class MainActivity : Activity() {
             if (subscribed && days >= 0) addUiCard(uiCard().apply {
                 addView(uiText("متبقٍ من الاشتراك: $days يوم", 13f, tint = mutedText))
             }, bottom = 16)
+
+            val activationCard = uiCard()
+            activationCard.addView(uiText("تفعيل الاشتراك بكود", 17f, true, blue))
+            activationCard.addView(uiText(
+                "إذا حصلت على كود من إدارة المنصة، أدخله هنا لتفعيل اشتراكك حسب صلاحية الكود.",
+                13f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
+            val activationInput = EditText(this).apply {
+                hint = "MW-XXXX-XXXX-XXXX"
+                textSize = 14f
+                isSingleLine = true
+                setTextColor(textColor)
+                setHintTextColor(mutedText)
+                setPadding(dp(12), dp(10), dp(12), dp(10))
+                background = shape(appColor, dp(8).toFloat())
+            }
+            activationCard.addView(activationInput, LinearLayout.LayoutParams(-1, dp(48)).apply {
+                topMargin = dp(12)
+            })
+            lateinit var activateButton: Button
+            activateButton = makeButton("تفعيل الاشتراك") {
+                attemptSubscriptionCodeRedemption(activationInput.text.toString(), activateButton)
+            }
+            activationCard.addView(activateButton, LinearLayout.LayoutParams(-1, -2).apply {
+                topMargin = dp(12)
+            })
+            activationCard.addView(uiText("كل كود يُستخدم مرة واحدة فقط، ومدته يحددها إصدار الكود من الإدارة.",
+                11f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
+            addUiCard(activationCard, bottom = 16)
 
             sectionHeader("الحساب والخدمات", "إدارة كل ما يخص حسابك", "person")
             val services = uiCard()
@@ -3528,29 +3707,71 @@ class MainActivity : Activity() {
         val code = input("رمز الاشتراك")
         lateinit var activate: Button
         activate = button("تفعيل الكود") {
-            if (code.text.isBlank()) { message("أدخل رمز الاشتراك."); return@button }
-            AlertDialog.Builder(this).setMessage("هل تريد تفعيل الرمز الآن؟")
-                .setPositiveButton("تفعيل") { _, _ ->
-                    activate.isEnabled = false
-                    activate.text = "جارٍ التحقق من التفعيل…"
-                    fetch("mobile/redeem-subscription-code.php", JSONObject().put("csrf",csrf).put("code",code.text.toString().trim())) { result ->
-                        if (result.optBoolean("ok")) { message(result.optString("message","تم تفعيل الاشتراك.")); refreshHome() }
-                        else if (needsMutationReconciliation(result)) {
-                            activate.text = "حالة التفعيل غير مؤكدة"
-                            message("قد يكون الرمز استُخدم بنجاح. سنراجع حالة الاشتراك قبل إعادة المحاولة.")
-                            fetch("mobile/bootstrap.php", showError = false) { account ->
-                                if (account.optBoolean("ok")) {
-                                    applyBootstrap(account)
-                                    if (subscribed) showHome(account)
-                                }
-                            }
-                        } else {
-                            activate.isEnabled = true
-                            activate.text = "تفعيل الكود"
+            attemptSubscriptionCodeRedemption(code.text.toString(), activate)
+        }
+    }
+
+    /** Shared by the standalone activation page and the iPhone-matched inline account card. */
+    private fun attemptSubscriptionCodeRedemption(raw: String, activate: Button) {
+        val code = raw.trim()
+        if (code.isBlank()) { message("أدخل رمز الاشتراك."); return }
+        if (!activate.isEnabled) return
+        val pendingKey = "uncertain_redeem_" + student.optInt("id", 0)
+        if (prefs.getBoolean(pendingKey, false)) {
+            AlertDialog.Builder(this).setTitle("تحقق من عملية التفعيل السابقة")
+                .setMessage("ربما استُخدم رمز في طلب سابق لم يصل رده. افحص الاشتراك لدى الإدارة قبل تجربة رمز آخر.")
+                .setPositiveButton("تحديث الاشتراك") { _, _ ->
+                    fetch("mobile/bootstrap.php", showError = false) { updated ->
+                        if (updated.optBoolean("ok")) {
+                            applyBootstrap(updated)
+                            if (subscribed) prefs.edit().remove(pendingKey).apply()
+                            if (activeScreen == "account") accountScreen() else showHome(updated)
                         }
                     }
-                }.setNegativeButton("إلغاء",null).show()
+                }
+                .setNeutralButton("تأكدت من الإدارة") { _, _ ->
+                    prefs.edit().remove(pendingKey).apply()
+                    message("يمكنك المحاولة مجددًا بعد التحقق من حالة الطلب لدى الإدارة.")
+                }.setNegativeButton("رجوع", null).show()
+            return
         }
+        AlertDialog.Builder(this).setMessage("هل تريد تفعيل الرمز الآن؟")
+            .setPositiveButton("تفعيل") { _, _ ->
+                activate.isEnabled = false
+                activate.text = "جارٍ التحقق من التفعيل…"
+                if (!prefs.edit().putBoolean(pendingKey, true).commit()) {
+                    activate.isEnabled = true
+                    message("تعذر تأمين سجل عملية التفعيل على الجهاز. حاول لاحقًا.")
+                    return@setPositiveButton
+                }
+                fetch("mobile/redeem-subscription-code.php",
+                    JSONObject().put("csrf", csrf).put("code", code)) { result ->
+                    when {
+                        result.optBoolean("ok") -> {
+                            prefs.edit().remove(pendingKey).apply()
+                            message(result.optString("message", "تم تفعيل الاشتراك."))
+                            if (activeScreen == "account") refreshAccountAfterMutation() else refreshHome()
+                        }
+                        needsMutationReconciliation(result) -> {
+                            activate.text = "حالة التفعيل غير مؤكدة"
+                            message("قد يكون الرمز استُخدم. نتحقق من الاشتراك قبل أي محاولة أخرى.")
+                            fetch("mobile/bootstrap.php", showError = false) { updated ->
+                                if (updated.optBoolean("ok")) {
+                                    applyBootstrap(updated)
+                                    if (subscribed) prefs.edit().remove(pendingKey).apply()
+                                    if (activeScreen == "account") accountScreen()
+                                    else if (subscribed) showHome(updated)
+                                }
+                            }
+                        }
+                        else -> {
+                            prefs.edit().remove(pendingKey).apply()
+                            activate.isEnabled = true
+                            activate.text = "تفعيل الاشتراك"
+                        }
+                    }
+                }
+            }.setNegativeButton("إلغاء", null).show()
     }
 
     private fun predictionsScreen(subjectId: Int, subject: String) {
@@ -4058,7 +4279,7 @@ class MainActivity : Activity() {
                 else -> subjectsScreen()
             }
             "subjects" -> showHome(homepage)
-            "tests", "success" -> showHome(homepage)
+            "tests", "success", "predictions_tab", "ads_tab" -> showHome(homepage)
             "account" -> showHome(homepage)
             "plans" -> if (plansReturnScreen == "account") accountScreen() else showHome(homepage)
             "login" -> finish()

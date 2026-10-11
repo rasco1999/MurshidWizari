@@ -2,6 +2,19 @@ package com.murshidwizari.student
 
 /** Geometry shared with the iOS v3.1 SwiftUI reference. Values are logical dp/pt. */
 object VisualRules {
+    data class MainTab(val id: String, val title: String, val icon: String)
+
+    // Verified against the owner's five-tab iPhone screenshots (2026-10-11).
+    val mainTabs = listOf(
+        MainTab("home", "الرئيسية", "home-filled"),
+        MainTab("tests", "الاختبارات", "checklist"),
+        MainTab("predictions", "المرشحات", "predictions-target"),
+        MainTab("ads", "الإعلانات", "ads-megaphone"),
+        MainTab("account", "حسابي", "account-tab")
+    )
+
+    fun initialNight(savedNight: Boolean?, systemNight: Boolean): Boolean = savedNight ?: systemNight
+
     const val contentInset = 16
     const val cardCornerRadius = 22
     const val cardInset = 16

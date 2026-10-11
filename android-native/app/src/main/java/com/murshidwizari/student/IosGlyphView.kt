@@ -52,6 +52,24 @@ class IosGlyphView(context: Context, private val symbol: String, private val tin
                 path(2f, 21f, 4f, 23f, 8f, 18f)
                 path(11f, 21f, 22f, 21f)
             }
+            "predictions-target" -> {
+                canvas.drawCircle(12f, 12f, 8f, ink)
+                canvas.drawCircle(12f, 12f, 2f, ink)
+                path(12f, 1f, 12f, 7f)
+                path(12f, 17f, 12f, 23f)
+                path(1f, 12f, 7f, 12f)
+                path(17f, 12f, 23f, 12f)
+            }
+            "ads-megaphone" -> {
+                val horn = Path().apply {
+                    moveTo(9f, 8f); lineTo(20f, 4f); lineTo(20f, 20f)
+                    lineTo(9f, 16f); close()
+                }
+                canvas.drawPath(horn, ink)
+                path(9f, 8f, 4f, 8f, 4f, 16f, 9f, 16f)
+                path(7f, 16f, 10f, 22f, 14f, 22f, 12f, 17f)
+                path(22f, 9f, 23f, 8f); path(22f, 15f, 23f, 16f)
+            }
             "trend" -> {
                 path(3f, 2f, 3f, 21f, 22f, 21f)
                 path(5f, 17f, 10.5f, 11f, 15f, 14f, 21f, 5f)
