@@ -669,7 +669,11 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
         }
-        row.addView(iconBubble(symbol, 50), LinearLayout.LayoutParams(dp(50), dp(50)).apply { marginEnd = dp(13) })
+        val rowIcon = if (symbol == "subscription-active") ImageView(this).apply {
+            setImageResource(R.drawable.ic_subscription_active)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        } else iconBubble(symbol, 50)
+        row.addView(rowIcon, LinearLayout.LayoutParams(dp(50), dp(50)).apply { marginEnd = dp(13) })
         val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         details.addView(uiText(name, 17f, true))
         details.addView(uiText(description, 12f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(3) })
@@ -3550,7 +3554,8 @@ class MainActivity : Activity() {
 
             val subscription = uiRow(if (subscribed) "الاشتراك" else "افتح كامل المنصة",
                 if (subscribed) "اشتراكك مفعّل حاليًا • متبقٍ ${response.optInt("subscription_days_remaining")} يوم"
-                else "الدفع خارجي ولا نطلب رقمًا إضافيًا من هنا.", "check") { plansScreen() }
+                else "الدفع خارجي ولا نطلب رقمًا إضافيًا من هنا.",
+                if (subscribed) "subscription-active" else "lock") { plansScreen() }
             addUiCard(subscription, bottom = 16)
             val activationCard = uiCard()
             activationCard.addView(uiText("تفعيل الاشتراك بكود", 17f, true, blue))
