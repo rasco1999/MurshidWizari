@@ -678,7 +678,7 @@ class MainActivity : Activity() {
             ).apply { cornerRadius = dp(28).toFloat() }
         }
         val emblem = ImageView(this).apply {
-            setImageResource(R.drawable.ic_avatar_placeholder)
+            setImageResource(R.drawable.ic_murshid_ios)
             scaleType = ImageView.ScaleType.FIT_CENTER
             background = GradientDrawable().apply {
                 setColor(Color.WHITE)
@@ -1597,6 +1597,7 @@ class MainActivity : Activity() {
             if (!result.optBoolean("ok") || chapterId != id ||
                 expectedScreenGeneration != screenGeneration) return@fetch
             csrf = result.optString("csrf", csrf)
+            applyServerQuota(result)
             examQuestions = result.optJSONArray("questions") ?: JSONArray()
             submissionUncertain = false
             examIssues.clear()
@@ -1628,6 +1629,15 @@ class MainActivity : Activity() {
 
     private fun isSubmitted(question: JSONObject): Boolean =
         ExamRules.knownBoolean(question.opt("submitted")) == true
+
+    private fun applyServerQuota(result: JSONObject) {
+        if (result.has("subscribed") && !result.isNull("subscribed"))
+            subscribed = result.optBoolean("subscribed")
+        if (result.has("free_remaining") && !result.isNull("free_remaining"))
+            homepage.put("free_remaining", result.optInt("free_remaining"))
+        if (result.has("free_limit") && !result.isNull("free_limit"))
+            homepage.put("free_limit", result.optInt("free_limit"))
+    }
 
     private fun auditQuestion(q: JSONObject): String? {
         val options = q.optJSONArray("options") ?: JSONArray()
@@ -1891,6 +1901,7 @@ class MainActivity : Activity() {
                 }
                 return@fetch
             }
+            applyServerQuota(result)
             val grade = result.optJSONObject("grades")?.optJSONObject(id.toString())
             // Server is the only source of truth; record a submitted answer after its ack.
             val confirmed = grade != null
@@ -2181,7 +2192,7 @@ class MainActivity : Activity() {
         }
         val avatar = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            setImageResource(R.drawable.ic_murshid)
+            setImageResource(R.drawable.ic_avatar_placeholder)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Color.WHITE)

@@ -49,6 +49,8 @@ The owner-selected iOS launcher JPEG has been reconstructed from the checked-in 
 
 The ordinary-topic exam also now has a fixed previous/next footer, progress bar, separated question/answer/feedback cards and the same server-authoritative navigation gate. Specialized genetics, Tajweed/matching, calculations and long-form answer rendering still require direct iOS/Android side-by-side inspection.
 
+An independent emulator-smoke workflow is configured to install **only the QA debug APK** on a disposable Android API-35 emulator, check that the anonymous native login activity stays alive, and save 360×640/800×1280 layouts at 1.0×/1.3× font scales. It does not attempt a signed install, authenticate the student, or declare functional/UI parity. Mark this test complete only after its Actions run and artifacts are reviewed.
+
 - [ ] Screenshot-compare fonts, icons, colors, sizes, spacing, RTL and motion against the iOS IPA with a defined acceptable tolerance. Current Android UI is **not** declared pixel-perfect.
 - [ ] Check 360×640 and 393×852 phone layouts at 1.0×/1.3× font scales, light and dark mode, with keyboard visible.
 - [ ] Check a 600dp-width small tablet, an 800dp-width tablet and landscape screens: centered content, two-column home actions, no clipping or text truncation.
