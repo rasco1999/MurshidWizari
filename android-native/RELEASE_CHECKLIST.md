@@ -47,6 +47,8 @@ Code-level visual alignment update (2026-10-11): the Android main navigation now
 
 The owner-selected iOS launcher JPEG has been reconstructed from the checked-in icon chunks and SHA-256 checked against the existing iOS build workflow; the Android launcher now points at the same bytes. Exact visual rendering inside Android launcher masks and home screens remains to be inspected on a device.
 
+The ordinary-topic exam also now has a fixed previous/next footer, progress bar, separated question/answer/feedback cards and the same server-authoritative navigation gate. Specialized genetics, Tajweed/matching, calculations and long-form answer rendering still require direct iOS/Android side-by-side inspection.
+
 - [ ] Screenshot-compare fonts, icons, colors, sizes, spacing, RTL and motion against the iOS IPA with a defined acceptable tolerance. Current Android UI is **not** declared pixel-perfect.
 - [ ] Check 360×640 and 393×852 phone layouts at 1.0×/1.3× font scales, light and dark mode, with keyboard visible.
 - [ ] Check a 600dp-width small tablet, an 800dp-width tablet and landscape screens: centered content, two-column home actions, no clipping or text truncation.

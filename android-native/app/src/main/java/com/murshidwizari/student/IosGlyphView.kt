@@ -87,6 +87,7 @@ class IosGlyphView(context: Context, private val symbol: String, private val tin
                 canvas.drawCircle(12f, 12f, 9f, ink)
                 path(7f, 12f, 10.5f, 15f, 17f, 9f)
             }
+            "circle" -> canvas.drawCircle(12f, 12f, 9f, ink)
             "search" -> {
                 canvas.drawCircle(10f, 10f, 6f, ink)
                 path(14.5f, 14.5f, 21f, 21f)

@@ -163,7 +163,8 @@ class MainActivity : Activity() {
     private fun setupRoot(horizontalPadding: Int = 16, topPadding: Int = 16, tab: String? = null) {
         screenGeneration++
         val scroll = ScrollView(this).apply { isFillViewport = true; setBackgroundColor(appColor); clipToPadding = false }
-        if (Build.VERSION.SDK_INT >= 35 && tab == null) {
+        val examNavigation = tab == null && activeScreen == "exam"
+        if (Build.VERSION.SDK_INT >= 35 && tab == null && !examNavigation) {
             // Android 15 enforces edge-to-edge: keep text and actions out of status/nav cutouts.
             scroll.setOnApplyWindowInsetsListener { view, insets ->
                 val safe = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
@@ -179,7 +180,7 @@ class MainActivity : Activity() {
         }
         screenFrame!!.addView(root, FrameLayout.LayoutParams(contentWidth(), -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         scroll.addView(screenFrame)
-        if (tab == null) {
+        if (tab == null && !examNavigation) {
             setContentView(scroll)
         } else {
             val container = LinearLayout(this).apply {
@@ -187,7 +188,8 @@ class MainActivity : Activity() {
                 setBackgroundColor(appColor)
             }
             container.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-            container.addView(mainTabBar(tab), LinearLayout.LayoutParams(-1, dp(58)))
+            val footer = if (tab != null) mainTabBar(tab) else examNavigationFooter()
+            container.addView(footer, LinearLayout.LayoutParams(-1, dp(if (tab != null) 58 else 66)))
             if (Build.VERSION.SDK_INT >= 35) {
                 container.setOnApplyWindowInsetsListener { view, insets ->
                     val safe = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
@@ -295,6 +297,39 @@ class MainActivity : Activity() {
             })
             addView(item, LinearLayout.LayoutParams(0, -1, 1f))
         }
+    }
+
+    private fun examNavigationFooter(): View = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        layoutDirection = View.LAYOUT_DIRECTION_RTL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(16), dp(8), dp(16), dp(8))
+        setBackgroundColor(surface)
+        elevation = dp(8).toFloat()
+        val hasQuestion = questionIndex < examQuestions.length()
+        val submitted = examQuestions.optJSONObject(questionIndex)?.let(::isSubmitted) == true
+        val canNext = hasQuestion && ExamRules.canAdvance(submitted, busyAnswer, submissionUncertain)
+        val canPrevious = questionIndex > 0 && !busyAnswer
+        val prev = uiText("‹ السابق", 16f, true, if (canPrevious) blue else mutedText).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            isEnabled = canPrevious
+            if (canPrevious) setOnClickListener { questionIndex--; renderQuestion() }
+            contentDescription = "السؤال السابق"
+        }
+        addView(prev, LinearLayout.LayoutParams(0, -1, 1f))
+        addView(uiText("${(questionIndex + 1).coerceAtMost(examQuestions.length())}/${examQuestions.length()}",
+            15f, tint = mutedText).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(0, -1, 1f))
+        val next = uiText(if (questionIndex == examQuestions.length() - 1) "عرض النتيجة ›"
+            else "التالي ›", 16f, true, if (canNext) blue else mutedText).apply {
+            gravity = Gravity.CENTER_VERTICAL or Gravity.END
+            isEnabled = canNext
+            if (canNext) setOnClickListener {
+                val index = ExamRules.nextIndex(questionIndex, examQuestions.length(), submitted, busyAnswer, submissionUncertain)
+                if (index != questionIndex) { questionIndex = index; renderQuestion() }
+            }
+            contentDescription = "السؤال التالي"
+        }
+        addView(next, LinearLayout.LayoutParams(0, -1, 1f))
     }
     private fun title(text: String) {
         root.addView(TextView(this).apply {
@@ -1643,6 +1678,77 @@ class MainActivity : Activity() {
         return ExamRules.issue(shape)
     }
 
+    private fun examProgressHeader() {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        row.addView(uiText(topicsSubjectName, 12f, tint = mutedText), LinearLayout.LayoutParams(0, -2, 1f))
+        row.addView(uiText("السؤال ${questionIndex + 1} من ${examQuestions.length()}", 12f, true))
+        root.addView(row, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5); bottomMargin = dp(9) })
+        root.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = examQuestions.length().coerceAtLeast(1)
+            progress = questionIndex + 1
+            progressTintList = ColorStateList.valueOf(blue)
+            progressBackgroundTintList = ColorStateList.valueOf(if (night) Color.rgb(58,58,62) else Color.rgb(220,224,233))
+        }, LinearLayout.LayoutParams(-1, dp(6)).apply { bottomMargin = dp(16) })
+        if (!subscribed) addUiCard(uiCard().apply {
+            addView(uiText("المتبقي مجانًا: ${homepage.optInt("free_remaining")} سؤال", 12f, true, gold))
+        }, bottom = 14)
+    }
+
+    private fun examQuestionCard(question: JSONObject) {
+        val card = uiCard()
+        val label = uiText("وزاري", 12f, true, blue).apply {
+            setPadding(dp(8), dp(5), dp(8), dp(5))
+            background = shape(Color.argb(26,45,108,223), dp(12).toFloat())
+        }
+        card.addView(label, LinearLayout.LayoutParams(-2, -2))
+        card.addView(uiText(question.optString("text"), 20f, true),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(11) })
+        addUiCard(card, bottom = 16)
+    }
+
+    private fun examOptionButton(answer: String, parent: LinearLayout, action: () -> Unit) {
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            minimumHeight = dp(50)
+            background = shape(if (night) Color.rgb(49,49,52) else Color.rgb(242,242,247), dp(14).toFloat())
+        }
+        content.addView(IosGlyphView(this, "circle", mutedText),
+            LinearLayout.LayoutParams(dp(22), dp(22)).apply { marginEnd = dp(11) })
+        content.addView(uiText(answer, 16f), LinearLayout.LayoutParams(0, -2, 1f))
+        parent.addView(tappable(content, "إجابة: $answer", action),
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(9) })
+    }
+
+    private fun examFeedbackCard(question: JSONObject, previous: JSONObject?) {
+        val correct = ExamRules.knownBoolean(previous?.opt("correct"))
+        val correctAnswer = question.optString("correct_answer")
+        val feedback = uiCard()
+        val verdict = when (correct) {
+            true -> "إجابة صحيحة"
+            false -> "راجع الإجابة"
+            null -> "تم حفظ إجابتك"
+        }
+        feedback.addView(uiText(verdict, 17f, true, if (correct == true) Color.rgb(41,158,80) else gold))
+        val storedAnswer = previous?.optString("text")?.takeIf { it.isNotBlank() }
+            ?: previous?.optString("selected_text").orEmpty()
+        if (storedAnswer.isNotBlank()) feedback.addView(uiText("إجابتك: $storedAnswer", 15f, tint = mutedText),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
+        feedback.addView(uiText("الإجابة النموذجية: " + correctAnswer.ifBlank { "غير متاحة من الخادم" },
+            15f, true, Color.rgb(41,158,80)), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
+        feedback.addView(uiText("لماذا؟", 12f, true, blue),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        feedback.addView(uiText(ExamRules.explanation(question.optString("explanation"), correctAnswer),
+            15f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
+        addUiCard(feedback, bottom = 16)
+    }
+
     private fun renderQuestion() {
         activeScreen = "exam"
         base(chapterName, true)
@@ -1679,20 +1785,13 @@ class MainActivity : Activity() {
         }
         val id = question.optInt("id")
         val submitted = isSubmitted(question)
-        caption("السؤال " + (questionIndex+1) + " من " + examQuestions.length() + " • وزاري")
-        line(question.optString("text"), true)
+        examProgressHeader()
+        examQuestionCard(question)
         if (!question.isNull("meaning_word") && question.optString("meaning_word").isNotBlank())
             caption("المفردة: " + question.optString("meaning_word"))
         val previous = question.optJSONObject("answer")
         if (submitted) {
-            val correct = ExamRules.knownBoolean(previous?.opt("correct"))
-            line(when (correct) { true -> "✓ إجابتك صحيحة"; false -> "إجابتك غير صحيحة"; null -> "تم حفظ إجابتك" })
-            val text = previous?.optString("text")?.takeIf { it.isNotBlank() }
-                ?: previous?.optString("selected_text").orEmpty()
-            if (text.isNotBlank()) caption("الإجابة المسجلة: " + text)
-            val correctAnswer = question.optString("correct_answer")
-            caption("الإجابة النموذجية: " + correctAnswer.ifBlank { "غير متاحة من الخادم" })
-            caption("الشرح: " + ExamRules.explanation(question.optString("explanation"), correctAnswer))
+            examFeedbackCard(question, previous)
         } else {
             val issue = examIssues[questionIndex]
             if (issue != null) {
@@ -1711,14 +1810,18 @@ class MainActivity : Activity() {
                 (question.optJSONArray("options")?.length() ?: 0) > 0 || question.optString("type") == "true_false" -> {
                     val serverOptions = question.optJSONArray("options") ?: JSONArray()
                     val options = if (serverOptions.length() > 0) serverOptions else JSONArray().put("صح").put("خطأ")
+                    val answersCard = uiCard()
+                    answersCard.addView(uiText("إجابتك", 17f, true),
+                        LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
                     for (i in 0 until options.length()) {
                         val option = options.optJSONObject(i)
                         val chosen = option?.optString("text") ?: options.optString(i)
                         val optionId = option?.optInt("id") ?: 0
-                        button(chosen, secondary = true) {
+                        examOptionButton(chosen, answersCard) {
                             sendAnswer(question, chosen, optionId)
                         }
                     }
+                    addUiCard(answersCard, bottom = 16)
                 }
                 else -> {
                     val field = input("اكتب إجابتك هنا", multiline = true)
@@ -1729,13 +1832,6 @@ class MainActivity : Activity() {
             }
         }
         gap(15)
-        if (questionIndex > 0) button("السؤال السابق", secondary = true) {
-            if (!busyAnswer) { questionIndex--; renderQuestion() }
-        }
-        if (submitted) button(if (questionIndex == examQuestions.length() - 1) "عرض النتيجة" else "السؤال التالي") {
-            val next = ExamRules.nextIndex(questionIndex, examQuestions.length(), submitted, busyAnswer, submissionUncertain)
-            if (next != questionIndex) { questionIndex = next; renderQuestion() }
-        }
         lateinit var favoriteButton: Button
         favoriteButton = button(if (question.optBoolean("favorite")) "إزالة من المفضلة" else "إضافة للمفضلة", secondary = true) {
             val action = if (question.optBoolean("favorite")) "unfavorite" else "favorite"
