@@ -29,4 +29,12 @@ class SearchRulesTest {
             assertNull(url, SearchRules.chapterId(url))
         }
     }
+
+    @Test fun chosenResultFocusesItsQuestionAfterLoadingTheChapter() {
+        val questions = listOf("ما تعريف القوة؟", "بماذا تمتاز المتسعة؟", "ارسم الدائرة")
+        assertEquals(1, SearchRules.questionIndex(questions, "بماذا تمتاز المتسعة؟"))
+        assertEquals(0, SearchRules.questionIndex(questions, "ما تَعْرِيفُ القُوَّة؟"))
+        assertNull(SearchRules.questionIndex(questions, "سؤال من فصل آخر"))
+        assertNull(SearchRules.questionIndex(questions, "   "))
+    }
 }

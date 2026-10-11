@@ -18,4 +18,11 @@ object SearchRules {
         if (rawId.isEmpty() || !rawId.all { it in '0'..'9' }) return null
         return rawId.toIntOrNull()?.takeIf { it > 0 }
     }
+
+    /** Search titles are question texts: jump to the matched question, not the chapter's start. */
+    fun questionIndex(texts: List<String>, title: String): Int? {
+        val target = ExamRules.answerKey(title)
+        if (target.isEmpty()) return null
+        return texts.indexOfFirst { ExamRules.answerKey(it) == target }.takeIf { it >= 0 }
+    }
 }

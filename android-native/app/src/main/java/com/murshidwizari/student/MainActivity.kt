@@ -53,6 +53,7 @@ class MainActivity : Activity() {
     private var chapterId = 0
     private var chapterName = ""
     private var examFromSearch = false
+    private var examSearchTarget = ""
     private var lastSearchQuery = ""
     private var lastSearchResults = JSONArray()
     private var examQuestions = JSONArray()
@@ -972,8 +973,9 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun loadExam(id: Int, name: String, fromSearch: Boolean = false) {
+    private fun loadExam(id: Int, name: String, fromSearch: Boolean = false, targetText: String = "") {
         examFromSearch = fromSearch
+        examSearchTarget = if (fromSearch) targetText else ""
         chapterId = id; chapterName = name
         fetch("mobile/exam.php?chapter_id=" + id) { result ->
             if (!result.optBoolean("ok") || chapterId != id) return@fetch
@@ -995,8 +997,13 @@ class MainActivity : Activity() {
                     else -> continue
                 }
             }
-            questionIndex = 0
-            while (questionIndex < examQuestions.length() &&
+            val match = if (examFromSearch && examSearchTarget.isNotBlank())
+                SearchRules.questionIndex((0 until examQuestions.length()).map { index ->
+                    examQuestions.optJSONObject(index)?.optString("text").orEmpty()
+                }, examSearchTarget)
+            else null
+            questionIndex = match ?: 0
+            if (match == null) while (questionIndex < examQuestions.length() &&
                 examQuestions.optJSONObject(questionIndex)?.let(::isSubmitted) == true) questionIndex++
             renderQuestion()
         }
@@ -1084,7 +1091,7 @@ class MainActivity : Activity() {
         val question = examQuestions.optJSONObject(questionIndex)
         if (question == null) {
             line("تعذر قراءة بيانات السؤال. حدّث الاختبار ثم أبلغ الإدارة إن استمر الخلل.")
-            button("تحديث الأسئلة") { loadExam(chapterId, chapterName, fromSearch = examFromSearch) }
+            button("تحديث الأسئلة") { loadExam(chapterId, chapterName, examFromSearch, examSearchTarget) }
             if (questionIndex > 0) button("السؤال السابق", secondary = true) { questionIndex--; renderQuestion() }
             return
         }
@@ -1109,7 +1116,7 @@ class MainActivity : Activity() {
             if (issue != null) {
                 line("هذا السؤال يحتاج إلى تصحيح في محتوى الخادم: $issue")
                 caption("لن تُخصم محاولة مجانية لأن إرسال الإجابة معطّل لهذا السؤال.")
-                button("تحديث بيانات السؤال") { loadExam(chapterId, chapterName, fromSearch = examFromSearch) }
+                button("تحديث بيانات السؤال") { loadExam(chapterId, chapterName, examFromSearch, examSearchTarget) }
             } else when {
                 question.optJSONObject("english_match") != null ->
                     englishMatchQuestion(question)
@@ -1195,7 +1202,7 @@ class MainActivity : Activity() {
                     AlertDialog.Builder(this).setTitle("التحقق من حفظ الإجابة")
                         .setMessage("قد تكون الإجابة قد حُفظت رغم انقطاع الاتصال. حدّث الاختبار للتحقق قبل المحاولة مجدداً.")
                         .setPositiveButton("التحقق الآن") { _, _ ->
-                            loadExam(chapterId, chapterName, fromSearch = examFromSearch)
+                            loadExam(chapterId, chapterName, examFromSearch, examSearchTarget)
                         }.setNegativeButton("لاحقاً", null).show()
                 }
                 if (result.optBoolean("payment_required")) {
@@ -1214,7 +1221,7 @@ class MainActivity : Activity() {
                 AlertDialog.Builder(this).setTitle("لم يصل تأكيد الحفظ")
                     .setMessage("سنقرأ الإجابة المحفوظة من الخادم قبل السماح بمحاولة أخرى.")
                     .setPositiveButton("تحديث الاختبار") { _, _ ->
-                        loadExam(chapterId, chapterName, fromSearch = examFromSearch)
+                        loadExam(chapterId, chapterName, examFromSearch, examSearchTarget)
                     }
                     .setCancelable(false).show()
                 return@fetch
@@ -1884,7 +1891,8 @@ class MainActivity : Activity() {
             val title = result.optString("title").ifBlank { "نتيجة بحث" }
             val resultChapterId = SearchRules.chapterId(result.optString("url"))
             if (resultChapterId == null) line(title, true) else button(title, secondary = true) {
-                loadExam(resultChapterId, result.optString("meta").ifBlank { title }, fromSearch = true)
+                loadExam(resultChapterId, result.optString("meta").ifBlank { title },
+                    fromSearch = true, targetText = title)
             }
             if (result.optString("meta").isNotBlank()) caption(result.optString("meta"))
         }
