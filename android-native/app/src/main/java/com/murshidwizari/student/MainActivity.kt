@@ -286,7 +286,21 @@ class MainActivity : Activity() {
                     }
                 }
             }
-            item.addView(IosGlyphView(this@MainActivity, icon, color), LinearLayout.LayoutParams(dp(23), dp(23)))
+            if (name == "account") {
+                // The owner's iPhone tab uses the circular gold Murshid emblem.
+                item.addView(ImageView(this@MainActivity).apply {
+                    setImageResource(R.drawable.ic_murshid)
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(Color.WHITE)
+                    }
+                    clipToOutline = true
+                }, LinearLayout.LayoutParams(dp(27), dp(27)))
+            } else {
+                item.addView(IosGlyphView(this@MainActivity, icon, color),
+                    LinearLayout.LayoutParams(dp(23), dp(23)))
+            }
             item.addView(TextView(this@MainActivity).apply {
                 text = title
                 textSize = 10f
@@ -384,6 +398,28 @@ class MainActivity : Activity() {
             FrameLayout.LayoutParams(dp(glyphSize), dp(glyphSize), Gravity.CENTER))
         minimumWidth = dp(size)
         minimumHeight = dp(size)
+    }
+
+    /** Both iPhone lists put a magnifier on the right side of their dark search field. */
+    private fun searchControl(hintText: String, cornerDp: Int = 16): Pair<FrameLayout, EditText> {
+        val frame = FrameLayout(this).apply {
+            background = shape(surface, dp(cornerDp).toFloat())
+        }
+        val input = EditText(this).apply {
+            hint = hintText
+            textSize = 16f
+            setSingleLine(true)
+            setTextColor(textColor)
+            setHintTextColor(mutedText)
+            background = null
+            setPadding(dp(13), dp(12), dp(45), dp(12))
+        }
+        frame.addView(input, FrameLayout.LayoutParams(-1, -2))
+        frame.addView(IosGlyphView(this, "search", mutedText),
+            FrameLayout.LayoutParams(dp(22), dp(22), Gravity.RIGHT or Gravity.CENTER_VERTICAL)
+                .apply { rightMargin = dp(14) })
+        frame.setOnClickListener { input.requestFocus() }
+        return frame to input
     }
 
     private fun sectionHeader(name: String, subtitle: String, symbol: String) {
@@ -652,7 +688,7 @@ class MainActivity : Activity() {
             scaleType = ImageView.ScaleType.CENTER_CROP
             contentDescription = "الصورة الشخصية"
         }
-        view.setImageResource(R.drawable.ic_avatar_placeholder)
+        view.setImageResource(R.drawable.ic_murshid)
         root.addView(view, LinearLayout.LayoutParams(dp(88), dp(88)).apply {
             gravity = Gravity.CENTER_HORIZONTAL
             bottomMargin = dp(12)
@@ -1175,7 +1211,7 @@ class MainActivity : Activity() {
         }
         val avatar = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            setImageResource(R.drawable.ic_avatar_placeholder)
+            setImageResource(R.drawable.ic_murshid)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Color.WHITE)
@@ -1502,16 +1538,8 @@ class MainActivity : Activity() {
         introRow.addView(introLabels, LinearLayout.LayoutParams(0, -2, 1f))
         intro.addView(introRow)
         addUiCard(intro, bottom = 14)
-        val search = EditText(this).apply {
-            hint = "ابحث عن مادة"
-            textSize = 16f
-            setSingleLine(true)
-            background = shape(surface, dp(16).toFloat())
-            setPadding(dp(13), dp(12), dp(13), dp(12))
-            setTextColor(textColor)
-            setHintTextColor(mutedText)
-        }
-        root.addView(search, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
+        val (searchFrame, search) = searchControl("ابحث عن مادة")
+        root.addView(searchFrame, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
         val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(rows)
         fun filterSubjects(text: String) {
@@ -1828,16 +1856,8 @@ class MainActivity : Activity() {
             val topicsScreenGeneration = screenGeneration
             val topics = response.optJSONArray("topics") ?: JSONArray()
             var topicMetrics = if (homeInsightsLoaded) homeInsights else JSONObject()
-            val search = EditText(this).apply {
-                hint = "ابحث عن موضوع"
-                textSize = 16f
-                setSingleLine(true)
-                setTextColor(textColor)
-                setHintTextColor(mutedText)
-                setPadding(dp(14), dp(12), dp(14), dp(12))
-                background = shape(surface, dp(14).toFloat())
-            }
-            root.addView(search, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
+            val (searchFrame, search) = searchControl("ابحث عن موضوع", 14)
+            root.addView(searchFrame, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
             val intro = uiCard()
             intro.addView(uiText(subjectName, 12f, true, blue))
             intro.addView(uiText("اختر الموضوع", 23f, true),
@@ -1998,6 +2018,34 @@ class MainActivity : Activity() {
             options.optJSONObject(i)?.optString("text") ?: options.optString(i)
         }
         val items = q.optJSONArray("match_items") ?: JSONArray()
+        val type = q.optString("type")
+        val structure = q.optJSONObject(type)
+        val stages = structure?.optJSONArray("stages") ?: JSONArray()
+        val stageNames = ArrayList<String>()
+        val required = ArrayList<String>()
+        var invalidChoice = false
+        for (i in 0 until stages.length()) {
+            val stage = stages.optJSONObject(i)
+            if (stage == null) { invalidChoice = true; continue }
+            val key = stage.optString("key")
+            stageNames.add(key)
+            if (stage.optString("kind") == "info" || stage.optBoolean("ungraded")) continue
+            if (stage.optString("kind") == "punnett") {
+                val cells = stage.optJSONArray("cells")
+                if (cells == null || cells.length() == 0) invalidChoice = true
+                for (j in 0 until (cells?.length() ?: 0)) required.add(key + "_" + j)
+            } else {
+                required.add(key)
+                if (stage.optString("kind") == "choice" && (stage.optJSONArray("options")?.length() ?: 0) < 2)
+                    invalidChoice = true
+            }
+        }
+        val english = q.optJSONObject("english_match")
+        val left = english?.optJSONObject("left")
+        val right = english?.optJSONObject("right")
+        val shape = ExamRules.Shape(
+            id = q.optInt("id"), text = q.optString("text"), type = type,
+            correctAnswer = q.optString("correct_answer"), options = optionTexts,
             matchIds = (0 until items.length()).map { items.optJSONObject(it)?.optInt("id") ?: 0 },
             matchWords = (0 until items.length()).map { items.optJSONObject(it)?.optString("mad_word") ?: "" },
             englishLeft = left?.keys()?.asSequence()?.map { key ->
@@ -2550,7 +2598,7 @@ class MainActivity : Activity() {
         }
         val avatar = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            setImageResource(R.drawable.ic_avatar_placeholder)
+            setImageResource(R.drawable.ic_murshid)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Color.WHITE)
