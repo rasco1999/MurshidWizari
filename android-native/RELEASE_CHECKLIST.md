@@ -54,6 +54,8 @@ Further SwiftUI-token alignment: primary and secondary buttons now use distinct 
 
 The V31 home quick-tools now also distinguish review, custom exam, daily challenge, proposal, inbox, attempt history, achievements, focus and stories with dedicated semantic vector drawings instead of reusing unrelated icons. They are independently drawn approximations of the roles specified in SwiftUI, **not** exported Apple SF Symbol assets; visual sign-off still requires iPhone screenshots and emulator artifact comparison.
 
+The four-page native home hero now also uses the SwiftUI reference timing (5.5-second auto-advance, 350ms horizontal page movement, 200ms indicator-width transition), including previous/next swipe direction. This is a source-level animation match; timing and RTL direction must be inspected side by side on Android and iPhone before visual acceptance.
+
 The owner-selected iOS launcher JPEG has been reconstructed from the checked-in icon chunks and SHA-256 checked against the existing iOS build workflow; the Android launcher now points at the same bytes. Exact visual rendering inside Android launcher masks and home screens remains to be inspected on a device.
 
 The ordinary-topic exam also now has a fixed previous/next footer, progress bar, separated question/answer/feedback cards and the same server-authoritative navigation gate. Specialized genetics, Tajweed/matching, calculations and long-form answer rendering still require direct iOS/Android side-by-side inspection.

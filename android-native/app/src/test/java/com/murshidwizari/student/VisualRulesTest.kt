@@ -23,6 +23,9 @@ class VisualRulesTest {
         assertEquals(16, VisualRules.cardInset)
         assertEquals(12, VisualRules.gridSpacing)
         assertEquals(220, VisualRules.heroHeight)
+        assertEquals(5500L, VisualRules.heroAutoAdvanceMs)
+        assertEquals(350L, VisualRules.heroPageTransitionMs)
+        assertEquals(200L, VisualRules.heroDotTransitionMs)
         assertTrue(VisualRules.minTouchTarget >= 44)
     }
 

@@ -96,6 +96,7 @@ class MainActivity : Activity() {
     private var homeHeroContainer: FrameLayout? = null
     private var homeHeroFallback: TextView? = null
     private var homeHeroDots: LinearLayout? = null
+    private var homeHeroOutgoing: View? = null
     private val heroBitmaps = HashMap<Int, Bitmap>()
     private val heroPending = HashSet<Int>()
     private val heroJobs = Executors.newFixedThreadPool(2)
@@ -1269,7 +1270,26 @@ class MainActivity : Activity() {
     }
 
     private fun showHeroSlide(index: Int) {
+        val previous = homeHeroIndex
         homeHeroIndex = ((index % heroNames.size) + heroNames.size) % heroNames.size
+        val host = homeHeroContainer
+        val changing = previous != homeHeroIndex && host != null && host.width > 0
+        if (changing) {
+            homeHeroOutgoing?.let { prior ->
+                prior.animate().cancel()
+                (prior.parent as? android.view.ViewGroup)?.removeView(prior)
+            }
+            val previousBitmap = heroBitmaps[previous]
+            val outgoing: View = if (previousBitmap != null) ImageView(this).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setImageBitmap(previousBitmap)
+            } else uiText(heroNames[previous], 23f, true, Color.WHITE).apply {
+                gravity = Gravity.CENTER
+            }
+            outgoing.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            host!!.addView(outgoing, FrameLayout.LayoutParams(-1, -1))
+            homeHeroOutgoing = outgoing
+        }
         val bitmap = heroBitmaps[homeHeroIndex]
         homeHeroView?.setImageBitmap(bitmap)
         homeHeroContainer?.contentDescription = heroNames[homeHeroIndex]
@@ -1277,14 +1297,50 @@ class MainActivity : Activity() {
             text = heroNames[homeHeroIndex]
             visibility = if (bitmap == null) View.VISIBLE else View.GONE
         }
+        if (changing) {
+            // SwiftUI PageTabView moves between pages in 350ms. Keep the old page
+            // visible while the new one enters; reverse direction for back-swipes.
+            val forward = (previous + 1) % heroNames.size == homeHeroIndex
+            val offset = host!!.width.toFloat() * if (forward) 1f else -1f
+            val easing = android.view.animation.AccelerateDecelerateInterpolator()
+            listOfNotNull(homeHeroView, homeHeroFallback).forEach { view ->
+                view.animate().cancel()
+                view.translationX = offset
+                view.animate().translationX(0f).setDuration(VisualRules.heroPageTransitionMs)
+                    .setInterpolator(easing).start()
+            }
+            val outgoing = homeHeroOutgoing!!
+            outgoing.animate().translationX(-offset).setDuration(VisualRules.heroPageTransitionMs)
+                .setInterpolator(easing).withEndAction {
+                    if (homeHeroOutgoing === outgoing) {
+                        host?.removeView(outgoing)
+                        homeHeroOutgoing = null
+                    }
+                }.start()
+        }
         homeHeroDots?.apply {
             removeAllViews()
             for (i in heroNames.indices) {
-                addView(View(this@MainActivity).apply {
+                val indicator = View(this@MainActivity).apply {
                     background = shape(if (i == homeHeroIndex) blue else mutedText, dp(4).toFloat())
-                }, LinearLayout.LayoutParams(dp(if (i == homeHeroIndex) 22 else 7), dp(7)).apply {
+                }
+                val targetWidth = if (i == homeHeroIndex) 22 else 7
+                val startWidth = if (changing && i == previous) 22
+                    else if (changing && i == homeHeroIndex) 7 else targetWidth
+                addView(indicator, LinearLayout.LayoutParams(dp(startWidth), dp(7)).apply {
                     marginStart = dp(3); marginEnd = dp(3)
                 })
+                if (startWidth != targetWidth) {
+                    android.animation.ValueAnimator.ofInt(startWidth, targetWidth).apply {
+                        duration = VisualRules.heroDotTransitionMs
+                        addUpdateListener { animation ->
+                            val params = indicator.layoutParams as? LinearLayout.LayoutParams ?: return@addUpdateListener
+                            params.width = dp(animation.animatedValue as Int)
+                            indicator.layoutParams = params
+                        }
+                        start()
+                    }
+                }
             }
         }
         if (bitmap == null) loadHeroImage(homeHeroIndex)
@@ -1329,6 +1385,11 @@ class MainActivity : Activity() {
     private fun stopHomeHeroTicker() {
         homeHeroTicker?.let(main::removeCallbacks)
         homeHeroTicker = null
+        homeHeroOutgoing?.let { outgoing ->
+            outgoing.animate().cancel()
+            (outgoing.parent as? android.view.ViewGroup)?.removeView(outgoing)
+        }
+        homeHeroOutgoing = null
     }
 
     private fun startHomeHeroTicker() {
@@ -1337,11 +1398,11 @@ class MainActivity : Activity() {
             override fun run() {
                 if (activeScreen != "home" || homeHeroTicker !== this) return
                 showHeroSlide(homeHeroIndex + 1)
-                main.postDelayed(this, 5500)
+                main.postDelayed(this, VisualRules.heroAutoAdvanceMs)
             }
         }
         homeHeroTicker = ticker
-        main.postDelayed(ticker, 5500)
+        main.postDelayed(ticker, VisualRules.heroAutoAdvanceMs)
     }
 
     private fun testsTabScreen() {

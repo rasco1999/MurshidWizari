@@ -8,6 +8,9 @@ object VisualRules {
     const val sectionSpacing = 16
     const val gridSpacing = 12
     const val heroHeight = 220
+    const val heroAutoAdvanceMs = 5500L
+    const val heroPageTransitionMs = 350L
+    const val heroDotTransitionMs = 200L
     const val minTouchTarget = 44
     // ThemeV34.swift PrimaryButtonStyle / SecondaryButtonStyle.
     const val primaryButtonHeight = 50
