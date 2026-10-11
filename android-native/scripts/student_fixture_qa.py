@@ -54,6 +54,15 @@ class Handler(BaseHTTPRequestHandler):
 
 def input_text(node,value):
  ui.tap_node(node);ui.adb('shell','input','text',value)
+def hide_keyboard_if_visible():
+ # KEYCODE_BACK can navigate to the *guest* screen on API 26 when a virtual
+ # keyboard was never shown. Only send it when Android reports a visible IME.
+ tree,_=ui.ui_tree()
+ keyboard_nodes=any('inputmethod' in n.attrib.get('package','').lower()
+  or 'keyboard' in n.attrib.get('package','').lower() for n in tree.iter('node'))
+ status=ui.adb('shell','dumpsys','input_method').decode(errors='replace')
+ if keyboard_nodes or 'mInputShown=true' in status:
+  back()
 def visible_login_fields():
  # Some freshly booted API-26 emulators briefly replace the app hierarchy
  # while the IME or launcher is settling. Wait for the *native* two-field form.
@@ -75,7 +84,7 @@ def login_field(index,value):
  # form, so coordinates cached before typing the first field become stale.
  fields=visible_login_fields()
  input_text(fields[index],value)
- back()
+ hide_keyboard_if_visible()
 def button(text): ui.tap_visible(text,393,852)
 def back(): ui.adb('shell','input','keyevent','KEYCODE_BACK');time.sleep(.6)
 def screenshot(out,name):
@@ -120,7 +129,7 @@ def main():
  assert len(STATE['answers'])==1,'Opening/navigating questions must not submit answers'
  assert sum(1 for m,p in STATE['calls'] if p=='/api/progress.php')==1,'Exactly one grading request'
  tree,_=ui.ui_tree();field=next(n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText')
- input_text(field,'8');back()
+ input_text(field,'8');hide_keyboard_if_visible()
  # A definitive application-level rejection must leave the form retryable.
  # This is not a timeout: uncertain submissions must still be reconciled.
  STATE['reject_once']=True
