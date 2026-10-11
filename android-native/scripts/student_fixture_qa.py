@@ -58,8 +58,10 @@ class Handler(BaseHTTPRequestHandler):
    self.send_response(200);self.send_header('Content-Type','text/html; charset=utf-8')
    self.send_header('Set-Cookie','fixture_session=synthetic; Path=/')
    self.end_headers();self.wfile.write(html.encode());return
-  elif path=='/mobile/bootstrap.php': data={**BOOT,'subscribed':STATE['subscription_active'],
-                                         'free_remaining':0 if not STATE['subscription_active'] else 15}
+  elif path=='/mobile/bootstrap.php':
+   time.sleep(STATE.get('bootstrap_delay_seconds',0))
+   data={**BOOT,'subscribed':STATE['subscription_active'],
+         'free_remaining':0 if not STATE['subscription_active'] else 15}
   elif path=='/mobile/homepage.php': data={**BOOT,'subscribed':STATE['subscription_active'],
                                           'free_remaining':0 if not STATE['subscription_active'] else 15}
   elif path=='/mobile/account.php': data={**BOOT,'subscribed':STATE['subscription_active'],

@@ -69,6 +69,15 @@ scrolls the unread row into view before asserting it: API 35 correctly omits
 off-screen nodes from its accessibility hierarchy. **New CI results must be
 recorded before these new checks are considered passed.**
 
+The follow-up also keeps the biometric shield above delayed bootstrap and
+screen redraws, prevents Back from navigating behind it, and persists a
+pending unlock across immediate process restart. Active sessions are covered
+even when “remember me” is off. API 29+ now checks actual biometric availability.
+`biometric_lock_qa.py` verifies the shield with a synthetic QA preference and
+delayed local bootstrap; this is explicitly **not a real fingerprint/face
+authentication test**. Hardware-enrollment and successful-unlock acceptance
+remain open.
+
 - The improved native build at commit `13b62e18917791ed856c45bb04b4a3c4e3504fb5` **passed** compilation and unit tests (Actions run `38140898473`), including the production-origin debug APK artifact signed with an Android test/debug key.
 - The **entire four-API emulator matrix passed** at the same commit: Android API 26, 29, 33 and 35 (Actions run `38140898498`; four successful jobs). Android 8, 10, 13 and 15 were thus exercised with synthetic local fixtures, not real student accounts.
 - The matrix covers login, all five tabs, background-return welcome replay, topic exam, server-confirmed grading, rejected-answer retry, note persistence, text answers, result page, account recovery, configuration loading, rejection-then-confirmed logout and final guest screen. These checks are *not* a substitute for live-backend and side-by-side iPhone testing.

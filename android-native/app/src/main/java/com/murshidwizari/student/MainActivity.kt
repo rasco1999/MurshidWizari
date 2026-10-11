@@ -7,6 +7,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.hardware.fingerprint.FingerprintManager
 import android.hardware.biometrics.BiometricPrompt
+import android.hardware.biometrics.BiometricManager
 import android.content.res.Configuration
 import android.content.Intent
 import android.graphics.Color
@@ -228,7 +229,14 @@ class MainActivity : Activity() {
 
     /** iOS V31 uses actual Face ID, not a cosmetic switch; Android verifies a real device biometric. */
     private fun deviceBiometricAvailable(): Boolean {
-        if (Build.VERSION.SDK_INT >= 28) return true // The platform prompt verifies enrollment.
+        if (Build.VERSION.SDK_INT >= 29) {
+            val manager = getSystemService(BiometricManager::class.java) ?: return false
+            val status = if (Build.VERSION.SDK_INT >= 30)
+                manager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK)
+            else manager.canAuthenticate()
+            return status == BiometricManager.BIOMETRIC_SUCCESS
+        }
+        if (Build.VERSION.SDK_INT == 28) return true // API 28's prompt verifies enrollment.
         val fingerprint = getSystemService(Context.FINGERPRINT_SERVICE) as? FingerprintManager
         return fingerprint?.isHardwareDetected == true && fingerprint.hasEnrolledFingerprints()
     }
@@ -249,7 +257,7 @@ class MainActivity : Activity() {
             if (success) {
                 biometricLastSuccessAt = SystemClock.elapsedRealtime()
                 biometricBackgroundAt = 0L
-                prefs.edit().remove("biometric_background_at").apply()
+                prefs.edit().remove("biometric_background_at").remove("biometric_unlock_required").apply()
             }
             onResult(success)
         }
@@ -297,7 +305,12 @@ class MainActivity : Activity() {
 
     private fun showBiometricLock() {
         if (biometricOverlay != null || biometricAuthInProgress) return
+        // A cancelled/failed unlock must not become an unlocked session if
+        // Android kills this Activity before the next twenty-second interval.
+        prefs.edit().putBoolean("biometric_unlock_required", true).commit()
         val parent = findViewById<FrameLayout>(android.R.id.content)
+        for (i in 0 until parent.childCount) parent.getChildAt(i).importantForAccessibility =
+            View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
         val overlay = FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
             isClickable = true
@@ -330,6 +343,8 @@ class MainActivity : Activity() {
                 val parent = biometricOverlay?.parent as? FrameLayout
                 parent?.removeView(biometricOverlay)
                 biometricOverlay = null
+                if (parent != null) for (i in 0 until parent.childCount)
+                    parent.getChildAt(i).importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
                 if (resumeWelcomeAfterUnlock) {
                     resumeWelcomeAfterUnlock = false
                     replayWelcomeAfterBackground()
@@ -427,7 +442,19 @@ class MainActivity : Activity() {
             view.setPadding(safe.left, safe.top, safe.right, maxOf(safe.bottom, keyboard.bottom))
             insets
         }
-        setContentView(container)
+        setProtectedContent(container)
+    }
+
+    /** Bootstrap, theme and network updates must never replace the lock shield. */
+    private fun setProtectedContent(content: View) {
+        val shield = biometricOverlay
+        (shield?.parent as? ViewGroup)?.removeView(shield)
+        setContentView(content)
+        if (shield != null) {
+            content.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+            findViewById<FrameLayout>(android.R.id.content).addView(shield,
+                FrameLayout.LayoutParams(-1, -1))
+        }
     }
     private fun base(title: String, showBack: Boolean = false, tab: String? = null) {
         stopHomeHeroTicker()
@@ -1019,7 +1046,7 @@ class MainActivity : Activity() {
         window.statusBarColor = Color.rgb(5,16,34)
         window.navigationBarColor = Color.rgb(5,16,34)
         window.decorView.systemUiVisibility = 0
-        setContentView(CinematicWelcomeView(this))
+        setProtectedContent(CinematicWelcomeView(this))
     }
 
     /** Replay the iOS Build 498 welcome after at least three seconds away. */
@@ -4511,7 +4538,8 @@ class MainActivity : Activity() {
             lockToggle.setOnCheckedChangeListener { _, selected ->
                 if (editingLockSwitch) return@setOnCheckedChangeListener
                 if (!selected) {
-                    prefs.edit().putBoolean("biometric_lock", false).remove("biometric_background_at").apply()
+                    prefs.edit().putBoolean("biometric_lock", false).remove("biometric_background_at")
+                        .remove("biometric_unlock_required").apply()
                     message("تم إيقاف قفل البصمة.")
                 } else {
                     editingLockSwitch = true
@@ -6218,6 +6246,10 @@ class MainActivity : Activity() {
     }
 
     private fun navigateBack() {
+        if (biometricOverlay != null) {
+            moveTaskToBack(true)
+            return
+        }
         if (activeScreen == "plans" && paymentBusy) {
             message("انتظر اكتمال التحقق من طلب الدفع حتى لا تضيع حالته.")
             return
@@ -6333,15 +6365,18 @@ class MainActivity : Activity() {
         backgroundEnteredAt = 0L
         appForeground = true
         startSessionServices()
-        if (prefs.getBoolean("biometric_lock", false) && !biometricAuthInProgress &&
-            biometricOverlay == null && ::api.isInitialized && api.hasRememberedSession()) {
+        if (::api.isInitialized) {
             val recorded = prefs.getLong("biometric_background_at", 0L)
             val elapsed = if (biometricBackgroundAt > 0L) {
                 SystemClock.elapsedRealtime() - biometricBackgroundAt
             } else if (recorded > 0L) {
                 (System.currentTimeMillis() - recorded).coerceAtLeast(0L)
             } else 0L
-            if (elapsed > 20_000L && SystemClock.elapsedRealtime() - biometricLastSuccessAt > 2_000L) {
+            if (BiometricRules.shouldLock(prefs.getBoolean("biometric_lock", false),
+                    student.optInt("id") > 0 || api.hasRememberedSession(),
+                    biometricAuthInProgress, biometricOverlay != null,
+                    prefs.getBoolean("biometric_unlock_required", false), elapsed,
+                    SystemClock.elapsedRealtime() - biometricLastSuccessAt)) {
                 showBiometricLock()
             }
         }
