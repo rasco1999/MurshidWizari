@@ -969,8 +969,11 @@ class MainActivity : Activity() {
         labels.addView(uiText("منصة المرشد الوزاري", 16f, true))
         labels.addView(uiText("مساحة تعلّمك", 12f, tint = mutedText))
         top.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
-        top.addView(makeButton("تسجيل الدخول", secondary = true) { loginScreen() },
-            LinearLayout.LayoutParams(dp(118), -2))
+        top.addView(makeButton("تسجيل الدخول", secondary = true) { loginScreen() }.apply {
+            setSingleLine(true)
+            maxLines = 1
+            textSize = 14f
+        }, LinearLayout.LayoutParams(-2, -2))
         root.addView(top, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(28) })
 
         root.addView(uiText("تعلّم بتركيز. تقدّم بثقة.", 15f, true, blue),
@@ -1184,7 +1187,12 @@ class MainActivity : Activity() {
         }
         form.addView(uiText("البريد الإلكتروني أو رقم الهاتف", 15f, true),
             LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
-        val identifier = field("example@email.com أو 07XXXXXXXXX")
+        val identifier = field("example@email.com أو 07XXXXXXXXX").apply {
+            // The SwiftUI source explicitly forces this mixed Arabic/Latin field LTR.
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            textDirection = View.TEXT_DIRECTION_LTR
+            gravity = Gravity.LEFT or Gravity.CENTER_VERTICAL
+        }
         form.addView(identifier, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(17) })
         form.addView(uiText("كلمة المرور", 15f, true),
             LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
