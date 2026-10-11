@@ -111,24 +111,38 @@ def visible_login_fields():
    print('RECOVER emulator Pixel Launcher dialog before fixture login',flush=True)
   time.sleep(1)
  raise AssertionError(f'Expected native login fields after waiting, found {last!r}')
+def visible_login_field(index):
+ # When Android 15 opens the IME it resizes the form and may clip the *other*
+ # input from UIAutomator entirely. Locate each field by its password flag
+ # rather than assuming the two are simultaneously visible.
+ last=[]
+ for attempt in range(18):
+  tree,_=ui.ui_tree()
+  last=ui.visible_texts(tree)
+  match=next((n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText'
+      and (n.attrib.get('password')=='true')==(index==1)),None)
+  if match is not None: return match
+  hide_keyboard_if_visible()
+  ui.adb('shell','input','swipe','196','410','196','200','330')
+  time.sleep(.35)
+ raise AssertionError(f'Could not reveal login field {index}: {last!r}')
 def login_field(index,value):
  # A cold API-26 emulator can drop the first adb text event while its IME is
  # opening. Confirm that the native EditText actually changed before moving
  # on; a successful adb shell exit alone does not prove text was delivered.
  for attempt in range(4):
-  fields=visible_login_fields()
-  seen=fields[index].attrib.get('text','')
+  field=visible_login_field(index)
+  seen=field.attrib.get('text','')
   hint=('example@email.com أو 07XXXXXXXXX' if index==0 else 'أدخل كلمة المرور')
   if seen==value or (index==1 and seen not in ('',hint)):
    hide_keyboard_if_visible()
    return
-  ui.tap_node(fields[index]);time.sleep(.5)
+  ui.tap_node(field);time.sleep(.5)
   if seen not in ('',hint):
    ui.adb('shell','input','keyevent','KEYCODE_MOVE_END')
    for _ in range(len(seen)+2):ui.adb('shell','input','keyevent','KEYCODE_DEL')
   ui.adb('shell','input','text',value);time.sleep(.45)
-  fields=visible_login_fields()
-  seen=fields[index].attrib.get('text','')
+  seen=visible_login_field(index).attrib.get('text','')
   if seen==value or (index==1 and seen not in ('',hint)):
    hide_keyboard_if_visible()
    return
@@ -157,10 +171,11 @@ def main():
  ui.adb('shell','wm','size','393x852');ui.adb('shell','wm','density','160');ui.adb('shell','settings','put','system','font_scale','1.0')
  ui.launch_native();ui.enter_login(393,852)
  login_field(0,'student@example.test');login_field(1,'fixture-pass')
- fields=visible_login_fields()
- assert fields[0].attrib.get('text')=='student@example.test',fields[0].attrib
+ username=visible_login_field(0)
+ assert username.attrib.get('text')=='student@example.test',username.attrib
  # Android masks password accessibility text on some API levels.
- assert fields[1].attrib.get('text') not in ('','أدخل كلمة المرور'),fields[1].attrib
+ secret=visible_login_field(1)
+ assert secret.attrib.get('text') not in ('','أدخل كلمة المرور'),secret.attrib
  button('دخول')
  ui.wait_for('حسابي');screenshot(args.output,'student-home-light')
  # iPhone Build 498 replays its cinematic welcome after a real background
