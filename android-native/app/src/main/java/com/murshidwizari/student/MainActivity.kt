@@ -2343,11 +2343,21 @@ class MainActivity : Activity() {
             for (i in 0 until predictions.length()) {
                 val item = predictions.optJSONObject(i) ?: continue
                 val card = uiCard()
-                card.addView(uiText(item.optString("chapter_name"), 12f, true, blue))
-                card.addView(uiText(item.optString("question_text"), 17f, true),
+                val chapter = item.optString("chapter_name").ifBlank { item.optString("topic") }
+                val question = item.optString("question_text").ifBlank {
+                    item.optString("question").ifBlank { item.optString("text") }
+                }
+                card.addView(uiText(chapter, 12f, true, blue))
+                card.addView(uiText(question, 17f, true),
                     LinearLayout.LayoutParams(-1,-2).apply { topMargin = dp(10) })
-                card.addView(uiText("درجة الترشيح: ${item.optString("prediction_score")} • الثقة: ${item.optString("confidence")}",
-                    12f, tint = mutedText), LinearLayout.LayoutParams(-1,-2).apply { topMargin = dp(10) })
+                val score = item.optString("prediction_score").ifBlank { item.optString("probability") }
+                val confidence = item.optString("confidence")
+                val metrics = listOfNotNull(
+                    score.takeIf { it.isNotBlank() }?.let { "درجة الترشيح: $it" },
+                    confidence.takeIf { it.isNotBlank() }?.let { "الثقة: $it" }
+                ).joinToString(" • ")
+                if (metrics.isNotEmpty()) card.addView(uiText(metrics, 12f, tint = mutedText),
+                    LinearLayout.LayoutParams(-1,-2).apply { topMargin = dp(10) })
                 val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
                 val answer = item.optString("correct_answer")
                 if (answer.isNotBlank()) {
