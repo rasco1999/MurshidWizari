@@ -15,6 +15,10 @@ jobs:
   anonymous-qa:
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [26, 29, 33, 35]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -37,7 +41,7 @@ jobs:
       - name: Exercise anonymous native login controls, recovery and register, and capture layouts
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: ${{ matrix.api-level }}
           target: google_apis
           arch: x86_64
           profile: pixel_6
@@ -49,6 +53,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Native-Anonymous-Emulator-QA
+          name: Murshid-Native-Anonymous-Emulator-QA-API${{ matrix.api-level }}
           path: ${{ runner.temp }}/murshid-anonymous-qa/
           if-no-files-found: warn

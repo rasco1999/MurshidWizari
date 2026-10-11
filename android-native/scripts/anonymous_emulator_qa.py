@@ -20,7 +20,7 @@ BOUNDS = re.compile(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]")
 
 def adb(*args: str) -> bytes:
     result = subprocess.run(["adb", *args], stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE, check=True)
+                            stderr=subprocess.PIPE, check=True, timeout=30)
     return result.stdout
 
 
@@ -52,7 +52,7 @@ def wait_for(text: str, seconds: float = 28):
             node = find(root, text)
             if node is not None:
                 return node, raw
-        except (subprocess.CalledProcessError, ET.ParseError):
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ET.ParseError):
             pass
         time.sleep(1.2)
     raise AssertionError(f"Timed out waiting for {text!r}; visible={last!r}")
@@ -89,16 +89,16 @@ def tap_visible(text: str, width: int, height: int):
     raise AssertionError(f"Cannot reach {text!r}; visible={visible_texts(root)!r}")
 
 
-def capture(directory: Path, name: str) -> None:
+def capture(directory: Path, name: str, marker: str = "منصة المرشد الوزاري") -> None:
     root, raw = ui_tree()
-    if find(root, "منصة المرشد الوزاري") is None:
-        raise AssertionError(f"Login title not visible at {name}: {visible_texts(root)!r}")
+    if find(root, marker) is None:
+        raise AssertionError(f"Screen marker {marker!r} not visible at {name}: {visible_texts(root)!r}")
     (directory / f"{name}.xml").write_bytes(raw)
     (directory / f"{name}.png").write_bytes(adb("exec-out", "screencap", "-p"))
     print(f"PASS captured {name}: {visible_texts(root)[:7]}", flush=True)
 
 
-def check_controls(width: int, height: int) -> None:
+def check_controls(directory: Path, name: str, width: int, height: int) -> None:
     label = "إظهار كلمة المرور"
     # A selected checkbox must really change its state, not just look clickable.
     tap_visible(label, width, height)
@@ -114,6 +114,7 @@ def check_controls(width: int, height: int) -> None:
     tap_visible("نسيت كلمة المرور؟", width, height)
     wait_for("استعادة كلمة المرور")
     wait_for("متابعة الاستعادة")
+    capture(directory, name + "-recovery", "استعادة كلمة المرور")
     adb("shell", "input", "keyevent", "KEYCODE_BACK")
     wait_for("منصة المرشد الوزاري")
     print("PASS recovery screen and Android back", flush=True)
@@ -121,6 +122,7 @@ def check_controls(width: int, height: int) -> None:
     tap_visible("إنشاء حساب طالب جديد", width, height)
     wait_for("إنشاء حساب جديد")
     wait_for("طريقة التسجيل")
+    capture(directory, name + "-register", "إنشاء حساب جديد")
     adb("shell", "input", "keyevent", "KEYCODE_BACK")
     wait_for("منصة المرشد الوزاري")
     print("PASS registration screen and Android back", flush=True)
@@ -135,7 +137,7 @@ def test_size(directory: Path, name: str, width: int, height: int, scale: float)
     if not adb("shell", "pidof", PACKAGE).strip():
         raise AssertionError("Native app process did not survive launch")
     capture(directory, name)
-    check_controls(width, height)
+    check_controls(directory, name, width, height)
 
 
 def main() -> None:
