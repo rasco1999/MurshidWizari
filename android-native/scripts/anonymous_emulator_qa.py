@@ -117,11 +117,23 @@ def capture(directory: Path, name: str, marker: str = "منصة المرشد ا�
 
 def check_controls(directory: Path, name: str, width: int, height: int) -> None:
     label = "إظهار كلمة المرور"
-    # A selected checkbox must really change its state, not just look clickable.
-    tap_visible(label, width, height)
-    checked_node, _ = wait_for(label, checked="true")
-    tap_node(checked_node)
+    # Each tap must produce an observable state change. A newly booted emulator
+    # occasionally drops its first synthetic input event; retry only when the
+    # hierarchy still proves the old state, and surface the retry in CI logs.
     wait_for(label, checked="false")
+    for desired in ("true", "false"):
+        for attempt in range(2):
+            node, _ = wait_for(label)
+            if node.attrib.get("checked") == desired:
+                break
+            tap_visible(label, width, height)
+            try:
+                wait_for(label, seconds=8, checked=desired)
+                break
+            except AssertionError:
+                if attempt == 1:
+                    raise
+                print(f"RETRY emulator input for {label!r}, desired={desired}", flush=True)
     print("PASS password visibility toggle", flush=True)
 
     tap_visible("نسيت كلمة المرور؟", width, height)
