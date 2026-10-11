@@ -62,6 +62,22 @@ class IosGlyphView(context: Context, private val symbol: String, private val tin
                 canvas.drawPath(plane, ink)
                 ink.style = Paint.Style.STROKE
             }
+            "chat" -> {
+                val back = Path().apply {
+                    moveTo(6f, 4f); lineTo(19f, 4f); quadTo(22f, 4f, 22f, 7f)
+                    lineTo(22f, 13f); quadTo(22f, 16f, 19f, 16f)
+                    lineTo(17f, 19f); lineTo(17f, 16f)
+                }
+                canvas.drawPath(back, ink)
+                val front = Path().apply {
+                    moveTo(5f, 8f); lineTo(14f, 8f); quadTo(17f, 8f, 17f, 11f)
+                    lineTo(17f, 17f); quadTo(17f, 20f, 14f, 20f)
+                    lineTo(8f, 20f); lineTo(4f, 23f); lineTo(4f, 20f)
+                    quadTo(2f, 19f, 2f, 17f); lineTo(2f, 11f)
+                    quadTo(2f, 8f, 5f, 8f); close()
+                }
+                canvas.drawPath(front, ink)
+            }
             // Dedicated tab variants track the silhouettes of SwiftUI's
             // house.fill, checklist.checked, chart.line.uptrend.xyaxis and
             // person.crop.circle.fill. Other contexts retain outline glyphs.
