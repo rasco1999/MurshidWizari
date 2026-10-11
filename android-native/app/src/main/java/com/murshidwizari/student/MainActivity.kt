@@ -3787,8 +3787,25 @@ class MainActivity : Activity() {
             val predictions = response.optJSONArray("predictions") ?: JSONArray()
             for (i in 0 until predictions.length()) {
                 val p = predictions.optJSONObject(i) ?: continue
-                line(p.optString("question_text", p.optString("title", "مرشح " + (i+1))))
-                caption(p.optString("explanation"))
+                val question = p.optString("question_text").ifBlank {
+                    p.optString("title", "مرشح ${i + 1}")
+                }
+                val topic = p.optString("topic_name").ifBlank {
+                    p.optString("chapter_name", subject)
+                }
+                val explanation = p.optString("explanation")
+                val card = uiCard().apply {
+                    addView(uiText(topic, 12f, tint = mutedText))
+                    addView(uiText("س${i + 1}: $question", 17f, true, blue),
+                        LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+                    if (explanation.isNotBlank()) addView(uiText("افتح لعرض الشرح والتفاصيل", 12f,
+                        tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+                }
+                addUiCard(tappable(card, "تفاصيل المرشح ${i + 1}") {
+                    AlertDialog.Builder(this).setTitle("مرشح ${i + 1} · $topic")
+                        .setMessage(question + if (explanation.isBlank()) "" else "\n\nالشرح: $explanation")
+                        .setPositiveButton("إغلاق", null).show()
+                })
             }
             if (predictions.length() == 0) caption("لم تُنشَر مرشحات لهذه المادة بعد.")
         }
