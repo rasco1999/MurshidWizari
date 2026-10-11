@@ -1238,6 +1238,54 @@ class MainActivity : Activity() {
         root.addView(policies)
     }
 
+    /** Shared SwiftUI AuthHeader: graduation mark, product name and subtitle. */
+    private fun authHeader(subtitle: String) {
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(12), dp(16), dp(12), dp(14))
+        }
+        val mark = FrameLayout(this).apply {
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(blue, navy))
+                .apply { cornerRadius = dp(24).toFloat() }
+            elevation = dp(6).toFloat()
+            contentDescription = "المرشد الوزاري"
+        }
+        mark.addView(IosGlyphView(this, "graduation", Color.WHITE),
+            FrameLayout.LayoutParams(dp(38), dp(38), Gravity.CENTER))
+        header.addView(mark, LinearLayout.LayoutParams(dp(82), dp(82)).apply { bottomMargin = dp(14) })
+        header.addView(uiText("المرشد الوزاري", 30f, true).apply { gravity = Gravity.CENTER })
+        header.addView(uiText(subtitle, 15f, tint = mutedText).apply { gravity = Gravity.CENTER },
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        root.addView(header, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+    }
+
+    private fun registrationPasswordReveal(field: EditText, description: String): FrameLayout {
+        // The two iPhone registration SecureFields each have their own eye control.
+        (field.parent as? ViewGroup)?.removeView(field)
+        field.setPadding(dp(48), dp(10), dp(14), dp(10))
+        val wrap = FrameLayout(this)
+        wrap.addView(field, FrameLayout.LayoutParams(-1, -2))
+        val reveal = FrameLayout(this).apply { isClickable = true; isFocusable = true }
+        fun updateEye(visible: Boolean) {
+            reveal.removeAllViews()
+            reveal.addView(IosGlyphView(this, if (visible) "eye-off" else "eye", blue),
+                FrameLayout.LayoutParams(dp(23), dp(23), Gravity.CENTER))
+            reveal.contentDescription = if (visible) "إخفاء $description" else "إظهار $description"
+        }
+        var visible = false
+        updateEye(false)
+        reveal.setOnClickListener {
+            visible = !visible
+            field.transformationMethod = if (visible) HideReturnsTransformationMethod.getInstance()
+                else PasswordTransformationMethod.getInstance()
+            field.setSelection(field.text.length)
+            updateEye(visible)
+        }
+        wrap.addView(reveal, FrameLayout.LayoutParams(dp(44), dp(48), Gravity.LEFT or Gravity.CENTER_VERTICAL))
+        return wrap
+    }
+
     private fun loginScreen() {
         activeScreen = "login"
         window.statusBarColor = if (night) Color.BLACK else navy
@@ -1452,9 +1500,8 @@ class MainActivity : Activity() {
     private fun verificationScreen(kind: String, destination: String, note: String) {
         activeScreen = "verification"
         base(if (kind == "phone") "تأكيد رقم الهاتف" else "تأكيد البريد الإلكتروني", true)
-        val intro = uiText("أكمل التحقق لحماية حسابك ومتابعة تقدّمك الدراسي", 15f,
-            tint = mutedText).apply { gravity = Gravity.CENTER }
-        root.addView(intro, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
+        authHeader(if (kind == "phone") "تأكيد رقم الهاتف" else "تأكيد البريد الإلكتروني")
+        val intro = root.getChildAt(root.childCount - 1)
         line("رمز التحقق", true)
         caption(note.ifBlank { "أدخل الرمز الذي أُرسل إلى $destination" })
         val code = input("رمز التحقق من 6 أرقام").apply {
@@ -1762,9 +1809,8 @@ class MainActivity : Activity() {
     private fun registerScreen() {
         activeScreen = "register"
         base("إنشاء حساب جديد", true)
-        val intro = uiText("حساب واحد يحفظ تقدّمك وإجاباتك على جميع أجهزتك", 15f,
-            tint = mutedText).apply { gravity = Gravity.CENTER }
-        root.addView(intro, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
+        authHeader("حساب واحد يحفظ تقدمك وإجاباتك على جميع أجهزتك")
+        val intro = root.getChildAt(root.childCount - 1)
         val name = input("الاسم الثلاثي الكامل")
         val identifier = input("البريد الإلكتروني")
         caption("طريقة التسجيل")
@@ -1786,6 +1832,10 @@ class MainActivity : Activity() {
         identifier.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
         val pass = input("كلمة المرور (8 أحرف على الأقل)", true)
         val confirm = input("تأكيد كلمة المرور", true)
+        val passWrap = registrationPasswordReveal(pass, "كلمة المرور")
+        val confirmWrap = registrationPasswordReveal(confirm, "تأكيد كلمة المرور")
+        root.addView(passWrap)
+        root.addView(confirmWrap)
         caption("الصف الدراسي")
         val gradeLabel = root.getChildAt(root.childCount - 1)
         val grades = ArrayList<Int>()
@@ -1858,7 +1908,7 @@ class MainActivity : Activity() {
         val fields = (0 until root.childCount).map { root.getChildAt(it) }
             .filter { it !== intro && it !== backToLogin }
         val preferred = listOf<View>(name, gradeLabel, gradeSpinner, genderLabel, gender,
-            contactLabel, contact, identifier, pass, confirm)
+            contactLabel, contact, identifier, passWrap, confirmWrap)
         val orderedFields = preferred + fields.filterNot { it in preferred }
         val form = uiCard()
         form.addView(uiText("بيانات الطالب", 22f, true),

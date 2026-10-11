@@ -149,25 +149,27 @@ def main():
  # iPhone Build 498 replays its cinematic welcome after a real background
  # visit longer than three seconds. Verify Android's overlay without killing
  # the student's in-progress Activity or losing the authenticated session.
- ui.adb('shell','input','keyevent','KEYCODE_HOME')
- # Keep a live logcat reader across resume. API 26 rejects buffer clearing,
- # and reading the ring buffer after resume can lose the brief replay event.
- live_log=subprocess.Popen(['adb','logcat','-v','brief','-s','MurshidWelcome:I','*:S'],
-                          stdout=subprocess.PIPE,stderr=subprocess.PIPE)
- time.sleep(4.2)
- ui.adb('shell','am','start','-n',f'{ui.PACKAGE}/{ui.MAIN_ACTIVITY}')
- # UIAutomator hierarchy dumps can take longer than the 2.7s welcome,
- # making accessibility polling a false negative. Capture pixels immediately
- # and assert the native Activity's non-personal replay event in logcat.
- args.output.joinpath('student-welcome-after-background.png').write_bytes(
-  ui.adb('exec-out','screencap','-p'))
- time.sleep(.35)
- live_log.terminate()
- logged,errors=live_log.communicate(timeout=8)
- log=logged.decode(errors='replace')
- if 'background-replay-started' not in log:
-  print('Replay logcat captured:',repr(log[-1300:]),'stderr:',repr(errors[-500:]),flush=True)
- assert 'background-replay-started' in log,'Returning from HOME must replay the native welcome overlay'
+ replayed=False
+ for attempt in range(2):
+  # First wait for the home activity transition before counting time away.
+  # Newer emulator GPUs may not dispatch Activity.onStop synchronously with
+  # the HOME keypress; a 4s wall-clock sleep is therefore insufficient.
+  live_log=subprocess.Popen(['adb','logcat','-v','brief','-s','MurshidWelcome:I','*:S'],
+                           stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+  ui.adb('shell','input','keyevent','KEYCODE_HOME')
+  time.sleep(7.0)
+  ui.adb('shell','am','start','-n',f'{ui.PACKAGE}/{ui.MAIN_ACTIVITY}')
+  time.sleep(.25)
+  args.output.joinpath('student-welcome-after-background.png').write_bytes(
+   ui.adb('exec-out','screencap','-p'))
+  time.sleep(.55)
+  live_log.terminate()
+  logged,errors=live_log.communicate(timeout=8)
+  log=logged.decode(errors='replace')
+  replayed='background-replay-started' in log
+  if replayed:break
+  print('Replay attempt',attempt+1,'log:',repr(log[-1000:]),'stderr:',repr(errors[-300:]),flush=True)
+ assert replayed,'Returning from HOME for >3s must replay the native welcome overlay'
  time.sleep(3.2)
  tree,_=ui.ui_tree()
  assert not any(n.attrib.get('content-desc','').startswith('منصة المرشد الوزاري. أهلًا، ') for n in tree.iter('node')),'Welcome overlay must disappear after playback'
