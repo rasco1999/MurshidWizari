@@ -2626,7 +2626,7 @@ class MainActivity : Activity() {
             val activationInput = EditText(this).apply {
                 hint = "MW-XXXX-XXXX-XXXX"
                 textSize = 14f
-                isSingleLine = true
+                setSingleLine(true)
                 setTextColor(textColor)
                 setHintTextColor(mutedText)
                 setPadding(dp(12), dp(10), dp(12), dp(10))
