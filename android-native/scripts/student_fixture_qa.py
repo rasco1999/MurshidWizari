@@ -112,13 +112,18 @@ def main():
  # visit longer than three seconds. Verify Android's overlay without killing
  # the student's in-progress Activity or losing the authenticated session.
  ui.adb('shell','input','keyevent','KEYCODE_HOME');time.sleep(3.5)
+ ui.adb('logcat','-c')
  ui.adb('shell','am','start','-n',f'{ui.PACKAGE}/{ui.MAIN_ACTIVITY}')
- resume_greeting='منصة المرشد الوزاري. أهلًا، طالب. تعلّم بثقة، واصنع مستقبلك'
- ui.wait_for(resume_greeting,seconds=3)
- screenshot(args.output,'student-welcome-after-background')
+ # UIAutomator hierarchy dumps can take longer than the 2.7s welcome,
+ # making accessibility polling a false negative. Capture pixels immediately
+ # and assert the native Activity's non-personal replay event in logcat.
+ args.output.joinpath('student-welcome-after-background.png').write_bytes(
+  ui.adb('exec-out','screencap','-p'))
+ log=ui.adb('logcat','-d','-s','MurshidWelcome:I','*:S').decode(errors='replace')
+ assert 'background-replay-started' in log,'Returning from HOME must replay the native welcome overlay'
  time.sleep(3.2)
  tree,_=ui.ui_tree()
- assert ui.find(tree,resume_greeting) is None,'Welcome overlay must disappear after playback'
+ assert not any(n.attrib.get('content-desc','').startswith('منصة المرشد الوزاري. أهلًا، ') for n in tree.iter('node')),'Welcome overlay must disappear after playback'
  ui.wait_for('حسابي')
  # Capture the reference iPhone's dark appearance as well as light Android.
  # The toggle is a native accessible header control, not a test-only shortcut.

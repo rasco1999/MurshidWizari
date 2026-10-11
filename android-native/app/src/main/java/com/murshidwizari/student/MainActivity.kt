@@ -30,6 +30,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.CancellationSignal
 import android.os.SystemClock
+import android.util.Log
 import android.text.InputType
 import android.text.InputFilter
 import android.text.Editable
@@ -993,6 +994,7 @@ class MainActivity : Activity() {
         }
         parent.addView(overlay, FrameLayout.LayoutParams(-1, -1))
         resumeWelcomeOverlay = overlay
+        Log.i("MurshidWelcome", "background-replay-started")
         main.postDelayed({
             if (resumeWelcomeOverlay === overlay && overlay.parent != null) {
                 overlay.animate().alpha(0f).setDuration(300L).withEndAction {

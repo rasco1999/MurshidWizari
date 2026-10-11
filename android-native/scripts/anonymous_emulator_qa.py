@@ -28,7 +28,7 @@ def adb(*args: str) -> bytes:
 
 
 def ui_tree() -> tuple[ET.Element, bytes]:
-    for attempt in range(2):
+    for attempt in range(6):
         adb("shell", "uiautomator", "dump", DEVICE_XML)
         raw = adb("exec-out", "cat", DEVICE_XML)
         root = ET.fromstring(raw)
@@ -37,12 +37,13 @@ def ui_tree() -> tuple[ET.Element, bytes]:
         # Dismiss only that known Android overlay, never an app-owned dialog.
         hint = find(root, "Viewing full screen")
         dismiss = find(root, "Got it")
-        if attempt == 0 and hint is not None and dismiss is not None:
+        if hint is not None and dismiss is not None:
             tap_node(dismiss)
-            print("RECOVER dismissed Android immersive-screen tutorial", flush=True)
-            time.sleep(0.4)
+            print(f"RECOVER dismissed Android immersive-screen tutorial (attempt {attempt + 1})", flush=True)
+            time.sleep(0.55)
             continue
         return root, raw
+    raise AssertionError("Android emulator kept displaying the system immersive-screen tutorial after six attempts")
     raise AssertionError("Could not read Android UI hierarchy")
 
 
