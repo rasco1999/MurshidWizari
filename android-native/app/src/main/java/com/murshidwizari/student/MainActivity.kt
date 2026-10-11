@@ -2292,7 +2292,8 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
-            setPadding(dp(18), dp(20), dp(18), dp(20))
+            minimumHeight = dp(154)
+            setPadding(dp(20), dp(20), dp(20), dp(20))
             background = GradientDrawable(GradientDrawable.Orientation.TR_BL,
                 intArrayOf(navy, blue)).apply { cornerRadius = dp(28).toFloat() }
             elevation = dp(4).toFloat()
@@ -2300,37 +2301,63 @@ class MainActivity : Activity() {
         val avatarColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
         }
+        val avatarFrame = FrameLayout(this).apply {
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            clipChildren = false
+            clipToPadding = false
+        }
         val avatar = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             setImageResource(R.drawable.ic_avatar_placeholder)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Color.WHITE)
-                setStroke(dp(2), Color.argb(140,255,255,255))
             }
             clipToOutline = true
             contentDescription = "الصورة الشخصية الحالية"
         }
-        avatarColumn.addView(avatar, LinearLayout.LayoutParams(dp(78), dp(78)))
+        avatarFrame.addView(avatar, FrameLayout.LayoutParams(-1, -1))
+        avatarFrame.addView(View(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.TRANSPARENT)
+                setStroke(dp(2), Color.argb(87, 255, 255, 255))
+            }
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, FrameLayout.LayoutParams(-1, -1))
         activeAvatar = java.lang.ref.WeakReference(avatar)
         fetchAvatarInto(avatar, account.optString("avatar_url"), account.optString("avatar_revision"))
-        val photoChange = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
+        val photoChange = FrameLayout(this).apply {
             isClickable = true
             isFocusable = true
             contentDescription = "اختيار صورة شخصية جديدة"
-            setPadding(dp(2), dp(7), dp(2), dp(3))
-            addView(IosGlyphView(this@MainActivity, "camera", Color.WHITE),
-                LinearLayout.LayoutParams(dp(15), dp(15)).apply { marginEnd = dp(3) })
-            addView(uiText("تغيير الصورة", 12f, true, Color.WHITE))
+            addView(FrameLayout(this@MainActivity).apply {
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(Color.WHITE)
+                }
+                addView(IosGlyphView(this@MainActivity, "camera", blue),
+                    FrameLayout.LayoutParams(dp(15), dp(15), Gravity.CENTER))
+            }, FrameLayout.LayoutParams(dp(29), dp(29), Gravity.CENTER))
             setOnClickListener { chooseAvatar() }
         }
-        avatarColumn.addView(photoChange)
+        avatarFrame.addView(photoChange, FrameLayout.LayoutParams(dp(44), dp(44), Gravity.BOTTOM or Gravity.END).apply {
+            marginEnd = -dp(7)
+            bottomMargin = -dp(7)
+        })
+        avatarColumn.addView(avatarFrame, LinearLayout.LayoutParams(dp(78), dp(78)))
+        val avatarStatusText = when (account.optString("avatar_status")) {
+            "approved" -> "الصورة مفعلة"
+            "blocked", "rejected" -> "الصورة غير مقبولة"
+            else -> "اضغط لتغيير الصورة"
+        }
+        avatarColumn.addView(uiText(avatarStatusText, 11f, true, Color.argb(194, 255, 255, 255)).apply {
+            gravity = Gravity.CENTER
+        }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(7) })
         card.addView(avatarColumn)
         val details = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), 0, dp(4), 0)
+            setPadding(dp(15), 0, 0, 0)
         }
         fun detail(value: String, size: Float, strong: Boolean, opacity: Int = 255) {
             details.addView(TextView(this).apply {
