@@ -1853,11 +1853,14 @@ class MainActivity : Activity() {
             if (value.length < 2) { message("اكتب حرفين على الأقل."); return@setOnClickListener }
             search.isEnabled = false
             val path = "api/search.php?q=" + URLEncoder.encode(value, "UTF-8")
-            fetch(path) { response ->
+            fetch(path, showError = false) { response ->
                 if (activeScreen != "question_search") return@fetch
                 search.isEnabled = true
                 if (!SearchRules.accepts(response.has("ok"), response.optBoolean("ok"),
-                        response.optJSONArray("results") != null)) return@fetch
+                        response.optJSONArray("results") != null)) {
+                    message(response.optString("message", "تعذر تحميل نتائج البحث."))
+                    return@fetch
+                }
                 // Replace only earlier search results, keeping the query field editable.
                 val results = response.optJSONArray("results") ?: JSONArray()
                 val savedQuery = query.text.toString()
@@ -1876,11 +1879,12 @@ class MainActivity : Activity() {
             val next = query.text.toString().trim()
             if (next.length < 2) { message("اكتب حرفين على الأقل."); return@button }
             val path = "api/search.php?q=" + URLEncoder.encode(next, "UTF-8")
-            fetch(path) { response ->
-                if (activeScreen == "question_search" && SearchRules.accepts(
-                        response.has("ok"), response.optBoolean("ok"),
-                        response.optJSONArray("results") != null))
+            fetch(path, showError = false) { response ->
+                if (activeScreen != "question_search") return@fetch
+                if (SearchRules.accepts(response.has("ok"), response.optBoolean("ok"),
+                        response.optJSONArray("results") != null)) {
                     renderQuestionSearchResults(next, response.optJSONArray("results") ?: JSONArray())
+                } else message(response.optString("message", "تعذر تحميل نتائج البحث."))
             }
         }
         line("نتائج البحث", true)
