@@ -8,7 +8,8 @@ import anonymous_emulator_qa as ui
 USER={'id':900001,'name':'طالب فحص افتراضي','grade':'السادس العلمي','grade_id':1,'email':'student@example.test','can_edit_name':True}
 SUBJECTS=[{'id':1,'name':'الرياضيات'},{'id':2,'name':'اللغة العربية'}]
 STATE={'notes':{},'answers':{},'calls':[],'reject_once':False,'logout_reject_once':False,
-       'registered':False,'verified':False,'resend_count':0,'invalid_code_count':0}
+       'registered':False,'verified':False,'resend_count':0,'invalid_code_count':0,
+       'registered_methods':[],'verified_methods':[]}
 BOOT={'ok':True,'csrf':'synthetic-csrf','user':USER,'subscribed':True,'free_remaining':15,'free_limit':15,'subjects':SUBJECTS,'stats':{},'ads':[{'id':1,'school':'مدرسة افتراضية','text':'إعلان محلي للتحقق من عرض الإعلانات','active':True}]}
 QUESTIONS=[{'id':101,'text':'ما حاصل جمع اثنين وثلاثة؟','type':'mcq','options':[{'id':1,'text':'خمسة'},{'id':2,'text':'ستة'}],'correct_answer':'خمسة','explanation':'نجمع اثنين مع ثلاثة فيكون الناتج خمسة.','submitted':False}, {'id':102,'text':'اكتب ناتج أربعة زائد أربعة.','type':'text','correct_answer':'8','explanation':'أربعة مضافاً إليها أربعة تساوي ثمانية.','submitted':False}]
 class Handler(BaseHTTPRequestHandler):
@@ -26,12 +27,18 @@ class Handler(BaseHTTPRequestHandler):
   if path=='/api/login.php': data={'ok':True} if body.get('password')=='fixture-pass' else {'ok':False,'message':'بيانات الدخول غير صحيحة.'}
   elif path=='/api/register.php':
    assert body.get('full_name')=='Test Student Demo',body
-   assert body.get('identifier')=='newstudent@example.test',body
-   assert body.get('contact_type')=='email' and body.get('grade_id')==1,body
+   assert body.get('contact_type') in ('email','phone') and body.get('grade_id')==1,body
+   assert body.get('identifier')==('newstudent@example.test' if body['contact_type']=='email' else '07701234567'),body
+   assert body.get('gender')=='male' and body.get('company_website')=='',body
    assert body.get('password')==body.get('password_confirmation')=='fixture-pass',body
    STATE['registered']=True
-   data={'ok':True,'email_verification_required':True,
-         'masked_email':'n***@example.test','message':'أرسلنا رمز التأكيد إلى بريد الطالب.'}
+   STATE['registered_methods'].append(body['contact_type'])
+   if body['contact_type']=='email':
+    data={'ok':True,'email_verification_required':True,
+          'masked_email':'n***@example.test','message':'أرسلنا رمز التأكيد إلى بريد الطالب.'}
+   else:
+    data={'ok':True,'phone_verification_required':True,
+          'masked_phone':'077****4567','message':'أرسلنا رمز التأكيد إلى الهاتف.'}
   elif path in ('/verify-email.php','/verify-phone.php'):
    if self.command=='GET':
     html='<form><input name="csrf" value="synthetic-csrf"></form>'
@@ -40,7 +47,8 @@ class Handler(BaseHTTPRequestHandler):
     html='<div class="form-message success">أرسلنا رمز تحقق جديدًا.</div>'
    elif body.get('action')=='verify' and body.get('code')=='123456':
     STATE['verified']=True
-    html='<div class="form-message success">تم تأكيد البريد الإلكتروني.</div>'
+    STATE['verified_methods'].append('phone' if path=='/verify-phone.php' else 'email')
+    html='<div class="form-message success">تم تأكيد الحساب.</div>'
    else:
     STATE['invalid_code_count']+=1
     html='<div class="form-message error">رمز التحقق غير صحيح.</div>'
@@ -280,8 +288,8 @@ def main():
  # Resend is separate from attempting an invalid code and must retain session.
  button('إعادة إرسال الرمز');time.sleep(.8)
  assert STATE['resend_count']==1,'Resend must hit the verification endpoint'
- fill_register_field('رمز التحقق من 6 أرقام','000000')
- button('تأكيد الحساب');ui.wait_for('رمز التحقق')
+ fill_register_field('000000','000000')
+ button('تأكيد الحساب');ui.wait_for('رمز التحقق غير صحيح.')
  assert STATE['invalid_code_count']==1 and not STATE['verified'],'Wrong OTP cannot activate'
  tree,_=ui.ui_tree()
  otp=next(n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText')
@@ -292,7 +300,53 @@ def main():
  button('تأكيد الحساب');ui.wait_for('حسابي')
  assert STATE['verified'],'Correct OTP must activate the same pending account'
  screenshot(args.output,'student-verified-account')
- args.output.joinpath('fixture-results.json').write_text(json.dumps({'passed':True,'grading_requests':3,'rejected_then_retryable':True,'summary_without_footer':True,'note_roundtrip':True,'welcome_replays_on_resume':True,'config_loaded':True,'logout_reject_then_accept':True,'register_and_verify':True,'resend_count':STATE['resend_count'],'invalid_code_count':STATE['invalid_code_count'],'synthetic_only':True},indent=2))
- print('PASS synthetic login, registration, email verification and grading semantics',flush=True)
+
+ # Complete the other real iPhone registration route, including empty-field
+ # validation, segment resets and the Android hardware-back step semantics.
+ button('حسابي');ui.wait_for('تفعيل الاشتراك بكود')
+ button('تسجيل الخروج');ui.wait_for('سيتم إنهاء جلسة حسابك على هذا الجهاز.')
+ button('تسجيل الخروج');ui.wait_for('مساحة تعلّمك')
+ ui.enter_login(393,852)
+ button('إنشاء حساب طالب جديد');ui.wait_for('بيانات الطالب')
+ registrations_before=len(STATE['registered_methods'])
+ button('التالي');ui.wait_for('بيانات الطالب')
+ assert len(STATE['registered_methods'])==registrations_before, 'Incomplete student name cannot register'
+ fill_register_field('مثال: يونس محمد عباس','Test%sStudent%sDemo')
+ button('التالي');ui.wait_for('طريقة التسجيل')
+ button('رقم الهاتف');ui.wait_for('07XXXXXXXXX')
+ button('التالي');ui.wait_for('طريقة التسجيل')
+ assert len(STATE['registered_methods'])==registrations_before, 'Empty phone cannot register'
+ fill_register_field('07XXXXXXXXX','07701234567')
+ # SwiftUI clears the identifier on each email/phone segment switch.
+ button('البريد الإلكتروني');ui.wait_for('example@email.com')
+ button('رقم الهاتف');ui.wait_for('07XXXXXXXXX')
+ tree,_=ui.ui_tree()
+ assert not any(n.attrib.get('text')=='07701234567' for n in tree.iter('node')), 'Switching contact type must clear stale phone'
+ fill_register_field('07XXXXXXXXX','07701234567')
+ screenshot(args.output,'student-phone-registration-step2')
+ button('التالي');ui.wait_for('حماية الحساب')
+ back();ui.wait_for('طريقة التسجيل')
+ tree,_=ui.ui_tree()
+ assert any(n.attrib.get('text')=='07701234567' for n in tree.iter('node')), 'Hardware back must preserve phone draft'
+ button('رجوع للخطوة السابقة');ui.wait_for('بيانات الطالب')
+ tree,_=ui.ui_tree()
+ assert any(n.attrib.get('text')=='Test Student Demo' for n in tree.iter('node')), 'Back navigation must preserve student name'
+ button('التالي');ui.wait_for('طريقة التسجيل')
+ button('التالي');ui.wait_for('حماية الحساب')
+ fill_register_field('8 أحرف على الأقل','fixture-pass')
+ button('إنشاء الحساب');ui.wait_for('حماية الحساب')
+ assert len(STATE['registered_methods'])==registrations_before, 'Missing password confirmation cannot register'
+ fill_register_field('أعد كتابة كلمة المرور','fixture-pass')
+ ui.wait_for('كلمتا المرور متطابقتان')
+ button('إنشاء الحساب');ui.wait_for('تأكيد رقم الهاتف')
+ ui.wait_for('رمز التحقق')
+ screenshot(args.output,'student-phone-verification')
+ assert STATE['registered_methods']==['email','phone'], STATE['registered_methods']
+ fill_register_field('000000','123456')
+ button('تأكيد الحساب');ui.wait_for('حسابي')
+ assert STATE['verified_methods']==['email','phone'], STATE['verified_methods']
+ screenshot(args.output,'student-phone-verified-account')
+ args.output.joinpath('fixture-results.json').write_text(json.dumps({'passed':True,'grading_requests':3,'rejected_then_retryable':True,'summary_without_footer':True,'note_roundtrip':True,'welcome_replays_on_resume':True,'config_loaded':True,'logout_reject_then_accept':True,'register_and_verify':True,'registration_methods':STATE['registered_methods'],'verification_methods':STATE['verified_methods'],'phone_segment_resets':True,'registration_draft_survives_back':True,'incomplete_registration_blocked':True,'resend_count':STATE['resend_count'],'invalid_code_count':STATE['invalid_code_count'],'synthetic_only':True},indent=2))
+ print('PASS synthetic login, both registration routes, email/phone verification and grading',flush=True)
  server.shutdown()
 if __name__=='__main__': main()

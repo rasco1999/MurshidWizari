@@ -1524,8 +1524,8 @@ class MainActivity : Activity() {
         authHeader(if (kind == "phone") "تأكيد رقم الهاتف" else "تأكيد البريد الإلكتروني")
         val intro = root.getChildAt(root.childCount - 1)
         line("رمز التحقق", true)
-        caption(note.ifBlank { "أدخل الرمز الذي أُرسل إلى $destination" })
-        val code = input("رمز التحقق من 6 أرقام").apply {
+        caption(note.ifBlank { "أدخل الرمز المرسل إلى $destination" })
+        val code = input("000000").apply {
             inputType = InputType.TYPE_CLASS_NUMBER
             filters = arrayOf(InputFilter.LengthFilter(6))
             layoutDirection = View.LAYOUT_DIRECTION_LTR
@@ -1535,6 +1535,20 @@ class MainActivity : Activity() {
             textSize = 22f
             contentDescription = "رمز التحقق من ستة أرقام"
         }
+        val verificationStatus = uiText("", 14f).apply {
+            visibility = View.GONE
+            setPadding(dp(12), dp(11), dp(12), dp(11))
+        }
+        root.addView(verificationStatus)
+        fun showVerificationStatus(text: String, error: Boolean) {
+            verificationStatus.text = text
+            verificationStatus.visibility = if (text.isBlank()) View.GONE else View.VISIBLE
+            verificationStatus.setTextColor(if (error) Color.rgb(181, 66, 54) else Color.rgb(29, 144, 75))
+            verificationStatus.background = shape(
+                if (error) (if (night) Color.rgb(68, 37, 35) else Color.rgb(255, 235, 232))
+                else (if (night) Color.rgb(23, 56, 37) else Color.rgb(231, 247, 235)),
+                dp(12).toFloat())
+        }
         val verify = button("تأكيد الحساب") {}
         verify.isEnabled = false
         code.addTextChangedListener(object : TextWatcher {
@@ -1542,15 +1556,20 @@ class MainActivity : Activity() {
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 verify.isEnabled = !recoveryBusy &&
                     RecoveryRules.normalizedDigits(s?.toString().orEmpty()).matches(Regex("[0-9]{6}"))
+                if (verificationStatus.visibility == View.VISIBLE) showVerificationStatus("", false)
             }
             override fun afterTextChanged(s: Editable?) = Unit
         })
         verify.setOnClickListener {
             val value = RecoveryRules.normalizedDigits(code.text.toString())
-            if (!value.matches(Regex("[0-9]{6}"))) { message("أدخل الرمز كاملاً من 6 أرقام."); return@setOnClickListener }
+            if (!value.matches(Regex("[0-9]{6}"))) {
+                showVerificationStatus("أدخل الرمز كاملاً من 6 أرقام.", true)
+                return@setOnClickListener
+            }
             if (recoveryBusy) return@setOnClickListener
             recoveryBusy = true
             verify.isEnabled = false
+            showVerificationStatus("", false)
             recoveryRequest(mayHaveSubmitted = true, action = { api.verifyPending(kind, value) }) { result ->
                 recoveryBusy = false
                 if (activeScreen != "verification") return@recoveryRequest
@@ -1558,7 +1577,8 @@ class MainActivity : Activity() {
                 if (result.optBoolean("ok")) {
                     api.setRemember(pendingVerificationRemember)
                     showHome(result)
-                } else message(result.optString("message", "تعذر تأكيد الرمز. تحقق منه وأعد المحاولة."))
+                } else showVerificationStatus(
+                    result.optString("message", "تعذر تأكيد الرمز. تحقق منه وأعد المحاولة."), true)
             }
         }
         val resend = button("إعادة إرسال الرمز", secondary = true) {}
@@ -1566,15 +1586,17 @@ class MainActivity : Activity() {
             if (recoveryBusy) return@setOnClickListener
             recoveryBusy = true
             resend.isEnabled = false
+            showVerificationStatus("", false)
             recoveryRequest(mayHaveSubmitted = true, action = { api.resendPending(kind) }) { result ->
                 recoveryBusy = false
                 if (activeScreen == "verification") {
                     resend.isEnabled = true
-                    message(result.optString("message", "تعذر إعادة إرسال الرمز."))
+                    showVerificationStatus(result.optString("message", "تعذر إعادة إرسال الرمز."),
+                        !result.optBoolean("ok"))
                 }
             }
         }
-        val backToLogin = button("العودة لتسجيل الدخول", secondary = true) { loginScreen() }
+        val backToLogin = button("إلغاء والعودة لتسجيل الدخول", secondary = true) { loginScreen() }
         val fields = (0 until root.childCount).map { root.getChildAt(it) }
             .filter { it !== intro && it !== backToLogin }
         val form = uiCard()
@@ -5915,7 +5937,15 @@ class MainActivity : Activity() {
             "instructions" -> if (instructionsReturnScreen == "account") accountScreen() else loginScreen()
             "account" -> showHome(homepage)
             "plans" -> if (plansReturnScreen == "account") accountScreen() else showHome(homepage)
-            "register" -> if (registerReturnScreen == "login") loginScreen() else guestLandingScreen()
+            "register" -> {
+                val draft = registrationDraft
+                if (draft != null && draft.step > 1 && !draft.loading) {
+                    draft.step--
+                    draft.fieldError = ""
+                    draft.generalError = ""
+                    renderRegistration(draft)
+                } else if (registerReturnScreen == "login") loginScreen() else guestLandingScreen()
+            }
             "verification" -> loginScreen()
             "login" -> guestLandingScreen()
             "guest" -> finish()
