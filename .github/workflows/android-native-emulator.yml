@@ -21,6 +21,8 @@ jobs:
         api-level: [26, 29, 33, 35]
     steps:
       - uses: actions/checkout@v4
+      - name: Verify scroll-aware UI harness
+        run: python3 -m unittest discover -s android-native/scripts -p 'test_ui_helpers.py' -v
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

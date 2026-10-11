@@ -53,7 +53,20 @@ def top():
 
 
 def pick(description, choice):
-    fixture.button(description)
+    # A stage's caption may have the same text as its Spinner's accessible
+    # label. Tap the actual native Spinner, not the adjacent caption.
+    for attempt in range(6):
+        tree, _ = ui.ui_tree()
+        spinner = next((node for node in tree.iter('node')
+                        if node.attrib.get('class') == 'android.widget.Spinner'
+                        and node.attrib.get('content-desc') == description), None)
+        if spinner is not None:
+            ui.tap_node(spinner)
+            break
+        ui.adb('shell', 'input', 'swipe', '196', '700', '196', '260', '270')
+        time.sleep(.3)
+    else:
+        raise AssertionError(f'Cannot reveal native picker {description!r}')
     fixture.button(choice)
     time.sleep(.25)
 
