@@ -255,6 +255,11 @@ class IosGlyphView(context: Context, private val symbol: String, private val tin
                 canvas.drawCircle(12f, 8f, 4f, ink)
                 canvas.drawArc(3f, 12f, 21f, 25f, 195f, 150f, false, ink)
             }
+            "grid" -> {
+                val solid = Paint(ink).apply { style = Paint.Style.FILL }
+                for (x in floatArrayOf(3f, 13f)) for (y in floatArrayOf(3f, 13f))
+                    canvas.drawRoundRect(x, y, x + 8f, y + 8f, 1.5f, 1.5f, solid)
+            }
             "id-card" -> {
                 canvas.drawRoundRect(2f, 4f, 22f, 20f, 2.5f, 2.5f, ink)
                 canvas.drawCircle(8f, 10f, 2.3f, ink)

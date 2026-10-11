@@ -4215,7 +4215,7 @@ class MainActivity : Activity() {
     }
 
     private fun accountSetting(card: LinearLayout, title: String, subtitle: String,
-                               symbol: String, action: () -> Unit) {
+                               symbol: String, action: () -> Unit): TextView {
         if (card.childCount > 0) card.addView(View(this).apply {
             setBackgroundColor(if (night) Color.rgb(52,52,55) else Color.rgb(235,235,239))
         }, LinearLayout.LayoutParams(-1, dp(1)).apply { topMargin = dp(3); bottomMargin = dp(3) })
@@ -4228,13 +4228,15 @@ class MainActivity : Activity() {
         row.addView(iconBubble(symbol, 34), LinearLayout.LayoutParams(dp(34), dp(34)).apply { marginEnd = dp(12) })
         val details = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         details.addView(uiText(title, 16f, true))
-        details.addView(uiText(subtitle, 12f, tint = mutedText),
+        val subtitleLabel = uiText(subtitle, 12f, tint = mutedText)
+        details.addView(subtitleLabel,
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(3) })
         row.addView(details, LinearLayout.LayoutParams(0, -2, 1f))
         row.addView(IosGlyphView(this, "chevron", mutedText), LinearLayout.LayoutParams(dp(15), dp(15)))
         card.addView(tappable(row, title, action), LinearLayout.LayoutParams(-1, -2).apply {
             topMargin = dp(5); bottomMargin = dp(5)
         })
+        return subtitleLabel
     }
 
     private fun accountSwitch(card: LinearLayout, title: String, symbol: String,
@@ -4348,13 +4350,22 @@ class MainActivity : Activity() {
                 11f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
             addUiCard(activationCard, bottom = 16)
 
-            sectionHeader("الحساب والخدمات", "إدارة كل ما يخص حسابك", "person")
+            sectionHeader("الحساب والخدمات", "إدارة كل ما يخص حسابك", "grid")
             val services = uiCard()
             if (response.optBoolean("can_change_name")) accountSetting(services, "تغيير الاسم",
                 "متاح مرة واحدة", "person") { promptRename(profile.optString("name")) }
-            accountSetting(services, "الإشعارات", "لا توجد إشعارات جديدة", "bell") { notificationsScreen() }
+            val notificationSubtitle = accountSetting(services, "الإشعارات", "لا توجد إشعارات جديدة", "bell") {
+                notificationsScreen()
+            }
             accountSetting(services, "خدمة العملاء", "محادثة مباشرة مع الدعم", "chat") { supportScreen() }
             addUiCard(services, bottom = 16)
+            fetch("mobile/notifications.php", showError = false) { notices ->
+                if (activeScreen == "account" && notices.optBoolean("ok")) {
+                    val unread = notices.optInt("unread", 0).coerceAtLeast(0)
+                    notificationSubtitle.text = if (unread > 0) "لديك $unread غير مقروء"
+                        else "لا توجد إشعارات جديدة"
+                }
+            }
 
             sectionHeader("الأمان والتذكير", "خيارات خاصة بجهازك", "lock")
             val security = uiCard()
@@ -4441,6 +4452,41 @@ class MainActivity : Activity() {
                     }.setNegativeButton("إلغاء", null).show()
             })
             addUiCard(logoutCard, bottom = 16)
+
+            // The active iPhone account concludes with version and policy links.
+            val appInfo = uiCard()
+            val appInfoHeading = LinearLayout(this).apply {
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            appInfoHeading.addView(IosGlyphView(this, "graduation", blue),
+                LinearLayout.LayoutParams(dp(24), dp(24)).apply { marginEnd = dp(9) })
+            appInfoHeading.addView(uiText("منصة المرشد الوزاري", 16f, true),
+                LinearLayout.LayoutParams(0, -2, 1f))
+            appInfoHeading.addView(uiText("${BuildConfig.VERSION_NAME} • ${BuildConfig.VERSION_CODE}",
+                12f, tint = mutedText))
+            appInfo.addView(appInfoHeading)
+            appInfo.addView(uiText("تطبيق أندرويد أصلي مرتبط مباشرة بحسابك في المنصة.",
+                13f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
+            val links = LinearLayout(this).apply {
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            fun policyLink(label: String, url: String): TextView = uiText(label, 13f, true, blue).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                minimumHeight = dp(42)
+                isClickable = true
+                isFocusable = true
+                contentDescription = label
+                setOnClickListener { external(url) }
+            }
+            links.addView(policyLink("الخصوصية", "https://www.mur-iq.com/privacy.php"),
+                LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(17) })
+            links.addView(policyLink("شروط الاستخدام", "https://www.mur-iq.com/terms.php"))
+            appInfo.addView(links, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(3) })
+            addUiCard(appInfo, bottom = 18)
         }
     }
 

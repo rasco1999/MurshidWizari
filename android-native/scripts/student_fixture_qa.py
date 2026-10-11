@@ -64,6 +64,7 @@ class Handler(BaseHTTPRequestHandler):
                                           'free_remaining':0 if not STATE['subscription_active'] else 15}
   elif path=='/mobile/account.php': data={**BOOT,'subscribed':STATE['subscription_active'],
                                          'subscription_days_remaining':30,'can_change_name':False}
+  elif path=='/mobile/notifications.php': data={'ok':True,'unread':2,'items':[]}
   elif path=='/api/payment-checkout.php':
    if body.get('action')=='checkout':
     STATE['checkout_requests']+=1
@@ -377,13 +378,20 @@ def main():
  login_field(0,'student@example.test');login_field(1,'fixture-pass')
  button('دخول');ui.wait_for('حسابي')
  button('حسابي');ui.wait_for('تفعيل الاشتراك بكود')
+ ui.wait_for('لديك 2 غير مقروء')
  screenshot(args.output,'student-unsubscribed-account')
  fill_register_field('MW-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX','INVALID')
  button('تفعيل الاشتراك');time.sleep(.6)
  assert STATE['redeem_requests']==0,'Malformed code must not contact the redemption endpoint'
+ hide_keyboard_if_visible()
+ # The real V31 account continues below security/logout with version and policies.
+ for _ in range(4):
+  ui.adb('shell','input','swipe','196','740','196','245','270');time.sleep(.12)
+ ui.wait_for('شروط الاستخدام')
+ screenshot(args.output,'student-account-policy-footer')
  # Move to the top, clear the test code, then exercise monthly/quarterly plans.
- ui.adb('shell','input','swipe','196','230','196','770','330');time.sleep(.5)
- ui.adb('shell','input','swipe','196','230','196','770','330');time.sleep(.5)
+ for _ in range(4):
+  ui.adb('shell','input','swipe','196','230','196','770','330');time.sleep(.2)
  button('اشتراك');ui.wait_for('لا تحفظ الإجابة فقط… افهم أين تتطور')
  screenshot(args.output,'student-subscription-hero')
  ui.wait_for('ماذا تكسب عند الاشتراك؟')
