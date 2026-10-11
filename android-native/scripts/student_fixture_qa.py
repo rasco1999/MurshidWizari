@@ -178,8 +178,8 @@ def login_field(index,value):
   if seen==value or (index==1 and seen not in ('',hint)):
    hide_keyboard_if_visible()
    return
-  print(f'RETRY input for login field {index} on emulator (attempt {attempt+1})',flush=True)
- raise AssertionError(f'Native login field {index} failed to retain typed value')
+  print(f'RETRY input for login field {index} on emulator (attempt {attempt+1}, actual={seen!r})',flush=True)
+ raise AssertionError(f'Native login field {index} failed to retain typed value; last visible={seen!r}')
 def button(text): ui.tap_visible(text,393,852)
 def back(): ui.adb('shell','input','keyevent','KEYCODE_BACK');time.sleep(.6)
 def fill_register_field(hint,value):
