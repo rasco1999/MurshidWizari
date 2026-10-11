@@ -4611,40 +4611,6 @@ class MainActivity : Activity() {
             })
             addUiCard(logoutCard, bottom = 16)
 
-            // The active iPhone account concludes with version and policy links.
-            val appInfo = uiCard()
-            val appInfoHeading = LinearLayout(this).apply {
-                layoutDirection = View.LAYOUT_DIRECTION_RTL
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-            }
-            appInfoHeading.addView(IosGlyphView(this, "graduation", blue),
-                LinearLayout.LayoutParams(dp(24), dp(24)).apply { marginEnd = dp(9) })
-            appInfoHeading.addView(uiText("منصة المرشد الوزاري", 16f, true),
-                LinearLayout.LayoutParams(0, -2, 1f))
-            appInfoHeading.addView(uiText("${BuildConfig.VERSION_NAME} • ${BuildConfig.VERSION_CODE}",
-                12f, tint = mutedText))
-            appInfo.addView(appInfoHeading)
-            appInfo.addView(uiText("تطبيق أندرويد أصلي مرتبط مباشرة بحسابك في المنصة.",
-                13f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
-            val links = LinearLayout(this).apply {
-                layoutDirection = View.LAYOUT_DIRECTION_RTL
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-            }
-            fun policyLink(label: String, url: String): TextView = uiText(label, 13f, true, blue).apply {
-                gravity = Gravity.CENTER_VERTICAL
-                minimumHeight = dp(42)
-                isClickable = true
-                isFocusable = true
-                contentDescription = label
-                setOnClickListener { external(url) }
-            }
-            links.addView(policyLink("الخصوصية", "https://www.mur-iq.com/privacy.php"),
-                LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(17) })
-            links.addView(policyLink("شروط الاستخدام", "https://www.mur-iq.com/terms.php"))
-            appInfo.addView(links, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(3) })
-            addUiCard(appInfo, bottom = 18)
         }
     }
 

@@ -396,11 +396,11 @@ def main():
  # before asserting the unread count; never assume it shares the code viewport.
  ui.reveal('لديك 2 غير مقروء',393,852)
  screenshot(args.output,'student-account-unread-count')
- # The real V31 account continues below security/logout with version and policies.
+ # Account ends at the red logout card per the user's final iPhone reference.
  for _ in range(4):
   ui.adb('shell','input','swipe','196','740','196','245','270');time.sleep(.12)
- ui.wait_for('شروط الاستخدام')
- screenshot(args.output,'student-account-policy-footer')
+ ui.wait_for('تسجيل الخروج')
+ screenshot(args.output,'student-account-logout-footer')
  # Move to the top, clear the test code, then exercise monthly/quarterly plans.
  for _ in range(4):
   ui.adb('shell','input','swipe','196','230','196','770','330');time.sleep(.2)
