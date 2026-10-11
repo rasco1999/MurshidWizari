@@ -5142,3 +5142,9 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         stopHomeHeroTicker()
         stopFocusTicker()
+        stopPracticeTicker()
+        heroJobs.shutdownNow()
+        jobs.shutdownNow()
+        super.onDestroy()
+    }
+}
