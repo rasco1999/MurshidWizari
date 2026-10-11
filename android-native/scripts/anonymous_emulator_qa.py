@@ -118,7 +118,6 @@ def capture(directory: Path, name: str, marker: str = "منصة المرشد ا�
 def check_controls(directory: Path, name: str, width: int, height: int) -> None:
     # The iPhone login uses an eye affordance inside the password field, not
     # the old Android checkbox. Verify both transitions through accessibility.
-    wait_for("إظهار كلمة المرور")
     for label, desired in (("إظهار كلمة المرور", "إخفاء كلمة المرور"),
                            ("إخفاء كلمة المرور", "إظهار كلمة المرور")):
         for attempt in range(2):
@@ -147,6 +146,22 @@ def check_controls(directory: Path, name: str, width: int, height: int) -> None:
     adb("shell", "input", "keyevent", "KEYCODE_BACK")
     wait_for("إظهار كلمة المرور")
     print("PASS registration screen and Android back", flush=True)
+
+
+def enter_login(width: int, height: int) -> None:
+    # A first synthetic tap can be dropped on a freshly booted Android 15
+    # emulator. Retry *only* if we can still observe the original guest page.
+    for attempt in range(3):
+        tap_visible("تسجيل الدخول", width, height)
+        try:
+            wait_for("سجّل الدخول وواصل دراستك من حيث توقفت", seconds=8)
+            return
+        except AssertionError:
+            root, _ = ui_tree()
+            if find(root, "تعلّم بتركيز. تقدّم بثقة.") is None:
+                raise
+            print(f"RETRY guest-to-login emulator tap, attempt={attempt + 1}", flush=True)
+    raise AssertionError("Guest login tap did not open the native login form")
 
 
 def launch_native() -> None:
@@ -179,8 +194,7 @@ def test_size(directory: Path, name: str, width: int, height: int, scale: float)
         raise AssertionError("Native app process did not survive launch")
     capture(directory, name + "-guest", "تعلّم بتركيز. تقدّم بثقة.")
     # The iOS GuestLandingView is the true entry screen after the animated welcome.
-    tap_visible("تسجيل الدخول", width, height)
-    wait_for("إظهار كلمة المرور")
+    enter_login(width, height)
     capture(directory, name, "المرشد الوزاري")
     check_controls(directory, name, width, height)
 
@@ -194,8 +208,7 @@ def capture_additional_layout(directory: Path, name: str, width: int, height: in
     if not adb("shell", "pidof", PACKAGE).strip():
         raise AssertionError(f"Native process exited at extra layout {name}")
     capture(directory, name + "-guest", "تعلّم بتركيز. تقدّم بثقة.")
-    tap_visible("تسجيل الدخول", width, height)
-    wait_for("إظهار كلمة المرور")
+    enter_login(width, height)
     capture(directory, name, "المرشد الوزاري")
 
 
