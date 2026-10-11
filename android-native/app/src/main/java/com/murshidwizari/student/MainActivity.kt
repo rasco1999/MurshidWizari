@@ -361,8 +361,18 @@ class MainActivity : Activity() {
         GradientDrawable().apply { setColor(color); cornerRadius = radius }
     private fun dp(size: Int): Int = (size * resources.displayMetrics.density).toInt()
     private fun contentWidth(): Int = VisualRules.contentWidthDp(resources.configuration.screenWidthDp)?.let(::dp) ?: -1
+    private fun styleSystemBars() {
+        // Android 15 draws transparent system bars over the activity. A light
+        // screen must request dark status/navigation glyphs or they disappear
+        // against the iOS-style grouped background.
+        window.statusBarColor = appColor
+        window.navigationBarColor = appColor
+        window.decorView.systemUiVisibility = if (night) 0 else
+            (View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR)
+    }
     private fun setupRoot(horizontalPadding: Int = 16, topPadding: Int = 16, tab: String? = null) {
         screenGeneration++
+        styleSystemBars()
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(appColor)
@@ -408,9 +418,6 @@ class MainActivity : Activity() {
     }
     private fun base(title: String, showBack: Boolean = false, tab: String? = null) {
         stopHomeHeroTicker()
-        window.statusBarColor = appColor
-        window.navigationBarColor = appColor
-        window.decorView.systemUiVisibility = if (night) 0 else View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         setupRoot(topPadding = if (tab == null) 16 else 0, tab = tab)
         when {
             tab != null -> tabHeader(title, tab)
@@ -5325,7 +5332,10 @@ class MainActivity : Activity() {
             val old = lastValidatedInternet
             lastValidatedInternet = validated
             if (old == true && !validated) message("انقطع اتصال الإنترنت. ستُحفظ الإجابات غير المرسلة في هذه الشاشة.")
-            if (old == false && validated) message("عاد اتصال الإنترنت. يمكنك إعادة تحميل البيانات؛ لن تُعاد طلبات الحفظ تلقائياً.")
+            // System connectivity can change several times during cold start.
+            // Do not obscure the welcome/guest/login screen with a transient toast.
+            if (old == false && validated && student.optInt("id") > 0)
+                message("عاد اتصال الإنترنت. يمكنك إعادة تحميل البيانات؛ لن تُعاد طلبات الحفظ تلقائياً.")
         }
     }
 
