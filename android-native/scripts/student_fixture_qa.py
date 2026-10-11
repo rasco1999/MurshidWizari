@@ -77,6 +77,9 @@ def main():
  assert fields[1].attrib.get('text') not in ('','أدخل كلمة المرور'),fields[1].attrib
  button('دخول')
  ui.wait_for('حسابي');screenshot(args.output,'student-home-light')
+ # Capture the reference iPhone's dark appearance as well as light Android.
+ # The toggle is a native accessible header control, not a test-only shortcut.
+ button('تبديل المظهر');ui.wait_for('حسابي');screenshot(args.output,'student-home-dark')
  button('الإعلانات');ui.wait_for('مدرسة افتراضية');screenshot(args.output,'student-ads')
  button('المرشحات');ui.wait_for('مرشح فحص افتراضي');screenshot(args.output,'student-predictions')
  button('عرض الإجابة والتوضيح⌄');ui.wait_for('إجابة المرشح الافتراضي');screenshot(args.output,'student-prediction-answer')
@@ -85,7 +88,9 @@ def main():
  tree,_=ui.ui_tree()
  assert any('student@example.test' in n.attrib.get('text','') for n in tree.iter('node')),'Account recovery must show the registered email'
  screenshot(args.output,'student-bound-recovery');back()
- button('الاختبارات');button('الرياضيات');ui.wait_for('موضوع فحص افتراضي');button('موضوع فحص افتراضي')
+ button('الاختبارات');ui.wait_for('الرياضيات');screenshot(args.output,'student-tests')
+ button('الرياضيات');ui.wait_for('موضوع فحص افتراضي');screenshot(args.output,'student-topics')
+ button('موضوع فحص افتراضي')
  ui.wait_for('ما حاصل جمع اثنين وثلاثة؟');screenshot(args.output,'student-exam-before-answer')
  button('خمسة');ui.wait_for('إجابة صحيحة');screenshot(args.output,'student-exam-graded')
  button('ملاحظتي الخاصة');ui.wait_for('حفظ');tree,_=ui.ui_tree();field=next(n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText')
