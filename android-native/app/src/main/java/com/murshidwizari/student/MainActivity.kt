@@ -80,6 +80,7 @@ class MainActivity : Activity() {
     private var lastSearchQuery = ""
     private var lastSearchResults = JSONArray()
     private var examQuestions = JSONArray()
+    private var examStartedAt = 0L
     private val examIssues = HashMap<Int, String>()
     private var questionIndex = 0
     private var busyAnswer = false
@@ -2746,6 +2747,7 @@ class MainActivity : Activity() {
     }
 
     private fun loadExam(id: Int, name: String, fromSearch: Boolean = false, targetText: String = "") {
+        if (chapterId != id || examStartedAt == 0L) examStartedAt = SystemClock.elapsedRealtime()
         examFromSearch = fromSearch
         examSearchTarget = if (fromSearch) targetText else ""
         chapterId = id; chapterName = name
@@ -2947,6 +2949,78 @@ class MainActivity : Activity() {
         addUiCard(feedback, bottom = 16)
     }
 
+    private fun examResultMetric(label: String, value: String, icon: String): View = uiCard().apply {
+        addView(IosGlyphView(this@MainActivity, icon, blue),
+            LinearLayout.LayoutParams(dp(26), dp(26)).apply { bottomMargin = dp(9) })
+        addView(uiText(value, 24f, true).apply {
+            if (value.any { it.isDigit() }) {
+                layoutDirection = View.LAYOUT_DIRECTION_LTR
+                textDirection = View.TEXT_DIRECTION_LTR
+            }
+        })
+        addView(uiText(label, 12f, tint = mutedText),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
+    }
+
+    /** SwiftUI V3ExamResultView geometry and copy, with server-confirmed grades only. */
+    private fun renderExamResult(total: Int, answered: Int, graded: Int, correct: Int) {
+        val score = ExamResultRules.Summary(answered, graded, correct)
+        val resultColor = when {
+            graded == 0 -> mutedText
+            score.percent >= 85 -> Color.rgb(52, 199, 89)
+            score.percent >= 60 -> blue
+            else -> Color.rgb(255, 149, 0)
+        }
+        val card = uiCard().apply { gravity = Gravity.CENTER_HORIZONTAL }
+        val symbol = if (score.percent >= 85 && graded > 0) "trophy"
+            else if (score.percent >= 60 && graded > 0) "check" else "book"
+        card.addView(FrameLayout(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.argb(26, Color.red(resultColor), Color.green(resultColor), Color.blue(resultColor)))
+            }
+            addView(IosGlyphView(this@MainActivity, symbol, resultColor),
+                FrameLayout.LayoutParams(dp(46), dp(46), Gravity.CENTER))
+        }, LinearLayout.LayoutParams(dp(116), dp(116)).apply { bottomMargin = dp(15) })
+        card.addView(uiText(score.title, 22f, true).apply { gravity = Gravity.CENTER },
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+        card.addView(uiText("$topicsSubjectName • $chapterName", 14f, tint = mutedText).apply {
+            gravity = Gravity.CENTER
+        }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+        card.addView(uiText("${score.percent}%", 48f, true, resultColor).apply {
+            gravity = Gravity.CENTER
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            textDirection = View.TEXT_DIRECTION_LTR
+        })
+        addUiCard(card, bottom = 15)
+
+        val elapsed = if (examStartedAt > 0L) ((SystemClock.elapsedRealtime() - examStartedAt)
+            .coerceAtLeast(0) / 1000).toInt() else 0
+        val timeLabel = String.format(java.util.Locale.US, "%02d:%02d", elapsed / 60, elapsed % 60)
+        uiTwoColumnGrid(listOf(
+            examResultMetric("الصحيحة", score.correct.toString(), "check"),
+            examResultMetric("الخاطئة", score.wrong.toString(), "circle"),
+            examResultMetric("تمت الإجابة", "${score.answered}/$total", "file"),
+            examResultMetric("الوقت", timeLabel, "clock")
+        ))
+        val next = uiCard()
+        next.addView(uiText("✦ خطوتك التالية", 17f, true, blue))
+        next.addView(uiText(score.advice, 15f, tint = mutedText),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        if (score.pending > 0) next.addView(uiText(
+            "${score.pending} إجابة لم يصل تصحيحها المؤكد بعد؛ لا تُحسب ضمن الأخطاء.",
+            13f, tint = gold), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
+        addUiCard(next, bottom = 14)
+        button(if (score.wrong > 0) "راجع الأسئلة التي تحتاج انتباها" else "مراجعة جميع الأسئلة") {
+            questionIndex = 0; renderQuestion()
+        }
+        button("فتح المراجعة الذكية", secondary = true) { reviewScreen() }
+        button("طلب أسئلة جديدة", secondary = true) { questionRequest() }
+        button(if (examFromSearch) "العودة إلى نتائج البحث" else "العودة إلى المواضيع", secondary = true) {
+            leaveExam()
+        }
+    }
+
     private fun renderQuestion() {
         activeScreen = "exam"
         base(chapterName, true)
@@ -2967,11 +3041,7 @@ class MainActivity : Activity() {
                 val answer = examQuestions.optJSONObject(index)?.optJSONObject("answer")
                 answer != null && ExamRules.knownBoolean(answer.opt("correct")) != null
             }
-            line("نتيجة الموضوع: $submitted من $total سؤالاً محلولاً، والصحيح $correct من $graded إجابات مؤكدة التصحيح.", true)
-            if (submitted < total) caption("بعض الأسئلة لم تُحلّ بعد. راجعها قبل إنهاء الموضوع.")
-            button("مراجعة جميع الأسئلة") { questionIndex = 0; renderQuestion() }
-            button("طلب أسئلة جديدة") { questionRequest() }
-            button(if (examFromSearch) "العودة إلى نتائج البحث" else "عودة إلى المواضيع") { leaveExam() }
+            renderExamResult(total, submitted, graded, correct)
             return
         }
         val question = examQuestions.optJSONObject(questionIndex)
@@ -3054,6 +3124,7 @@ class MainActivity : Activity() {
     }
 
     private fun leaveExam() {
+        examStartedAt = 0L
         if (examFromSearch) renderQuestionSearchResults(lastSearchQuery, lastSearchResults)
         else topicsScreen(topicsSubjectId, topicsSubjectName)
     }
