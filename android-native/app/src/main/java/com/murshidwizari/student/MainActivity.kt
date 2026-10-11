@@ -1084,7 +1084,7 @@ class MainActivity : Activity() {
         val question = examQuestions.optJSONObject(questionIndex)
         if (question == null) {
             line("تعذر قراءة بيانات السؤال. حدّث الاختبار ثم أبلغ الإدارة إن استمر الخلل.")
-            button("تحديث الأسئلة") { loadExam(chapterId, chapterName) }
+            button("تحديث الأسئلة") { loadExam(chapterId, chapterName, fromSearch = examFromSearch) }
             if (questionIndex > 0) button("السؤال السابق", secondary = true) { questionIndex--; renderQuestion() }
             return
         }
@@ -1109,7 +1109,7 @@ class MainActivity : Activity() {
             if (issue != null) {
                 line("هذا السؤال يحتاج إلى تصحيح في محتوى الخادم: $issue")
                 caption("لن تُخصم محاولة مجانية لأن إرسال الإجابة معطّل لهذا السؤال.")
-                button("تحديث بيانات السؤال") { loadExam(chapterId, chapterName) }
+                button("تحديث بيانات السؤال") { loadExam(chapterId, chapterName, fromSearch = examFromSearch) }
             } else when {
                 question.optJSONObject("english_match") != null ->
                     englishMatchQuestion(question)
@@ -1195,7 +1195,7 @@ class MainActivity : Activity() {
                     AlertDialog.Builder(this).setTitle("التحقق من حفظ الإجابة")
                         .setMessage("قد تكون الإجابة قد حُفظت رغم انقطاع الاتصال. حدّث الاختبار للتحقق قبل المحاولة مجدداً.")
                         .setPositiveButton("التحقق الآن") { _, _ ->
-                            loadExam(chapterId, chapterName)
+                            loadExam(chapterId, chapterName, fromSearch = examFromSearch)
                         }.setNegativeButton("لاحقاً", null).show()
                 }
                 if (result.optBoolean("payment_required")) {
@@ -1213,7 +1213,9 @@ class MainActivity : Activity() {
                 submissionUncertain = true
                 AlertDialog.Builder(this).setTitle("لم يصل تأكيد الحفظ")
                     .setMessage("سنقرأ الإجابة المحفوظة من الخادم قبل السماح بمحاولة أخرى.")
-                    .setPositiveButton("تحديث الاختبار") { _, _ -> loadExam(chapterId, chapterName) }
+                    .setPositiveButton("تحديث الاختبار") { _, _ ->
+                        loadExam(chapterId, chapterName, fromSearch = examFromSearch)
+                    }
                     .setCancelable(false).show()
                 return@fetch
             }
@@ -2953,7 +2955,7 @@ class MainActivity : Activity() {
                     else -> showHome(homepage)
                 }
             }
-            "exam" -> topicsScreen(topicsSubjectId, topicsSubjectName)
+            "exam" -> leaveExam()
             "topics" -> subjectsScreen()
             "subjects" -> showHome(homepage)
             "account" -> showHome(homepage)
