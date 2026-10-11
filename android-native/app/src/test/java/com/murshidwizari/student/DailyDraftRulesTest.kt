@@ -9,22 +9,24 @@ class DailyDraftRulesTest {
         CompetitionRules.Question(11, "text", "أكمل العبارة التالية", emptyList())
     )
 
-    @Test fun signatureIsStableButScopedToAccountDayAndLiveQuestionContent() {
-        val signature = DailyDraftRules.signature(4, "2026-10-11", questions)
+    @Test fun signatureIsStableAcrossMidnightButScopedToAccountAndLiveQuestionContent() {
+        val signature = DailyDraftRules.signature(4, questions)
         assertEquals(64, signature.length)
-        assertEquals(signature, DailyDraftRules.signature(4, "2026-10-11", questions))
-        assertNotEquals(signature, DailyDraftRules.signature(5, "2026-10-11", questions))
-        assertNotEquals(signature, DailyDraftRules.signature(4, "2026-10-12", questions))
-        assertNotEquals(signature, DailyDraftRules.signature(4, "2026-10-11", questions.reversed()))
-        assertNotEquals(signature, DailyDraftRules.signature(4, "2026-10-11",
+        assertEquals(signature, DailyDraftRules.signature(4, questions))
+        assertNotEquals(signature, DailyDraftRules.signature(5, questions))
+        assertNotEquals(signature, DailyDraftRules.signature(4, questions.reversed()))
+        assertNotEquals(signature, DailyDraftRules.signature(4,
             questions.map { if (it.id == 10) it.copy(text = "سؤال آخر مختلف") else it }))
+        assertNotEquals(signature, DailyDraftRules.legacySignature(4, "2026-10-11", questions))
+        assertNotEquals(DailyDraftRules.legacySignature(4, "2026-10-11", questions),
+            DailyDraftRules.legacySignature(4, "2026-10-12", questions))
     }
 
     @Test fun invalidOrAnonymousChallengeCannotCreatePersistentDraftSignature() {
-        assertEquals("", DailyDraftRules.signature(0, "2026-10-11", questions))
-        assertEquals("", DailyDraftRules.signature(4, "", questions))
-        assertEquals("", DailyDraftRules.signature(4, "2026-10-11", emptyList()))
-        assertEquals("", DailyDraftRules.signature(4, "2026-10-11", questions + questions.first()))
+        assertEquals("", DailyDraftRules.signature(0, questions))
+        assertEquals("", DailyDraftRules.legacySignature(4, "", questions))
+        assertEquals("", DailyDraftRules.signature(4, emptyList()))
+        assertEquals("", DailyDraftRules.signature(4, questions + questions.first()))
     }
 
     @Test fun restoringDraftFiltersUnknownAndNoLongerAvailableAnswers() {

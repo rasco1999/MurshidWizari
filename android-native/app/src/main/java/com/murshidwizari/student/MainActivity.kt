@@ -4550,8 +4550,8 @@ class MainActivity : Activity() {
 
     private fun dailyDraftKey(): String = "daily_challenge_draft_v1_" + student.optInt("id", 0)
 
-    private fun dailyDraftSignature(): String = DailyDraftRules.signature(student.optInt("id", 0),
-        java.time.LocalDate.now(java.time.ZoneId.of("Asia/Baghdad")).toString(), dailyQuestions)
+    private fun dailyDraftSignature(): String =
+        DailyDraftRules.signature(student.optInt("id", 0), dailyQuestions)
 
     private fun clearDailyDraft() {
         prefs.edit().remove(dailyDraftKey()).apply()
@@ -4583,7 +4583,12 @@ class MainActivity : Activity() {
         if (signature.isBlank()) return
         val saved = try { JSONObject(prefs.getString(dailyDraftKey(), "").orEmpty()) }
             catch (_: Exception) { null }
-        if (saved?.optString("signature") != signature) {
+        val baghdadDate = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Baghdad"))
+        val isLegacy = saved != null && (0L..1L).any { days ->
+            saved.optString("signature") == DailyDraftRules.legacySignature(student.optInt("id", 0),
+                baghdadDate.minusDays(days).toString(), dailyQuestions)
+        }
+        if (saved?.optString("signature") != signature && !isLegacy) {
             // A new day or question must not erase evidence of an uncertain POST.
             // A previously accepted answer may be in flight even after midnight.
             if (saved?.optBoolean("pending_receipt") == true) dailyUncertain = true
@@ -4598,6 +4603,7 @@ class MainActivity : Activity() {
         }
         dailyAnswers.putAll(DailyDraftRules.validAnswers(dailyQuestions, restored))
         dailyUncertain = saved?.optBoolean("pending_receipt") == true
+        if (isLegacy) saveDailyDraft(pendingReceipt = dailyUncertain)
     }
 
     private fun loadDailyChallenge() {
@@ -5136,9 +5142,3 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         stopHomeHeroTicker()
         stopFocusTicker()
-        stopPracticeTicker()
-        heroJobs.shutdownNow()
-        jobs.shutdownNow()
-        super.onDestroy()
-    }
-}
