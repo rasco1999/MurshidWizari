@@ -1825,7 +1825,9 @@ class MainActivity : Activity() {
                 topicsSubjectId != subjectId) return@fetch
             activeScreen = "topics"
             base(subjectName, true)
+            val topicsScreenGeneration = screenGeneration
             val topics = response.optJSONArray("topics") ?: JSONArray()
+            var topicMetrics = if (homeInsightsLoaded) homeInsights else JSONObject()
             val search = EditText(this).apply {
                 hint = "ابحث عن موضوع"
                 textSize = 16f
@@ -1854,17 +1856,20 @@ class MainActivity : Activity() {
                     val name = topic.optString("name")
                     if (!name.contains(query.trim(), ignoreCase = true)) continue
                     shown++
-                    // The current home-insights contract exposes coverage for a
-                    // subset of chapters under daily_topics, not chapters.
-                    val metrics = homeInsights.optJSONArray("daily_topics")
+                    // Match iOS V3TopicsView's mobile/insights.php chapters map.
+                    // Never use a daily suggestion as the authoritative metric.
+                    val metrics = topicMetrics.optJSONArray("chapters")
                     val metric = metrics?.let { chapters ->
                         (0 until chapters.length()).mapNotNull { chapters.optJSONObject(it) }
-                            .firstOrNull { it.optInt("id") == topic.optInt("id") }
+                            .firstOrNull { it.optInt("id") == topic.optInt("id") &&
+                                it.optInt("subject_id") == subjectId }
                     }
                     val coverage = (metric?.optInt("coverage") ?: 0).coerceIn(0, 100)
+                    val accuracy = (metric?.optInt("accuracy") ?: 0).coerceIn(0, 100)
+                    val completed = metric?.optBoolean("completed") ?: false
                     val state = when {
                         metric == null -> "التقدم غير متاح"
-                        coverage >= 100 -> "مكتمل"
+                        completed -> "مكتمل"
                         coverage > 0 -> "قيد التقدم"
                         else -> "لم يبدأ"
                     }
@@ -1874,7 +1879,9 @@ class MainActivity : Activity() {
                         layoutDirection = View.LAYOUT_DIRECTION_RTL
                         gravity = Gravity.CENTER_VERTICAL
                     }
-                    row.addView(iconBubble("file", 48), LinearLayout.LayoutParams(dp(48), dp(48)).apply {
+                    row.addView(iconBubble(if (completed) "check" else "file", 48,
+                        if (completed) Color.rgb(52,199,89) else blue),
+                        LinearLayout.LayoutParams(dp(48), dp(48)).apply {
                         marginEnd = dp(12)
                     })
                     val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -1882,19 +1889,25 @@ class MainActivity : Activity() {
                     labels.addView(uiText("$count سؤال", 12f, tint = mutedText),
                         LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
                     row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
-                    row.addView(uiText(state, 12f, true, if (coverage > 0) blue else mutedText))
+                    row.addView(uiText(state, 12f, true, when {
+                        completed -> Color.rgb(52,199,89)
+                        coverage > 0 -> blue
+                        else -> mutedText
+                    }))
                     row.addView(IosGlyphView(this, "chevron", mutedText),
                         LinearLayout.LayoutParams(dp(15), dp(15)).apply { marginStart = dp(7) })
                     card.addView(row)
-                    if (coverage > 0) {
+                    if (metric != null && (coverage > 0 || accuracy > 0)) {
                         card.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
                             max = 100
                             progress = coverage
-                            progressTintList = ColorStateList.valueOf(blue)
+                            progressTintList = ColorStateList.valueOf(
+                                if (completed) Color.rgb(52,199,89) else blue)
                             progressBackgroundTintList = ColorStateList.valueOf(
                                 if (night) Color.rgb(57,57,60) else Color.rgb(222,224,230))
                         }, LinearLayout.LayoutParams(-1, dp(4)).apply { topMargin = dp(12) })
-                        card.addView(uiText("$coverage% من الموضوع", 12f, tint = mutedText),
+                        val accuracyLabel = if (metric.optInt("attempts") > 0) " · دقة $accuracy%" else ""
+                        card.addView(uiText("$coverage%$accuracyLabel", 12f, tint = mutedText),
                             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
                     }
                     addUiCard(tappable(card, name) {
@@ -1914,6 +1927,17 @@ class MainActivity : Activity() {
                 }
                 override fun afterTextChanged(s: Editable?) {}
             })
+            // The iPhone fetches this endpoint on each topics entry. Refreshing
+            // here gives every chapter its real coverage/accuracy/completed state.
+            fetch("mobile/insights.php", showError = false) insightsDone@{ insightsResult ->
+                if (!insightsResult.optBoolean("ok") || screenGeneration != topicsScreenGeneration ||
+                    activeScreen != "topics" || topicsSubjectId != subjectId) return@insightsDone
+                topicMetrics = insightsResult.optJSONObject("insights") ?: JSONObject()
+                homeInsights = topicMetrics
+                homeWeekly = insightsResult.optJSONObject("weekly") ?: JSONObject()
+                homeInsightsLoaded = true
+                filterTopics(search.text.toString())
+            }
         }
     }
 
@@ -1974,30 +1998,6 @@ class MainActivity : Activity() {
             options.optJSONObject(i)?.optString("text") ?: options.optString(i)
         }
         val items = q.optJSONArray("match_items") ?: JSONArray()
-        val type = q.optString("type")
-        val structure = q.optJSONObject(type)
-        val stages = structure?.optJSONArray("stages") ?: JSONArray()
-        val stageNames = ArrayList<String>()
-        val required = ArrayList<String>()
-        var invalidChoice = false
-        for (i in 0 until stages.length()) {
-            val stage = stages.optJSONObject(i)
-            if (stage == null) { invalidChoice = true; continue }
-            val key = stage.optString("key")
-            stageNames.add(key)
-            if (stage.optString("kind") == "info" || stage.optBoolean("ungraded")) continue
-            if (stage.optString("kind") == "punnett") {
-                val cells = stage.optJSONArray("cells")
-                if (cells == null || cells.length() == 0) invalidChoice = true
-                for (j in 0 until (cells?.length() ?: 0)) required.add(key + "_" + j)
-            } else {
-                required.add(key)
-                if (stage.optString("kind") == "choice" && (stage.optJSONArray("options")?.length() ?: 0) < 2)
-                    invalidChoice = true
-            }
-        }
-        val english = q.optJSONObject("english_match")
-        val left = english?.optJSONObject("left")
             matchIds = (0 until items.length()).map { items.optJSONObject(it)?.optInt("id") ?: 0 },
             matchWords = (0 until items.length()).map { items.optJSONObject(it)?.optString("mad_word") ?: "" },
             englishLeft = left?.keys()?.asSequence()?.map { key ->
