@@ -500,8 +500,9 @@ class MainActivity : Activity() {
                     }
                 }
             }
-            if (name == "account") {
-                // The owner's iPhone tab uses the circular gold Murshid emblem.
+            if (name == "account" && !selected) {
+                // iOS shows the gold avatar on inactive tabs, but switches to
+                // a blue filled person-circle when Account is selected.
                 val tabAvatar = ImageView(this@MainActivity).apply {
                     setImageResource(R.drawable.ic_ios_v4818)
                     scaleType = ImageView.ScaleType.CENTER_CROP
