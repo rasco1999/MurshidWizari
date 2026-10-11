@@ -445,6 +445,7 @@ class MainActivity : Activity() {
         }
     }
     private fun backHeader(title: String) {
+        val backLabel = if (title == "الاشتراك" && plansReturnScreen == "account") "حسابي" else "رجوع"
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -455,9 +456,9 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             orientation = LinearLayout.HORIZONTAL
             addView(IosGlyphView(this@MainActivity, "chevron", blue), LinearLayout.LayoutParams(dp(19), dp(19)))
-            addView(uiText("رجوع", 15f, tint = blue))
+            addView(uiText(backLabel, 15f, tint = blue))
         }
-        row.addView(tappable(back, "رجوع") { navigateBack() }, LinearLayout.LayoutParams(dp(72), dp(44)))
+        row.addView(tappable(back, backLabel) { navigateBack() }, LinearLayout.LayoutParams(dp(72), dp(44)))
         row.addView(uiText(title, 18f, true).apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(0, -2, 1f))
         row.addView(Space(this), LinearLayout.LayoutParams(dp(72), dp(1)))
@@ -3029,11 +3030,11 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(dp(29), dp(29)))
         hero.addView(eyebrow, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(16) })
         hero.addView(uiText(if (subscribed) "دراستك مستمرة بلا حدّ الأسئلة المجانية"
-            else "لا تحفظ الإجابة فقط… افهم أين تتطور", 23f, true, Color.WHITE),
+            else "لا تحفظ الإجابة فقط… افهم أين تتطور", 22f, true, Color.WHITE),
             LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
         hero.addView(uiText(if (subscribed) "وصولك إلى بنك أسئلة صفك فعّال وفق مدة اشتراكك."
             else "تدرّب على أسئلة صفك، راجع أخطاءك، واستخدم المحاكاة والمؤشرات المتاحة لتعرف الخطوة التالية.",
-            15f, tint = Color.argb(224, 255, 255, 255)),
+            14f, tint = Color.argb(224, 255, 255, 255)),
             LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = if (subscribed) 0 else dp(14) })
         if (!subscribed) {
             val freeLimit = homepage.optInt("free_limit", 15)
@@ -3075,10 +3076,10 @@ class MainActivity : Activity() {
             })
             val copy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             copy.addView(uiText(title, 16f, true))
-            copy.addView(uiText(detail, 13f, tint = mutedText),
-                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+            copy.addView(uiText(detail, 12f, tint = mutedText),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(3) })
             row.addView(copy, LinearLayout.LayoutParams(0, -2, 1f))
-            benefits.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
+            benefits.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
         }
         benefit("أسئلة صفّك", "تابع الحل بعد انتهاء الرصيد المجاني مع إظهار الإجابة الصحيحة.", "check")
         benefit("دفتر الأخطاء", "ارجع للأسئلة التي أخطأت بها والمواضيع الأضعف.", "book")
@@ -3191,6 +3192,10 @@ class MainActivity : Activity() {
             }
             if (result.optBoolean("subscribed")) {
                 prefs.edit().remove(uncertainCheckoutKey()).apply()
+                // An authenticated checkout response can confirm the entitlement;
+                // the next bootstrap still reconciles its duration and limits.
+                subscribed = true
+                homepage.put("subscribed", true)
                 refreshSubscriptionStatus(); return@fetch
             }
             val url = result.optString("redirect")
@@ -3222,7 +3227,10 @@ class MainActivity : Activity() {
             if (!result.optBoolean("ok")) {
                 plansScreen(result.optString("message", "تعذر التحقق من حالة الدفع حالياً."))
             } else if (result.optBoolean("subscribed")) {
-                // The checkout response alone does not unlock subscriber-only features.
+                // An authenticated paid status is authoritative even if follow-up
+                // bootstrap fails; it will reconcile the expiry when available.
+                subscribed = true
+                homepage.put("subscribed", true)
                 refreshSubscriptionStatus(clearOrderOnSuccess = true)
             } else {
                 plansScreen(result.optString("message", "الدفع قيد التحقق."))
@@ -5477,6 +5485,10 @@ class MainActivity : Activity() {
             when {
                 result.optBoolean("ok") && result.optBoolean("subscribed") -> {
                     prefs.edit().remove(pendingKey).apply()
+                    // The code is single-use. Preserve the confirmed grant even
+                    // if the follow-up bootstrap cannot be fetched immediately.
+                    subscribed = true
+                    homepage.put("subscribed", true)
                     message(result.optString("message", "تم تأكيد تفعيل اشتراكك من الخادم."))
                     if (activeScreen == "account") refreshAccountAfterMutation() else refreshHome()
                 }
