@@ -86,6 +86,7 @@ class MainActivity : Activity() {
     private var achievementStats = JSONObject()
     private var achievementFilter = "all"
     private var night = false
+    private var instructionsReturnScreen = "login"
     private var screenFrame: FrameLayout? = null
     private var homeInsights = JSONObject()
     private var homeWeekly = JSONObject()
@@ -155,6 +156,7 @@ class MainActivity : Activity() {
             Configuration.UI_MODE_NIGHT_YES
         night = VisualRules.initialNight(if (prefs.contains("night")) prefs.getBoolean("night", false) else null,
             systemNight)
+        setTheme(if (night) R.style.MurshidDark else R.style.MurshidLight)
         loginScreen()
         if (api.hasRememberedSession()) {
             fetch("mobile/bootstrap.php", showError = false) { response ->
@@ -255,6 +257,7 @@ class MainActivity : Activity() {
         if (tab == "home") row.addView(headerIcon(if (night) "sun" else "moon", "تبديل المظهر") {
             night = !night
             prefs.edit().putBoolean("night", night).apply()
+            setTheme(if (night) R.style.MurshidDark else R.style.MurshidLight)
             showHome(homepage)
         }, LinearLayout.LayoutParams(dp(42), dp(44)))
         else row.addView(Space(this), LinearLayout.LayoutParams(dp(42), dp(44)))
@@ -289,7 +292,7 @@ class MainActivity : Activity() {
             if (name == "account") {
                 // The owner's iPhone tab uses the circular gold Murshid emblem.
                 item.addView(ImageView(this@MainActivity).apply {
-                    setImageResource(R.drawable.ic_murshid)
+                    setImageResource(R.drawable.ic_ios_v4818)
                     scaleType = ImageView.ScaleType.CENTER_CROP
                     background = GradientDrawable().apply {
                         shape = GradientDrawable.OVAL
@@ -688,7 +691,7 @@ class MainActivity : Activity() {
             scaleType = ImageView.ScaleType.CENTER_CROP
             contentDescription = "الصورة الشخصية"
         }
-        view.setImageResource(R.drawable.ic_murshid)
+        view.setImageResource(R.drawable.ic_ios_v4818)
         root.addView(view, LinearLayout.LayoutParams(dp(88), dp(88)).apply {
             gravity = Gravity.CENTER_HORIZONTAL
             bottomMargin = dp(12)
@@ -743,7 +746,7 @@ class MainActivity : Activity() {
             ).apply { cornerRadius = dp(28).toFloat() }
         }
         val emblem = ImageView(this).apply {
-            setImageResource(R.drawable.ic_murshid_ios)
+            setImageResource(R.drawable.ic_ios_v4818)
             scaleType = ImageView.ScaleType.FIT_CENTER
             background = GradientDrawable().apply {
                 setColor(Color.WHITE)
@@ -852,6 +855,10 @@ class MainActivity : Activity() {
         gap(6)
         button("إنشاء حساب طالب جديد", secondary = true) { registerScreen() }
         button("نسيت كلمة المرور؟", secondary = true) { recoverScreen() }
+        button("تعليمات استخدام المنصة", secondary = true) {
+            instructionsReturnScreen = "login"
+            instructionsScreen()
+        }
         gap(12)
         root.addView(TextView(this).apply {
             text = "mur-iq.com  •  منصة تعليمية عراقية"
@@ -869,6 +876,57 @@ class MainActivity : Activity() {
             setOnClickListener { external("https://mur-iq.com/privacy.php") }
         }
         root.addView(privacy)
+    }
+
+    /** The seven usage instructions shipped in the iOS 4.x GuestLandingView. */
+    private fun instructionsScreen() {
+        activeScreen = "instructions"
+        base("تعليمات الاستخدام", true)
+        sectionHeader("كيف تبدأ وتستفيد من المنصة", "التعليمات نفسها المعروضة في iPhone", "book")
+        val instructions = listOf(
+            "الحساب وتسجيل الدخول" to
+                "استخدم بيانات صحيحة عند إنشاء الحساب، واحفظ كلمة المرور الخاصة بك. تسجيل الدخول متاح برقم الهاتف أو البريد الإلكتروني المسجل في الحساب.",
+            "الاختبارات" to
+                "اختر الصف والمادة والموضوع ثم ابدأ الاختبار. يتم حفظ الإجابات والتقدم والنتائج داخل حساب الطالب، ويمكن متابعة الاختبار من الموضع المحفوظ.",
+            "الأسئلة المجانية" to
+                "يتوفر للحساب الجديد رصيد مقداره 15 سؤالًا مجانيًا بالضبط. بعد استهلاك الرصيد المجاني يتطلب الوصول إلى الأسئلة الإضافية اشتراكًا فعالًا.",
+            "قسم النجاح" to
+                "يعرض قسم النجاح أداء الطالب استنادًا إلى إجاباته وتقدمه، ويتضمن المواد الأقوى والموضوعات التي تحتاج إلى مراجعة. هذه المؤشرات خاصة بمتابعة المستوى داخل المنصة.",
+            "تحدي المليون" to
+                "يعتمد الترتيب على النقاط المسجلة وفق نظام المنصة. يستطيع الطالب متابعة مركزه والمتصدرين والفارق بينه وبين المراكز الأعلى من صفحة التحدي.",
+            "بيانات الحساب" to
+                "لا تشارك كلمة المرور أو بيانات الدخول مع أي شخص. يجب استخدام الحساب من صاحبه فقط لضمان سلامة النتائج والنقاط وسجل الاختبارات.",
+            "خدمة العملاء" to
+                "عند وجود مشكلة في الحساب أو الاشتراك أو استخدام الموقع، استخدم زر خدمة العملاء الموجود داخل المنصة بعد الدخول لإرسال طلب الدعم."
+        )
+        instructions.forEachIndexed { index, (heading, details) ->
+            val card = uiCard()
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                gravity = Gravity.TOP
+            }
+            row.addView(FrameLayout(this).apply {
+                background = shape(Color.argb(26, 45, 108, 223), dp(12).toFloat())
+                addView(uiText((index + 1).toString().padStart(2, '0'), 15f, true, blue).apply {
+                    gravity = Gravity.CENTER
+                }, FrameLayout.LayoutParams(-1, -1))
+            }, LinearLayout.LayoutParams(dp(46), dp(46)).apply { marginEnd = dp(13) })
+            row.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(uiText(heading, 17f, true))
+                addView(uiText(details, 14f, tint = mutedText),
+                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            card.addView(row)
+            addUiCard(card, bottom = 13)
+        }
+        button(if (instructionsReturnScreen == "account") "العودة إلى حسابي" else "تسجيل الدخول") {
+            if (instructionsReturnScreen == "account") accountScreen() else loginScreen()
+        }
+        if (instructionsReturnScreen == "login") {
+            button("إنشاء حساب", secondary = true) { registerScreen() }
+        }
     }
 
     private fun verifyPrompt(response: JSONObject) {
@@ -1167,27 +1225,67 @@ class MainActivity : Activity() {
         val tiles = listOf(
             uiTile("راجع أخطاءك", "مراجعة ذكية", "brain") { reviewScreen() },
             uiTile("اختبار مخصص", "عدد · نوع · مؤقت", "sliders") { practiceBuilderScreen() },
-            uiTile("تحدي اليوم", "خمسة أسئلة سريعة", "flame") { openCompetition("daily_challenge") },
-            uiTile("ابحث عن سؤال", "في بنك الأسئلة", "search") { questionSearchScreen() },
+            uiTile("تحدي اليوم", "سؤال واحد كل 24 ساعة", "flame") { openCompetition("daily_challenge") },
             uiTile("اقترح سؤالًا", "ساهم في البنك", "plus-bubble") { proposeQuestionScreen() },
             uiTile("طلباتك", "تابع المراجعة", "tray") { myQuestionSubmissionsScreen() },
             uiTile("سجل الاختبارات", "نتائجك السابقة", "history") { attemptHistoryScreen() },
-            uiTile("خطة الدراسة", "هدف يومي", "calendar") { studyPlanScreen() },
-            uiTile("الإنجازات", "XP والمستوى", "medal") { openCompetition("achievements") },
-            uiTile("جلسة تركيز", "25 · 45 · 60 دقيقة", "timer") { focusScreen() },
             uiTile("تحدي المليون", "ترتيب ونقاط", "trophy") { openCompetition("contest") },
-            uiTile("غيّر جو", "استراحة قصيرة", "sparkles") { storiesScreen() },
-            uiTile("المفضلة", "الأسئلة المحفوظة", "heart") { favoritesScreen() },
-            uiTile("الدعم", "محادثة مع الإدارة", "person") { supportScreen() },
-            uiTile("المرشحات", "للمشتركين", "book") {
-                if (subscribed) subjectsScreen(true) else message("المرشحات للمشتركين فقط.")
-            },
-            uiTile("رمز الاشتراك", "تفعيل رمز", "check") { redeemScreen() }
+            uiTile("غيّر جو", "استراحة قصيرة", "sparkles") { storiesScreen() }
         )
         uiTwoColumnGrid(tiles)
+
+        sectionHeader("تعلّم من إجاباتك", "خطوة صغيرة بعد كل اختبار", "trend")
+        val learningCard = uiCard()
+        learningCard.addView(uiText("كل إجابة تساهم في تحليل نقاط قوتك والمواضيع التي تحتاج مراجعة.", 15f,
+            tint = mutedText))
+        val learningAction = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(IosGlyphView(this@MainActivity, "book", blue),
+                LinearLayout.LayoutParams(dp(22), dp(22)).apply { marginEnd = dp(8) })
+            addView(uiText("افتح دفتر الأخطاء والتحليل", 16f, true, blue))
+        }
+        learningCard.addView(learningAction, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(15) })
+        addUiCard(tappable(learningCard, "افتح دفتر الأخطاء والتحليل") { reviewScreen() }, bottom = 18)
+
+        sectionHeader("تابعنا على منصات التواصل", "كل جديد من منصة المرشد الوزاري", "chat")
+        val socialCard = uiCard()
+        val socialRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            gravity = Gravity.CENTER
+        }
+        listOf(
+            Triple("إنستغرام", "instagram", "https://www.instagram.com/murshid.iq/"),
+            Triple("فيسبوك", "facebook", "https://www.facebook.com/Murshidiq/"),
+            Triple("تيليجرام", "telegram", "https://t.me/El_Murshed_iq")
+        ).forEachIndexed { index, (name, symbol, url) ->
+            val brandColor = when (index) {
+                0 -> Color.rgb(193, 45, 126)
+                1 -> Color.rgb(34, 87, 194)
+                else -> Color.rgb(30, 151, 202)
+            }
+            val platform = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                val icon = FrameLayout(this@MainActivity).apply {
+                    background = shape(brandColor, dp(17).toFloat())
+                    addView(IosGlyphView(this@MainActivity, symbol, Color.WHITE),
+                        FrameLayout.LayoutParams(dp(34), dp(34), Gravity.CENTER))
+                }
+                addView(icon, LinearLayout.LayoutParams(dp(58), dp(58)))
+                addView(uiText(name, 13f, true).apply { gravity = Gravity.CENTER },
+                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
+            }
+            socialRow.addView(tappable(platform, name) { external(url) },
+                LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        socialCard.addView(socialRow)
+        addUiCard(socialCard, bottom = 18)
+
         val pendingPractice = prefs.getInt("practice_session_${student.optInt("id", 0)}", 0)
         if (pendingPractice > 0) button("متابعة الاختبار المخصص", secondary = true) { loadPracticeSession(pendingPractice) }
-        button("تحديث البيانات", secondary = true) { refreshHome() }
         if (!homeInsightsLoaded) loadHomeInsights()
         fetch("mobile/notifications.php", showError = false) { /* notification count is read on demand */ }
     }
@@ -1211,7 +1309,7 @@ class MainActivity : Activity() {
         }
         val avatar = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            setImageResource(R.drawable.ic_murshid)
+            setImageResource(R.drawable.ic_ios_v4818)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Color.WHITE)
@@ -2324,16 +2422,9 @@ class MainActivity : Activity() {
             question.put("explanation", explanation)
             question.put("correct_answer", correctAnswer)
             if (activeScreen == "exam" && sentChapterId == chapterId && questionIndex == sentIndex) {
+                // iOS presents the graded answer and explanation inline. The
+                // extra Android modal duplicated this card and blocked Next.
                 renderQuestion()
-                val feedback = when (ExamRules.knownBoolean(grade.opt("is_correct"))) {
-                    true -> "إجابة صحيحة ✓"
-                    false -> "راجع إجابتك"
-                    null -> "تم حفظ الإجابة"
-                }
-                AlertDialog.Builder(this).setTitle(feedback)
-                    .setMessage("الإجابة النموذجية: " + correctAnswer.ifBlank { "غير متاحة" } +
-                        "\n\n" + ExamRules.explanation(explanation, correctAnswer))
-                    .setPositiveButton("حسناً", null).show()
             }
         }
     }
@@ -2598,7 +2689,7 @@ class MainActivity : Activity() {
         }
         val avatar = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            setImageResource(R.drawable.ic_murshid)
+            setImageResource(R.drawable.ic_ios_v4818)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Color.WHITE)
@@ -2791,6 +2882,10 @@ class MainActivity : Activity() {
             accountSetting(services, "الإشعارات", "الرسائل الواردة من المنصة", "bell") { notificationsScreen() }
             accountSetting(services, "خدمة العملاء", "محادثة مباشرة مع الدعم", "person") { supportScreen() }
             accountSetting(services, "غيّر جو", "رسائل وقصص قصيرة", "sparkle") { storiesScreen() }
+            accountSetting(services, "تعليمات استخدام المنصة", "كيف تبدأ وتستفيد من المنصة", "book") {
+                instructionsReturnScreen = "account"
+                instructionsScreen()
+            }
             addUiCard(services, bottom = 16)
 
             sectionHeader("الأمان والتذكير", "خيارات خاصة بجهازك", "lock")
@@ -2807,6 +2902,7 @@ class MainActivity : Activity() {
             addUiCard(uiRow(if (night) "الوضع الداكن" else "الوضع الفاتح", "التبديل بين المظهرين", if (night) "sun" else "moon") {
                 night = !night
                 prefs.edit().putBoolean("night", night).apply()
+                setTheme(if (night) R.style.MurshidDark else R.style.MurshidLight)
                 accountScreen()
             }, bottom = 16)
 
@@ -4446,6 +4542,7 @@ class MainActivity : Activity() {
                 else -> showHome(homepage)
             }
             "tests", "success", "predictions_tab", "ads_tab" -> showHome(homepage)
+            "instructions" -> if (instructionsReturnScreen == "account") accountScreen() else loginScreen()
             "account" -> showHome(homepage)
             "plans" -> if (plansReturnScreen == "account") accountScreen() else showHome(homepage)
             "login" -> finish()

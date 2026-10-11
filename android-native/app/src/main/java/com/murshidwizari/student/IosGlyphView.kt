@@ -29,6 +29,39 @@ class IosGlyphView(context: Context, private val symbol: String, private val tin
             canvas.drawPath(p, ink)
         }
         when (symbol) {
+            "instagram" -> {
+                canvas.drawRoundRect(3f, 3f, 21f, 21f, 5f, 5f, ink)
+                canvas.drawCircle(12f, 12f, 4.4f, ink)
+                ink.style = Paint.Style.FILL
+                canvas.drawCircle(17.5f, 6.6f, 1.15f, ink)
+                ink.style = Paint.Style.STROKE
+            }
+            "facebook" -> {
+                ink.style = Paint.Style.FILL
+                val f = Path().apply {
+                    moveTo(14.6f, 22f); lineTo(9.3f, 22f); lineTo(9.3f, 12.8f)
+                    lineTo(6.5f, 12.8f); lineTo(6.5f, 8.9f); lineTo(9.3f, 8.9f)
+                    lineTo(9.3f, 6.5f); quadTo(9.3f, 2f, 14.2f, 2f)
+                    lineTo(18f, 2f); lineTo(18f, 6.1f); lineTo(15.1f, 6.1f)
+                    quadTo(14.6f, 6.1f, 14.6f, 7f); lineTo(14.6f, 8.9f)
+                    lineTo(18f, 8.9f); lineTo(17.3f, 12.8f)
+                    lineTo(14.6f, 12.8f); close()
+                }
+                canvas.drawPath(f, ink)
+                ink.style = Paint.Style.STROKE
+            }
+            "telegram" -> {
+                ink.style = Paint.Style.FILL
+                val plane = Path().apply {
+                    moveTo(1f, 10f); lineTo(22f, 2f); quadTo(23.3f, 1.5f, 23f, 3.2f)
+                    lineTo(19f, 21.2f); quadTo(18.7f, 22.9f, 17.4f, 22f)
+                    lineTo(10.5f, 16.4f); lineTo(7.3f, 19.5f)
+                    lineTo(7.8f, 14.2f); lineTo(17.6f, 5.8f)
+                    lineTo(5.4f, 12.8f); close()
+                }
+                canvas.drawPath(plane, ink)
+                ink.style = Paint.Style.STROKE
+            }
             // Dedicated tab variants track the silhouettes of SwiftUI's
             // house.fill, checklist.checked, chart.line.uptrend.xyaxis and
             // person.crop.circle.fill. Other contexts retain outline glyphs.
