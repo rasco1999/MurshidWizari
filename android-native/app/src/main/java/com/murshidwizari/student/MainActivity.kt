@@ -122,6 +122,8 @@ class MainActivity : Activity() {
     private var instructionsReturnScreen = "login"
     private var biometricAuthInProgress = false
     private var biometricOverlay: FrameLayout? = null
+    // Remove private account views from the window while the biometric shield is active.
+    private var protectedContentWhileLocked: View? = null
     private var biometricLastSuccessAt = 0L
     private var biometricBackgroundAt = 0L
     private var reminderPermissionPending = false
@@ -309,8 +311,10 @@ class MainActivity : Activity() {
         // Android kills this Activity before the next twenty-second interval.
         prefs.edit().putBoolean("biometric_unlock_required", true).commit()
         val parent = findViewById<FrameLayout>(android.R.id.content)
-        for (i in 0 until parent.childCount) parent.getChildAt(i).importantForAccessibility =
-            View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        protectedContentWhileLocked = if (parent.childCount > 0) parent.getChildAt(parent.childCount - 1) else null
+        // Keeping a covered account in the hierarchy can still expose it to
+        // accessibility services on some Android versions. Detach it completely.
+        parent.removeAllViews()
         val overlay = FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
             isClickable = true
@@ -343,8 +347,12 @@ class MainActivity : Activity() {
                 val parent = biometricOverlay?.parent as? FrameLayout
                 parent?.removeView(biometricOverlay)
                 biometricOverlay = null
-                if (parent != null) for (i in 0 until parent.childCount)
-                    parent.getChildAt(i).importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+                protectedContentWhileLocked?.let { content ->
+                    (content.parent as? ViewGroup)?.removeView(content)
+                    if (parent != null) parent.addView(content, FrameLayout.LayoutParams(-1, -1))
+                    else setContentView(content)
+                }
+                protectedContentWhileLocked = null
                 if (resumeWelcomeAfterUnlock) {
                     resumeWelcomeAfterUnlock = false
                     replayWelcomeAfterBackground()
@@ -445,16 +453,16 @@ class MainActivity : Activity() {
         setProtectedContent(container)
     }
 
-    /** Bootstrap, theme and network updates must never replace the lock shield. */
+    /** Never attach private account views while the device awaits biometric unlock. */
     private fun setProtectedContent(content: View) {
-        val shield = biometricOverlay
-        (shield?.parent as? ViewGroup)?.removeView(shield)
-        setContentView(content)
-        if (shield != null) {
-            content.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-            findViewById<FrameLayout>(android.R.id.content).addView(shield,
-                FrameLayout.LayoutParams(-1, -1))
+        if (biometricOverlay != null) {
+            // Async bootstrap may redraw the app while locked. Keep only the
+            // black shield attached; display the latest content after unlock.
+            protectedContentWhileLocked = content
+            return
         }
+        protectedContentWhileLocked = null
+        setContentView(content)
     }
     private fun base(title: String, showBack: Boolean = false, tab: String? = null) {
         stopHomeHeroTicker()
