@@ -81,7 +81,10 @@ def main():
  button('المرشحات');ui.wait_for('مرشح فحص افتراضي');screenshot(args.output,'student-predictions')
  button('عرض الإجابة والتوضيح⌄');ui.wait_for('إجابة المرشح الافتراضي');screenshot(args.output,'student-prediction-answer')
  button('حسابي');ui.wait_for('تفعيل الاشتراك بكود');screenshot(args.output,'student-account')
- button('استعادة / تغيير كلمة المرور');ui.wait_for('student@example.test');screenshot(args.output,'student-bound-recovery');back()
+ button('استعادة / تغيير كلمة المرور');ui.wait_for('استعادة آمنة لبيانات حسابك الحالي')
+ tree,_=ui.ui_tree()
+ assert any('student@example.test' in n.attrib.get('text','') for n in tree.iter('node')),'Account recovery must show the registered email'
+ screenshot(args.output,'student-bound-recovery');back()
  button('الاختبارات');button('الرياضيات');ui.wait_for('موضوع فحص افتراضي');button('موضوع فحص افتراضي')
  ui.wait_for('ما حاصل جمع اثنين وثلاثة؟');screenshot(args.output,'student-exam-before-answer')
  button('خمسة');ui.wait_for('إجابة صحيحة');screenshot(args.output,'student-exam-graded')
