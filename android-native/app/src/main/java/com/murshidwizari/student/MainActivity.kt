@@ -3488,8 +3488,11 @@ class MainActivity : Activity() {
             return
         }
         for ((index, question) in dailyQuestions.withIndex()) {
-            caption("السؤال ${index + 1} من ${dailyQuestions.size}")
-            line(question.text, true)
+            val questionCard = uiCard()
+            questionCard.addView(uiText("سؤال ${index + 1} من ${dailyQuestions.size}", 12f, true, blue),
+                LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(9) })
+            questionCard.addView(uiText(question.text, 17f, true),
+                LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
             val choices = question.choices()
             if (choices.isNotEmpty()) {
                 val group = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
@@ -3501,18 +3504,32 @@ class MainActivity : Activity() {
                         textSize = 16f
                         setTextColor(textColor)
                         isChecked = dailyAnswers[question.id] == choice
-                        setPadding(dp(4), dp(5), dp(4), dp(5))
+                        buttonTintList = ColorStateList.valueOf(blue)
+                        setPadding(dp(9), dp(7), dp(9), dp(7))
+                        background = shape(if (night) Color.rgb(49,49,52)
+                            else Color.rgb(242,242,247), dp(12).toFloat())
                     }
                     ids[radio.id] = choice
-                    group.addView(radio)
+                    group.addView(radio, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
                 }
                 group.setOnCheckedChangeListener { _, selected ->
                     ids[selected]?.let { dailyAnswers[question.id] = it }
                 }
-                root.addView(group)
+                questionCard.addView(group)
             } else {
-                val field = input("اكتب إجابتك هنا", multiline = true)
-                field.setText(dailyAnswers[question.id].orEmpty())
+                val field = EditText(this).apply {
+                    hint = "اكتب إجابتك هنا"
+                    textSize = 16f
+                    setTextColor(textColor)
+                    setHintTextColor(mutedText)
+                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                    minLines = 2
+                    maxLines = 5
+                    setPadding(dp(12), dp(10), dp(12), dp(10))
+                    background = shape(if (night) Color.rgb(49,49,52)
+                        else Color.rgb(242,242,247), dp(12).toFloat())
+                    setText(dailyAnswers[question.id].orEmpty())
+                }
                 field.addTextChangedListener(object : TextWatcher {
                     override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                     override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
@@ -3520,8 +3537,9 @@ class MainActivity : Activity() {
                     }
                     override fun afterTextChanged(s: Editable?) = Unit
                 })
+                questionCard.addView(field, LinearLayout.LayoutParams(-1, -2))
             }
-            gap(8)
+            addUiCard(questionCard, bottom = 14)
         }
         val submit = button(if (dailyBusy) "جارٍ التصحيح…" else "إنهاء تحدي اليوم") {
             if (!CompetitionRules.canSubmit(dailyQuestions, dailyAnswers, dailyAvailable, dailyDone,
@@ -3620,44 +3638,59 @@ class MainActivity : Activity() {
     private fun renderContest() {
         activeScreen = "contest"
         base("تحدي المليون", true)
-        caption("الترتيب يُحتسب في الخادم من نقاط XP والإجابات الصحيحة ضمن فترة التحدي.")
+        addUiCard(uiCard().apply {
+            addView(uiText("تحدي المليون", 12f, true, blue))
+            addView(uiText("تقدمك بين الطلاب", 21f, true),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            addView(uiText("الترتيب يعتمد على نقاط المنصة والإجابات الصحيحة ضمن فترة التحدي.",
+                14f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+        }, bottom = 16)
         val mine = contest.optJSONObject("mine")
         val active = ExamRules.knownBoolean(contest.optJSONObject("config")?.opt("active"))
-        line(when (active) { true -> "حالة المنافسة: نشطة"; false -> "حالة المنافسة: غير نشطة حالياً"; null -> "حالة المنافسة: غير محددة" })
-        if (mine == null) line("أجب عن أسئلة المنصة لتدخل الترتيب.") else {
-            line("مركزك: #${mine.optInt("rank")}", true)
-            caption("${mine.optInt("xp")} XP • ${mine.optInt("correct")} إجابة صحيحة")
-        }
-        button(if (contestMode == "contest") "● تحدي المليون" else "تحدي المليون") {
-            contestMode = "contest"; contestShowAll = false; renderContest()
-        }
-        button(if (contestMode == "season") "● ترتيب الموسم" else "ترتيب الموسم", secondary = true) {
-            contestMode = "season"; contestShowAll = false; renderContest()
-        }
-        val data = if (contestMode == "contest") contest else season
-        val ranking = data.optJSONArray("leaderboard") ?: JSONArray()
-        line(if (contestMode == "contest") "متصدرو تحدي المليون" else "متصدرو الموسم", true)
-        if (contestMode == "season" && season.length() == 0)
-            caption("تعذر تحميل ترتيب الموسم الآن. حدّث الصفحة لاحقاً.")
-        if (ranking.length() == 0) caption("لم تُنشر مراكز لهذا الترتيب حتى الآن.")
-        val limit = if (contestShowAll) ranking.length() else minOf(ranking.length(), 10)
-        for (i in 0 until limit) {
-            val row = ranking.optJSONObject(i) ?: continue
-            val rank = row.optInt("rank")
-            val name = row.optString("name", "طالب")
-            val xp = row.optInt("xp")
-            button("#$rank • $name • $xp XP", secondary = true) {
-                AlertDialog.Builder(this).setTitle("المركز #$rank — $name")
-                    .setMessage(buildString {
-                        if (row.optString("grade").isNotBlank()) append("الصف: ${row.optString("grade")}\n")
-                        append("النقاط: $xp XP")
-                        if (row.has("correct")) append("\nالإجابات الصحيحة: ${row.optInt("correct")}")
-                    })
-                    .setPositiveButton("حسناً", null).show()
+        addUiCard(uiCard().apply {
+            addView(uiText("مركزك الحالي", 13f, tint = mutedText))
+            addView(uiText(if (mine == null) "ابدأ الإجابة لتدخل الترتيب"
+                else "#${mine.optInt("rank")}", if (mine == null) 18f else 32f, true, blue),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
+            if (mine != null) addView(uiText("${mine.optInt("xp")} XP • ${mine.optInt("correct")} إجابة صحيحة",
+                13f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
+            if (active == true) addView(uiText("● نشط", 13f, true, Color.rgb(41,158,80)),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        }, bottom = 18)
+        // Both leaderboards are visible together as on iOS. Expanding one does not hide the other.
+        for ((mode, heading, data) in listOf(
+            Triple("contest", "متصدرو تحدي المليون", contest),
+            Triple("season", "ترتيب الموسم", season))) {
+            val ranking = data.optJSONArray("leaderboard") ?: JSONArray()
+            sectionHeader(heading, if (ranking.length() == 0) "لا توجد بيانات بعد" else "أعلى المراكز", "chart")
+            if (ranking.length() == 0) {
+                addUiCard(uiCard().apply { addView(uiText(if (mode == "season" && data.length() == 0)
+                    "تعذر تحميل ترتيب الموسم الآن. حدّث الصفحة لاحقاً."
+                    else "سيظهر الترتيب هنا عند توفر البيانات.", 14f, tint = mutedText)) })
             }
-        }
-        if (ranking.length() > 10) button(if (contestShowAll) "عرض أول 10 مراكز" else "عرض جميع المراكز", secondary = true) {
-            contestShowAll = !contestShowAll; renderContest()
+            val expanded = contestMode == mode && contestShowAll
+            val limit = if (expanded) ranking.length() else minOf(ranking.length(), 10)
+            for (i in 0 until limit) {
+                val entry = ranking.optJSONObject(i) ?: continue
+                val rank = entry.optInt("rank")
+                val name = entry.optString("name", "طالب")
+                val xp = entry.optInt("xp")
+                val grade = entry.optString("grade")
+                addUiCard(uiRow("#$rank  $name", "$xp XP" + if (grade.isBlank()) "" else " • $grade", "trophy") {
+                    AlertDialog.Builder(this).setTitle("المركز #$rank — $name")
+                        .setMessage(buildString {
+                            if (grade.isNotBlank()) append("الصف: $grade\n")
+                            append("النقاط: $xp XP")
+                            if (entry.has("correct")) append("\nالإجابات الصحيحة: ${entry.optInt("correct")}")
+                        })
+                        .setPositiveButton("حسناً", null).show()
+                }, bottom = 9)
+            }
+            if (ranking.length() > 10) button(if (expanded) "عرض أول 10 مراكز" else "عرض جميع المراكز", secondary = true) {
+                contestMode = mode
+                contestShowAll = !expanded
+                renderContest()
+            }
         }
         button("شارك في تحدي اليوم") { openCompetition("daily_challenge") }
         button("اجمع نقاطاً بحل الأسئلة") { subjectsScreen() }
@@ -3692,17 +3725,25 @@ class MainActivity : Activity() {
         val earned = (0 until achievements.length()).count { i ->
             achievements.optJSONObject(i)?.let(::isEarned) == true
         }
-        line("المستوى ${achievementStats.optInt("level", 1)} • ${achievementStats.optInt("xp")} XP", true)
-        caption("الشارات المكتسبة: $earned من ${achievements.length()}")
-        button(if (achievementFilter == "all") "● جميع الشارات" else "جميع الشارات", secondary = true) {
-            achievementFilter = "all"; renderAchievements()
+        sectionHeader("مستواك", "نقاطك وشاراتك من الخادم", "trophy")
+        addUiCard(uiCard().apply {
+            addView(uiText("المستوى ${achievementStats.optInt("level", 1)}", 22f, true, blue))
+            addView(uiText("${achievementStats.optInt("xp")} XP • $earned من ${achievements.length()} شارات مكتسبة",
+                14f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+        }, bottom = 17)
+        sectionHeader("الإنجازات", "اضغط على الشارة لعرض تفاصيلها وتقدمك", "check")
+        val filters = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
         }
-        button(if (achievementFilter == "earned") "● المكتسبة" else "المكتسبة", secondary = true) {
-            achievementFilter = "earned"; renderAchievements()
+        for ((mode, label) in listOf( "all" to "الجميع", "earned" to "المكتسبة", "locked" to "المتبقية")) {
+            filters.addView(makeButton(label, secondary = achievementFilter != mode) {
+                achievementFilter = mode; renderAchievements()
+            }, LinearLayout.LayoutParams(0, dp(47), 1f).apply {
+                marginEnd = dp(3); marginStart = dp(3)
+            })
         }
-        button(if (achievementFilter == "locked") "● غير المكتسبة" else "غير المكتسبة", secondary = true) {
-            achievementFilter = "locked"; renderAchievements()
-        }
+        addUiCard(filters, bottom = 15)
         var shown = 0
         for (i in 0 until achievements.length()) {
             val item = achievements.optJSONObject(i) ?: continue
@@ -3711,7 +3752,9 @@ class MainActivity : Activity() {
             shown++
             val name = item.optString("title", "إنجاز")
             val description = item.optString("description")
-            button((if (unlocked) "🏆 " else "🔒 ") + name, secondary = !unlocked) {
+            val subtitle = (if (unlocked) "مكتسب" else "لم تحصل عليه بعد") +
+                (if (description.isBlank()) "" else " • $description")
+            addUiCard(uiRow(name, subtitle, if (unlocked) "trophy" else "lock") {
                 AlertDialog.Builder(this).setTitle(name)
                     .setMessage(buildString {
                         append(description.ifBlank { "لم تُضف تفاصيل لهذا الإنجاز." })
@@ -3724,8 +3767,7 @@ class MainActivity : Activity() {
                     .setNeutralButton(if (unlocked) "عرض الترتيب" else "ابدأ التحدي") { _, _ ->
                         openCompetition(if (unlocked) "contest" else "daily_challenge")
                     }.show()
-            }
-            if (description.isNotBlank()) caption(description)
+            }, bottom = 9)
         }
         if (shown == 0) caption(if (achievements.length() == 0) "لم يرسل الخادم إنجازات بعد." else "لا توجد شارات ضمن هذا التصنيف.")
         button("تحدي اليوم • حقق إنجازاً جديداً") { openCompetition("daily_challenge") }
