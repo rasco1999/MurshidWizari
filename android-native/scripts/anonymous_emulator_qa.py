@@ -185,6 +185,17 @@ def test_size(directory: Path, name: str, width: int, height: int, scale: float)
     check_controls(directory, name, width, height)
 
 
+def capture_additional_layout(directory: Path, name: str, width: int, height: int,
+                              scale: float) -> None:
+    """Extra layout evidence only; the full tap flows are exercised in test_size."""
+    adb("shell", "settings", "put", "system", "font_scale", str(scale))
+    adb("shell", "wm", "size", f"{width}x{height}")
+    launch_native()
+    if not adb("shell", "pidof", PACKAGE).strip():
+        raise AssertionError(f"Native process exited at extra layout {name}")
+    capture(directory, name)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, required=True)
@@ -194,6 +205,11 @@ def main() -> None:
     adb("shell", "wm", "density", "160")
     test_size(args.output, "login-phone-360x640", 360, 640, 1.0)
     test_size(args.output, "login-tablet-800x1280-font1.3", 800, 1280, 1.3)
+    # API 35 provides additional small-phone and compact-tablet viewport evidence.
+    api_level = int(adb("shell", "getprop", "ro.build.version.sdk").decode().strip())
+    if api_level == 35:
+        capture_additional_layout(args.output, "login-phone-393x852-font1.3", 393, 852, 1.3)
+        capture_additional_layout(args.output, "login-compact-tablet-600x960", 600, 960, 1.0)
     print("PASS all anonymous device UI checks; no authentication or POST requests", flush=True)
 
 

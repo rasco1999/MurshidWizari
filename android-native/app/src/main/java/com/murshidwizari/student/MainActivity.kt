@@ -3485,6 +3485,51 @@ class MainActivity : Activity() {
             )
         }
 
+    private fun dailyDraftKey(): String = "daily_challenge_draft_v1_" + student.optInt("id", 0)
+
+    private fun dailyDraftSignature(): String = DailyDraftRules.signature(student.optInt("id", 0),
+        java.time.LocalDate.now(java.time.ZoneId.of("Asia/Baghdad")).toString(), dailyQuestions)
+
+    private fun clearDailyDraft() {
+        prefs.edit().remove(dailyDraftKey()).apply()
+    }
+
+    private fun saveDailyDraft(pendingReceipt: Boolean = dailyUncertain): Boolean {
+        val signature = dailyDraftSignature()
+        if (signature.isBlank()) return false
+        val answers = JSONObject()
+        DailyDraftRules.validAnswers(dailyQuestions, dailyAnswers).forEach { (id, answer) ->
+            answers.put(id.toString(), answer)
+        }
+        val editor = prefs.edit().putString(dailyDraftKey(), JSONObject()
+            .put("signature", signature).put("answers", answers)
+            .put("pending_receipt", pendingReceipt).toString())
+        // A pending POST flag must reach disk before network I/O, even if the app is killed.
+        return if (pendingReceipt) editor.commit() else { editor.apply(); true }
+    }
+
+    /** Recover only the current account/day/question set; a pending POST needs manual reconciliation. */
+    private fun restoreDailyDraft() {
+        dailyAnswers.clear()
+        dailyUncertain = false
+        if (dailyDone || !dailyAvailable) { clearDailyDraft(); return }
+        val signature = dailyDraftSignature()
+        val saved = try { JSONObject(prefs.getString(dailyDraftKey(), "").orEmpty()) }
+            catch (_: Exception) { null }
+        if (signature.isBlank() || saved?.optString("signature") != signature) {
+            clearDailyDraft()
+            return
+        }
+        val answers = saved?.optJSONObject("answers") ?: JSONObject()
+        val restored = LinkedHashMap<Int, String>()
+        for (question in dailyQuestions) {
+            val answer = answers.optString(question.id.toString())
+            if (answer.isNotBlank()) restored[question.id] = answer
+        }
+        dailyAnswers.putAll(DailyDraftRules.validAnswers(dailyQuestions, restored))
+        dailyUncertain = saved?.optBoolean("pending_receipt") == true
+    }
+
     private fun loadDailyChallenge() {
         activeScreen = "daily_challenge"
         base("تحدي اليوم", true)
@@ -3505,8 +3550,7 @@ class MainActivity : Activity() {
             dailyTotal = response.optInt("total")
             dailyReward = response.optInt("reward")
             dailyQuestions = parseDailyQuestions(response.optJSONArray("questions") ?: JSONArray())
-            dailyAnswers.keys.retainAll(dailyQuestions.map { it.id }.toSet())
-            dailyUncertain = false // A successful GET reconciles any uncertain POST.
+            restoreDailyDraft()
             dailyStatusMessage = ""
             renderDailyChallenge()
         }
@@ -3546,8 +3590,17 @@ class MainActivity : Activity() {
         }
         if (dailyUncertain) {
             line("تعذر التأكد من حفظ التحدي. قد تكون الإجابات وصلت رغم انقطاع الاتصال.")
-            caption("تحقق من الخادم أولاً؛ لن تُرسل إجاباتك مرة ثانية تلقائياً.")
+            caption("احتفظنا بإجاباتك على هذا الجهاز. تحقق من حالتك على الخادم أولاً؛ لن تُرسل الإجابات ثانية تلقائياً.")
             button("التحقق من حالة التحدي") { loadDailyChallenge() }
+            button("تحققت، إعادة المحاولة يدوياً", secondary = true) {
+                AlertDialog.Builder(this).setTitle("إعادة إرسال التحدي؟")
+                    .setMessage("تحقق من حالة التحدي أو الدعم قبل المتابعة. قد يكون التسليم السابق وصل للخادم رغم فقدان الرد، ولن نعيده تلقائياً.")
+                    .setPositiveButton("تحققت، متابعة") { _, _ ->
+                        dailyUncertain = false
+                        saveDailyDraft(pendingReceipt = false)
+                        renderDailyChallenge()
+                    }.setNegativeButton("إلغاء", null).show()
+            }
             return
         }
         for ((index, question) in dailyQuestions.withIndex()) {
@@ -3576,7 +3629,7 @@ class MainActivity : Activity() {
                     group.addView(radio, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
                 }
                 group.setOnCheckedChangeListener { _, selected ->
-                    ids[selected]?.let { dailyAnswers[question.id] = it }
+                    ids[selected]?.let { dailyAnswers[question.id] = it; saveDailyDraft() }
                 }
                 questionCard.addView(group)
             } else {
@@ -3597,6 +3650,7 @@ class MainActivity : Activity() {
                     override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                     override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                         dailyAnswers[question.id] = s?.toString().orEmpty()
+                        saveDailyDraft()
                     }
                     override fun afterTextChanged(s: Editable?) = Unit
                 })
@@ -3625,12 +3679,21 @@ class MainActivity : Activity() {
         if (!CompetitionRules.canSubmit(dailyQuestions, dailyAnswers, dailyAvailable, dailyDone,
                 dailyBusy, dailyUncertain)) return
         if (csrf.isBlank()) { message("انتهت الجلسة. حدّث التحدي أولاً."); return }
+        if (dailyDraftSignature().isBlank()) {
+            message("تعذر تحديد حسابك أو أسئلة التحدي للحفظ الآمن. حدّث بيانات الحساب أولاً.")
+            return
+        }
         dailyBusy = true
         val answerObject = JSONObject()
         CompetitionRules.submission(dailyQuestions, dailyAnswers).forEach { (id, answer) ->
             answerObject.put(id, answer)
         }
         val payload = JSONObject().put("csrf", csrf).put("answers", answerObject)
+        if (!saveDailyDraft(pendingReceipt = true)) {
+            dailyBusy = false
+            message("تعذر حفظ حالة التحدي على الجهاز؛ لن نرسل الإجابات قبل تأمين الاستعادة.")
+            return
+        }
         renderDailyChallenge()
         fetch("mobile/challenge.php", payload, showError = true) { response ->
             dailyBusy = false
@@ -3638,11 +3701,13 @@ class MainActivity : Activity() {
                 dailyStatusMessage = "انتهى رصيدك المجاني أثناء التحدي. يمكنك تفعيل الاشتراك والمتابعة."
                 dailyUncertain = false
                 dailyQuotaBlocked = true
+                saveDailyDraft(pendingReceipt = false)
                 if (activeScreen == "daily_challenge") renderDailyChallenge()
                 return@fetch
             }
             if (!response.optBoolean("ok")) {
                 dailyUncertain = true
+                saveDailyDraft(pendingReceipt = true)
                 if (activeScreen == "daily_challenge") renderDailyChallenge()
                 return@fetch
             }
@@ -3654,8 +3719,11 @@ class MainActivity : Activity() {
                 // An accepted POST without a completion receipt must be reconciled.
                 dailyUncertain = true
                 dailyStatusMessage = "استجاب الخادم دون تأكيد إنهاء التحدي. تحقق من حالته."
+                saveDailyDraft(pendingReceipt = true)
             } else {
                 dailyStatusMessage = ""
+                clearDailyDraft()
+                dailyAnswers.clear()
                 fetch("mobile/challenge.php", showError = false) { latest ->
                     if (latest.optBoolean("ok") && ExamRules.knownBoolean(latest.opt("done")) == true) {
                         dailyScore = latest.optInt("score", dailyScore)
