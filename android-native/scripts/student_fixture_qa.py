@@ -136,7 +136,7 @@ def main():
  button('تصحيح الإجابة');time.sleep(1)
  assert '102' not in STATE['answers'],'Rejected answer must not be counted'
  button('تصحيح الإجابة');ui.wait_for('إجابة صحيحة');screenshot(args.output,'student-text-question-graded')
- button('عرض النتيجة ›');ui.wait_for('مراجعة جميع الأسئلة');screenshot(args.output,'student-exam-summary')
+ button('عرض النتيجة ›');ui.wait_for('أداء ممتاز');screenshot(args.output,'student-exam-summary')
  tree,_=ui.ui_tree()
  assert not any('السؤال التالي' in n.attrib.get('content-desc','') for n in tree.iter('node')), (
   'Completed exam must not leave an inactive navigation footer')
