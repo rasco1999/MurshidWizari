@@ -112,7 +112,7 @@ def main():
  # visit longer than three seconds. Verify Android's overlay without killing
  # the student's in-progress Activity or losing the authenticated session.
  ui.adb('shell','input','keyevent','KEYCODE_HOME');time.sleep(3.5)
- ui.adb('logcat','-c')
+ # API-26 emulator can reject logcat buffer clearing (exit 1); replay has a unique tag.
  ui.adb('shell','am','start','-n',f'{ui.PACKAGE}/{ui.MAIN_ACTIVITY}')
  # UIAutomator hierarchy dumps can take longer than the 2.7s welcome,
  # making accessibility polling a false negative. Capture pixels immediately
