@@ -153,7 +153,7 @@ def main():
  STATE['logout_reject_once']=True
  button('تسجيل الخروج');ui.wait_for('سيتم إنهاء جلسة حسابك على هذا الجهاز.')
  button('تسجيل الخروج');time.sleep(.9)
- ui.wait_for('تفعيل الاشتراك بكود')
+ ui.wait_for('تسجيل الخروج')
  assert sum(1 for m,p in STATE['calls'] if p=='/mobile/logout.php')==1,'One rejected logout must not clear the session'
  button('تسجيل الخروج');ui.wait_for('سيتم إنهاء جلسة حسابك على هذا الجهاز.')
  button('تسجيل الخروج');ui.wait_for('مساحة تعلّمك')

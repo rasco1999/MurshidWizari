@@ -1,6 +1,8 @@
 # Android Native — production release gates
 
-Target: feature parity with iOS **4.8.18**. Branch: **`android-native`**. Do not distribute a provisional APK.
+Target: feature parity with iOS **4.8.18**. Branch: **`android-native`**. No public or production distribution of a provisional APK. On 2026-10-11 the owner separately authorized **a debug-key test APK for private installation on the owner's Android phone**; that exception does not satisfy the release gates below.
+
+See `BUILD498_END_TO_END_AUDIT.md` for the source/binary-verified launch-to-logout mapping, visible gaps and evidence limitations.
 
 `[x]` means independently verified; all other checks must remain open until observed on the stated environment. Do not treat JVM/build success as device/server acceptance.
 
