@@ -60,6 +60,9 @@ class MainActivity : Activity() {
     private var predictionGeneration = 0
     private var serviceTicker: Runnable? = null
     private var appForeground = false
+    private var backgroundEnteredAt = 0L
+    private var resumeWelcomeOverlay: View? = null
+    private var resumeWelcomeAfterUnlock = false
     private var lastPopupPoll = 0L
     private var popupChecking = false
     private var currentAdDialog: AlertDialog? = null
@@ -323,6 +326,10 @@ class MainActivity : Activity() {
                 val parent = biometricOverlay?.parent as? FrameLayout
                 parent?.removeView(biometricOverlay)
                 biometricOverlay = null
+                if (resumeWelcomeAfterUnlock) {
+                    resumeWelcomeAfterUnlock = false
+                    replayWelcomeAfterBackground()
+                }
             } else message("لم يتم فتح التطبيق. استخدم زر فتح بالبصمة للمحاولة مجددًا.")
         }
     }
@@ -966,6 +973,29 @@ class MainActivity : Activity() {
         window.navigationBarColor = Color.rgb(5,16,34)
         window.decorView.systemUiVisibility = 0
         setContentView(CinematicWelcomeView(this))
+    }
+
+    /** Replay the iOS Build 498 welcome after at least three seconds away. */
+    private fun replayWelcomeAfterBackground() {
+        if (activeScreen == "welcome" || activeScreen == "restoring" || isFinishing || isDestroyed) return
+        if (resumeWelcomeOverlay != null) return
+        val parent = findViewById<FrameLayout>(android.R.id.content)
+        val firstName = student.optString("name").trim().split(' ').firstOrNull().orEmpty()
+        val greeting = if (firstName.isEmpty()) "أهلًا بك" else "أهلًا، $firstName"
+        val overlay = CinematicWelcomeView(this, greeting).apply {
+            isClickable = true
+            isFocusable = true
+        }
+        parent.addView(overlay, FrameLayout.LayoutParams(-1, -1))
+        resumeWelcomeOverlay = overlay
+        main.postDelayed({
+            if (resumeWelcomeOverlay === overlay && overlay.parent != null) {
+                overlay.animate().alpha(0f).setDuration(300L).withEndAction {
+                    (overlay.parent as? FrameLayout)?.removeView(overlay)
+                    if (resumeWelcomeOverlay === overlay) resumeWelcomeOverlay = null
+                }.start()
+            }
+        }, 2700L)
     }
 
     /** GuestLandingView: the iPhone's first unauthenticated screen, including its live navigation. */
@@ -3745,11 +3775,20 @@ class MainActivity : Activity() {
                 AlertDialog.Builder(this).setTitle("تسجيل الخروج؟")
                     .setMessage("سيتم إنهاء جلسة حسابك على هذا الجهاز.")
                     .setPositiveButton("تسجيل الخروج") { _, _ ->
-                        fetch("mobile/logout.php", JSONObject().put("csrf", csrf), showError = false) {
+                        fun clearAfterLogout() {
                             sessionGeneration++
                             api.clear(); csrf = ""; student = JSONObject()
                             homeInsightsLoaded = false; homeInsights = JSONObject(); homeWeekly = JSONObject()
                             guestLandingScreen()
+                        }
+                        if (csrf.isBlank()) {
+                            clearAfterLogout()
+                        } else fetch("mobile/logout.php", JSONObject().put("csrf", csrf), showError = false) { result ->
+                            if (LogoutRules.mayClearLocalSession(csrf, result.optBoolean("ok"))) {
+                                clearAfterLogout()
+                            } else {
+                                message(result.optString("message", "تعذر تسجيل الخروج؛ لم تُحذف جلستك. حاول مجددًا."))
+                            }
                         }
                     }.setNegativeButton("إلغاء", null).show()
             }
@@ -5453,6 +5492,10 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        val timeAwayMs = if (backgroundEnteredAt != 0L) {
+            SystemClock.elapsedRealtime() - backgroundEnteredAt
+        } else 0L
+        backgroundEnteredAt = 0L
         appForeground = true
         startSessionServices()
         if (prefs.getBoolean("biometric_lock", false) && !biometricAuthInProgress &&
@@ -5472,10 +5515,16 @@ class MainActivity : Activity() {
             val order = prefs.getInt(lastPaymentKey(), 0)
             if (order > 0) checkPaymentStatus(order)
         }
+        if (timeAwayMs >= 3000L && activeScreen != "welcome") {
+            if (biometricOverlay != null || biometricAuthInProgress) {
+                resumeWelcomeAfterUnlock = true
+            } else replayWelcomeAfterBackground()
+        }
     }
 
     override fun onStop() {
         appForeground = false
+        backgroundEnteredAt = SystemClock.elapsedRealtime()
         serviceTicker?.let { main.removeCallbacks(it) }
         serviceTicker = null
         if (prefs.getBoolean("biometric_lock", false) && !biometricAuthInProgress) {

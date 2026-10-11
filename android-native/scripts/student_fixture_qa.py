@@ -7,7 +7,7 @@ import anonymous_emulator_qa as ui
 
 USER={'id':900001,'name':'طالب فحص افتراضي','grade':'السادس العلمي','grade_id':1,'email':'student@example.test','can_edit_name':True}
 SUBJECTS=[{'id':1,'name':'الرياضيات'},{'id':2,'name':'اللغة العربية'}]
-STATE={'notes':{},'answers':{},'calls':[],'reject_once':False}
+STATE={'notes':{},'answers':{},'calls':[],'reject_once':False,'logout_reject_once':False}
 BOOT={'ok':True,'csrf':'synthetic-csrf','user':USER,'subscribed':True,'free_remaining':15,'free_limit':15,'subjects':SUBJECTS,'stats':{},'ads':[{'id':1,'school':'مدرسة افتراضية','text':'إعلان محلي للتحقق من عرض الإعلانات','active':True}]}
 QUESTIONS=[{'id':101,'text':'ما حاصل جمع اثنين وثلاثة؟','type':'mcq','options':[{'id':1,'text':'خمسة'},{'id':2,'text':'ستة'}],'correct_answer':'خمسة','explanation':'نجمع اثنين مع ثلاثة فيكون الناتج خمسة.','submitted':False}, {'id':102,'text':'اكتب ناتج أربعة زائد أربعة.','type':'text','correct_answer':'8','explanation':'أربعة مضافاً إليها أربعة تساوي ثمانية.','submitted':False}]
 class Handler(BaseHTTPRequestHandler):
@@ -46,6 +46,10 @@ class Handler(BaseHTTPRequestHandler):
    if self.command=='POST': STATE['notes'][key]=body['note']
    data={'ok':True,'note':STATE['notes'].get(key,'')}
   elif path=='/mobile/school-ad-popup.php': data={'ok':True,'ads':[]}
+  elif path=='/mobile/logout.php':
+   if STATE['logout_reject_once']:
+    STATE['logout_reject_once']=False
+    data={'ok':False,'message':'رفض الخادم تسجيل الخروج؛ الجلسة محفوظة.'}
   elif path in ['/mobile/contest.php','/mobile/season.php']: data={'ok':True,'config':{'active':True},'mine':{'rank':1,'xp':5,'correct':1},'leaderboard':[{'rank':1,'name':USER['name'],'xp':5,'correct':1,'grade':'السادس العلمي'}]}
   elif path=='/mobile/contest-instructions.php': data={'ok':True,'prize_iqd':1000000,'end_at':'2027-01-01','rules':[{'title':'قاعدة فحص افتراضية','text':'تأتي قواعد التحدي من الخادم.'}],'points':[]}
   elif path=='/api/grades.php': data={'ok':True,'grades':[{'id':1,'name':'السادس العلمي'}]}
@@ -141,7 +145,21 @@ def main():
  assert not any('السؤال التالي' in n.attrib.get('content-desc','') for n in tree.iter('node')), (
   'Completed exam must not leave an inactive navigation footer')
  assert sum(1 for m,p in STATE['calls'] if p=='/api/progress.php')==3,'One rejection plus two accepted answers'
- args.output.joinpath('fixture-results.json').write_text(json.dumps({'passed':True,'grading_requests':3,'rejected_then_retryable':True,'summary_without_footer':True,'note_roundtrip':True,'synthetic_only':True},indent=2))
+ # End-to-end exit: a rejected server logout must retain the active account;
+ # the subsequently accepted logout must return to the exact guest landing.
+ back();ui.wait_for('موضوع فحص افتراضي')
+ back();ui.wait_for('الرياضيات')
+ button('حسابي');ui.wait_for('تفعيل الاشتراك بكود')
+ STATE['logout_reject_once']=True
+ button('تسجيل الخروج');ui.wait_for('سيتم إنهاء جلسة حسابك على هذا الجهاز.')
+ button('تسجيل الخروج');time.sleep(.9)
+ ui.wait_for('تفعيل الاشتراك بكود')
+ assert sum(1 for m,p in STATE['calls'] if p=='/mobile/logout.php')==1,'One rejected logout must not clear the session'
+ button('تسجيل الخروج');ui.wait_for('سيتم إنهاء جلسة حسابك على هذا الجهاز.')
+ button('تسجيل الخروج');ui.wait_for('مساحة تعلّمك')
+ assert sum(1 for m,p in STATE['calls'] if p=='/mobile/logout.php')==2,'Confirmed logout must not repeat the request'
+ screenshot(args.output,'student-logged-out')
+ args.output.joinpath('fixture-results.json').write_text(json.dumps({'passed':True,'grading_requests':3,'rejected_then_retryable':True,'summary_without_footer':True,'note_roundtrip':True,'logout_reject_then_accept':True,'synthetic_only':True},indent=2))
  print('PASS synthetic authenticated UI and grading semantics',flush=True)
  server.shutdown()
 if __name__=='__main__': main()

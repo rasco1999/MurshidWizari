@@ -8,7 +8,7 @@ import android.view.View
 import kotlin.math.min
 
 /** Canvas counterpart of Build 498's native three-second welcome artwork. */
-class CinematicWelcomeView(context: Context) : View(context) {
+class CinematicWelcomeView(context: Context, private val greetingText: String = "أهلًا بك") : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val emblem = BitmapFactory.decodeResource(resources, R.drawable.welcome_emblem)
     private val started = SystemClock.elapsedRealtime()
@@ -17,7 +17,7 @@ class CinematicWelcomeView(context: Context) : View(context) {
     private val emerald = Color.rgb(15, 122, 89)
     private val density = resources.displayMetrics.density
     private val motion = ValueAnimator.areAnimatorsEnabled()
-    init { contentDescription = "منصة المرشد الوزاري. أهلًا بك. تعلّم بثقة، واصنع مستقبلك"; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES }
+    init { contentDescription = "منصة المرشد الوزاري. $greetingText. تعلّم بثقة، واصنع مستقبلك"; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES }
     private fun dp(v: Float) = v * density
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
@@ -71,7 +71,7 @@ class CinematicWelcomeView(context: Context) : View(context) {
         canvas.drawLine(cx-dp(47f),titleY+dp(25f),cx-dp(11f),titleY+dp(25f),paint)
         canvas.drawLine(cx+dp(11f),titleY+dp(25f),cx+dp(47f),titleY+dp(25f),paint)
         label("تعلّم بثقة، واصنع مستقبلك",cx,titleY+dp(58f),15f,ivory,reveal)
-        label("أهلًا بك",cx,titleY+dp(103f),20f,gold,greeting,true)
+        label(greetingText,cx,titleY+dp(103f),20f,gold,greeting,true)
         label("المنهج العراقي • طريقك نحو النجاح",cx,h-dp(50f),12f,ivory,reveal)
         paint.color=ivory;paint.alpha=(48*reveal).toInt(); val trackL=inset+dp(20f);val trackR=w-trackL
         canvas.drawRoundRect(trackL,h-dp(29f),trackR,h-dp(25f),dp(2f),dp(2f),paint)
