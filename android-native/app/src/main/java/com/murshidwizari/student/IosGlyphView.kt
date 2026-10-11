@@ -337,6 +337,33 @@ class IosGlyphView(context: Context, private val symbol: String, private val tin
                 ink.style = Paint.Style.STROKE
                 path(22f, 9.3f, 22f, 17.5f)
             }
+            "crown" -> {
+                val crown = Path().apply {
+                    moveTo(2f, 7f); lineTo(7f, 12f); lineTo(12f, 4f)
+                    lineTo(17f, 12f); lineTo(22f, 7f); lineTo(20f, 19f)
+                    lineTo(4f, 19f); close()
+                }
+                ink.style = Paint.Style.FILL
+                canvas.drawPath(crown, ink)
+                canvas.drawRoundRect(4f, 20f, 20f, 22f, 1f, 1f, ink)
+                ink.style = Paint.Style.STROKE
+            }
+            "external" -> {
+                canvas.drawRoundRect(3f, 7f, 17f, 21f, 2f, 2f, ink)
+                path(10f, 3f, 21f, 3f, 21f, 14f)
+                path(21f, 3f, 10f, 14f)
+            }
+            "ticket" -> {
+                path(3f, 6f, 21f, 6f, 21f, 10f, 19f, 12f, 21f, 14f,
+                    21f, 18f, 3f, 18f, 3f, 14f, 5f, 12f, 3f, 10f, 3f, 6f)
+                path(12f, 6f, 12f, 9f)
+                path(12f, 15f, 12f, 18f)
+            }
+            "logout" -> {
+                path(13f, 4f, 5f, 4f, 5f, 20f, 13f, 20f)
+                path(10f, 12f, 22f, 12f, 17f, 7f)
+                path(22f, 12f, 17f, 17f)
+            }
             "gift" -> {
                 canvas.drawRoundRect(3f, 10f, 21f, 22f, 1.5f, 1.5f, ink)
                 canvas.drawRoundRect(2f, 7f, 22f, 11f, 1.5f, 1.5f, ink)

@@ -3000,33 +3000,111 @@ class MainActivity : Activity() {
     private fun lastPaymentKey(): String = "last_payment_order_" + student.optInt("id", 0)
     private fun uncertainCheckoutKey(): String = "uncertain_payment_checkout_" + student.optInt("id", 0)
 
-    /** Mirrors the latest iOS V31 flow: plan selection, external HTTPS checkout and status polling. */
+    /** The *active* iPhone Build 498 V31SubscriptionView: external checkout, no in-app payment picker. */
     private fun plansScreen(statusText: String = "") {
         if (activeScreen != "plans") plansReturnScreen = if (activeScreen == "account") "account" else "home"
         activeScreen = "plans"
         base("الاشتراك", true)
-        line(if (subscribed) "✓ اشتراكك مفعّل" else "افتح كامل الأسئلة", true)
-        caption(if (subscribed) "يمكنك الوصول إلى كامل المحتوى المتاح في صفك." else
-            "اختر الباقة، ثم انتقل إلى صفحة الدفع الخارجية الآمنة.")
-        if (statusText.isNotBlank()) line(statusText)
+
+        val hero = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(dp(21), dp(21), dp(21), dp(21))
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                intArrayOf(navy, blue)).apply {
+                cornerRadius = dp(23).toFloat()
+                setStroke(dp(1), Color.argb(115, 255, 190, 53))
+            }
+        }
+        val eyebrow = LinearLayout(this).apply {
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        eyebrow.addView(IosGlyphView(this, "crown", gold), LinearLayout.LayoutParams(dp(27), dp(27)).apply {
+            marginEnd = dp(7)
+        })
+        eyebrow.addView(uiText("المرشد الوزاري", 16f, true, gold), LinearLayout.LayoutParams(0, -2, 1f))
+        eyebrow.addView(IosGlyphView(this, if (subscribed) "check" else "sparkles", gold),
+            LinearLayout.LayoutParams(dp(29), dp(29)))
+        hero.addView(eyebrow, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(16) })
+        hero.addView(uiText(if (subscribed) "دراستك مستمرة بلا حدّ الأسئلة المجانية"
+            else "لا تحفظ الإجابة فقط… افهم أين تتطور", 23f, true, Color.WHITE),
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+        hero.addView(uiText(if (subscribed) "وصولك إلى بنك أسئلة صفك فعّال وفق مدة اشتراكك."
+            else "تدرّب على أسئلة صفك، راجع أخطاءك، واستخدم المحاكاة والمؤشرات المتاحة لتعرف الخطوة التالية.",
+            15f, tint = Color.argb(224, 255, 255, 255)),
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = if (subscribed) 0 else dp(14) })
+        if (!subscribed) {
+            val freeLimit = homepage.optInt("free_limit", 15)
+            val freeRemaining = homepage.optInt("free_remaining", freeLimit)
+            val gift = LinearLayout(this).apply {
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                gravity = Gravity.CENTER_VERTICAL
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(dp(12), dp(9), dp(12), dp(9))
+                background = shape(gold, dp(25).toFloat())
+            }
+            gift.addView(IosGlyphView(this, "gift", navy), LinearLayout.LayoutParams(dp(19), dp(19)).apply {
+                marginEnd = dp(8)
+            })
+            gift.addView(uiText("تجربة مجانية: $freeLimit سؤال · المتبقي ${freeRemaining.coerceAtLeast(0)}",
+                14f, true, navy))
+            hero.addView(gift, LinearLayout.LayoutParams(-2, -2))
+        }
+        addUiCard(hero, bottom = 16)
         if (subscribed) {
-            line("لا تحتاج إلى إجراء أي عملية دفع الآن.")
-            button("تحديث حالة الاشتراك", secondary = true) { refreshSubscriptionStatus() }
+            val active = uiCard()
+            active.addView(uiText("✓ لا تحتاج إلى أي عملية دفع الآن.", 16f, true,
+                Color.rgb(52, 199, 89)))
+            addUiCard(active)
             return
         }
+
+        val benefits = uiCard()
+        benefits.addView(uiText("ماذا تكسب عند الاشتراك؟", 21f, true),
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(15) })
+        fun benefit(title: String, detail: String, glyph: String) {
+            val row = LinearLayout(this).apply {
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.TOP
+            }
+            row.addView(iconBubble(glyph, 35), LinearLayout.LayoutParams(dp(35), dp(35)).apply {
+                marginEnd = dp(12)
+            })
+            val copy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            copy.addView(uiText(title, 16f, true))
+            copy.addView(uiText(detail, 13f, tint = mutedText),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+            row.addView(copy, LinearLayout.LayoutParams(0, -2, 1f))
+            benefits.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
+        }
+        benefit("أسئلة صفّك", "تابع الحل بعد انتهاء الرصيد المجاني مع إظهار الإجابة الصحيحة.", "check")
+        benefit("دفتر الأخطاء", "ارجع للأسئلة التي أخطأت بها والمواضيع الأضعف.", "book")
+        if (homeFeatureEnabled("custom_exam"))
+            benefit("اختبار ومحاكاة", "حدد أسئلة للتدريب أو جرّب محاكاة مؤقتة والتصحيح بعد النهاية.", "timer")
+        benefits.addView(uiText("ⓘ الشرح التفصيلي والمصادر يظهران فقط حيث تتوفر بيانات صحيحة لهما.",
+            12f, tint = mutedText))
+        addUiCard(benefits, bottom = 16)
+
         val plans = homepage.optJSONArray("plans") ?: JSONArray()
         if (plans.length() == 0) {
-            line("لم تصل الباقات من الخادم.")
+            val missing = uiCard()
+            missing.addView(uiText("لم تصل الباقات من الخادم.", 15f, tint = mutedText))
+            addUiCard(missing)
             button("إعادة التحميل") { refreshSubscriptionStatus() }
             return
         }
-        caption("اختر الباقة المناسبة:")
+        sectionHeader("اختر الباقة", "يمكنك تغييرها قبل الانتقال للدفع", "calendar")
         val validIds = ArrayList<String>()
+        var monthlyAmount = 0L
         for (i in 0 until plans.length()) {
             val plan = plans.optJSONObject(i) ?: continue
             val id = plan.optString("id")
             if (id.isBlank()) continue
             validIds.add(id)
+            if (id == "month1") monthlyAmount = plan.optLong("amount")
         }
         if (paymentPlan !in validIds) paymentPlan = validIds.firstOrNull() ?: ""
         for (i in 0 until plans.length()) {
@@ -3034,25 +3112,54 @@ class MainActivity : Activity() {
             val id = plan.optString("id")
             if (id.isBlank()) continue
             val selected = id == paymentPlan
-            val price = java.text.NumberFormat.getNumberInstance(java.util.Locale("ar", "IQ"))
-                .format(plan.optLong("amount", 0))
-            button((if (selected) "◉ " else "◯ ") + plan.optString("label") + " — " + price + " د.ع",
-                secondary = !selected) {
-                if (!paymentBusy) { paymentPlan = id; plansScreen(statusText) }
+            val amount = plan.optLong("amount", 0)
+            val formatter = java.text.NumberFormat.getNumberInstance(java.util.Locale("ar", "IQ"))
+            val row = LinearLayout(this).apply {
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(15), dp(15), dp(15), dp(15))
+                background = shape(if (selected) (if (night) Color.rgb(4, 15, 35)
+                    else Color.rgb(235, 243, 255)) else surface, dp(18).toFloat())
             }
+            val circle = uiText(if (selected) "✓" else "◯", 18f, selected,
+                if (selected) blue else mutedText).apply { gravity = Gravity.CENTER }
+            row.addView(circle, LinearLayout.LayoutParams(dp(25), dp(28)).apply { marginEnd = dp(12) })
+            val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            labels.addView(uiText(plan.optString("label"), 17f, true))
+            val discount = id == "month3" && monthlyAmount > 0 && monthlyAmount * 3 > amount
+            labels.addView(uiText(if (discount) "توفّر ${formatter.format(monthlyAmount * 3 - amount)} د.ع مقارنة بثلاث باقات شهرية"
+                else "وصول إلى المحتوى حسب مدة الباقة", 13f, discount,
+                if (discount) Color.rgb(42, 190, 89) else mutedText),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(3) })
+            row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
+            row.addView(uiText("${formatter.format(amount)} د.ع", 17f, true, blue),
+                LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(10) })
+            addUiCard(tappable(row, plan.optString("label")) {
+                if (!paymentBusy) {
+                    val scrollY = contentScroll?.scrollY ?: 0
+                    paymentPlan = id
+                    plansScreen(statusText)
+                    contentScroll?.post { contentScroll?.scrollTo(0, scrollY) }
+                }
+            }, bottom = 11)
         }
-        val checkout = button("الانتقال إلى الدفع الخارجي") { beginCheckout() }
+
+        if (statusText.isNotBlank()) addUiCard(uiCard().apply {
+            addView(registrationNotice(statusText, listOf("تعذر", "غير مؤكدة", "لم يُرجع",
+                "مغلقة", "فشل", "غير صحيح").any { statusText.contains(it) }))
+        })
+        val checkout = button(if (paymentBusy) "جاري تجهيز الرابط…" else "الانتقال إلى الدفع الخارجي") { beginCheckout() }
         checkout.isEnabled = !paymentBusy && paymentPlan.isNotBlank()
         if (prefs.getBoolean(uncertainCheckoutKey(), false)) {
             line("قد يكون الخادم أنشأ طلب دفع لم نستلم رقمه. تحقق من حالة طلباتك مع الدعم قبل إنشاء طلب آخر.", true)
             button("مراسلات الدعم", secondary = true) { supportScreen() }
         }
         val lastOrder = prefs.getInt(lastPaymentKey(), 0)
-        if (lastOrder > 0) button("التحقق من حالة آخر عملية #$lastOrder", secondary = true) {
+        if (lastOrder > 0) button("تحقق من حالة آخر عملية", secondary = true) {
             checkPaymentStatus(lastOrder)
         }
-        caption("بيانات الدفع الحساسة لا تمر عبر التطبيق، وسيُؤكَّد الاشتراك بعد تحقق الخادم من العملية.")
-        button("لديك رمز اشتراك؟", secondary = true) { redeemScreen() }
+        caption("بعد اختيار الباقة ستنتقل إلى صفحة الدفع الخارجية الآمنة. لا توجد طريقة دفع يختارها الطالب داخل التطبيق.")
     }
 
     private fun beginCheckout() {
@@ -4164,24 +4271,50 @@ class MainActivity : Activity() {
             val profile = response.optJSONObject("user") ?: JSONObject()
             accountProfileCard(profile, response)
 
-            val subscription = uiRow(if (subscribed) "الاشتراك" else "افتح كامل المنصة",
-                if (subscribed) "اشتراكك مفعّل حاليًا • متبقٍ ${response.optInt("subscription_days_remaining")} يوم"
-                else "الدفع خارجي ولا نطلب رقمًا إضافيًا من هنا.",
-                if (subscribed) "subscription-active" else "lock") { plansScreen() }
-            addUiCard(subscription, bottom = 16)
+            val subscriptionCard = uiCard()
+            val subscriptionRow = LinearLayout(this).apply {
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            subscriptionRow.addView(IosGlyphView(this, if (subscribed) "check" else "external",
+                if (subscribed) Color.rgb(52, 199, 89) else blue),
+                LinearLayout.LayoutParams(dp(32), dp(32)).apply { marginEnd = dp(13) })
+            val subscriptionCopy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            subscriptionCopy.addView(uiText("اشتراك", 17f, true, if (subscribed) textColor else blue))
+            subscriptionCopy.addView(uiText(if (subscribed) "الأيام المتبقية: ${response.optInt("subscription_days_remaining")} يوم"
+                else "الدفع خارجي ولا نطلب رقمًا إضافيًا من هنا.", 13f, tint = mutedText),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+            subscriptionRow.addView(subscriptionCopy, LinearLayout.LayoutParams(0, -2, 1f))
+            subscriptionRow.addView(IosGlyphView(this, "chevron", mutedText),
+                LinearLayout.LayoutParams(dp(16), dp(16)).apply { marginStart = dp(9) })
+            subscriptionCard.addView(tappable(subscriptionRow, "اشتراك") { plansScreen() })
+            addUiCard(subscriptionCard, bottom = 16)
             val activationCard = uiCard()
-            activationCard.addView(uiText("تفعيل الاشتراك بكود", 17f, true, blue))
+            val activationHeading = LinearLayout(this).apply {
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            activationHeading.addView(IosGlyphView(this, "ticket", blue),
+                LinearLayout.LayoutParams(dp(21), dp(21)).apply { marginEnd = dp(9) })
+            activationHeading.addView(uiText("تفعيل الاشتراك بكود", 17f, true, blue))
+            activationCard.addView(activationHeading)
             activationCard.addView(uiText(
-                "إذا حصلت على كود من إدارة المنصة، أدخله هنا لتفعيل اشتراكك حسب صلاحية الكود.",
-                13f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
+                "إذا حصلت على كود من إدارة المنصة، أدخله هنا لتفعيل اشتراكك لمدة شهر أو أكثر حسب صلاحية الكود.",
+                15f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
             val activationInput = EditText(this).apply {
-                hint = "MW-XXXX-XXXX-XXXX"
+                hint = "MW-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
                 textSize = 14f
                 setSingleLine(true)
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+                layoutDirection = View.LAYOUT_DIRECTION_LTR
+                textDirection = View.TEXT_DIRECTION_LTR
+                gravity = Gravity.CENTER_VERTICAL or Gravity.LEFT
                 setTextColor(textColor)
                 setHintTextColor(mutedText)
                 setPadding(dp(12), dp(10), dp(12), dp(10))
-                background = shape(appColor, dp(8).toFloat())
+                background = shape(if (night) Color.BLACK else Color.rgb(235, 235, 239), dp(8).toFloat())
             }
             activationCard.addView(activationInput, LinearLayout.LayoutParams(-1, dp(48)).apply {
                 topMargin = dp(12)
@@ -4190,6 +4323,16 @@ class MainActivity : Activity() {
             activateButton = makeButton("تفعيل الاشتراك") {
                 attemptSubscriptionCodeRedemption(activationInput.text.toString(), activateButton)
             }
+            activateButton.isEnabled = false
+            activationInput.addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                    if (activateButton.text != "جاري التحقق من الكود…" &&
+                        activateButton.text != "حالة التفعيل غير مؤكدة")
+                        activateButton.isEnabled = !s.isNullOrBlank()
+                }
+                override fun afterTextChanged(s: Editable?) = Unit
+            })
             activationCard.addView(activateButton, LinearLayout.LayoutParams(-1, -2).apply {
                 topMargin = dp(12)
             })
@@ -4201,13 +4344,13 @@ class MainActivity : Activity() {
             val services = uiCard()
             if (response.optBoolean("can_change_name")) accountSetting(services, "تغيير الاسم",
                 "متاح مرة واحدة", "person") { promptRename(profile.optString("name")) }
-            accountSetting(services, "الإشعارات", "الرسائل الواردة من المنصة", "bell") { notificationsScreen() }
-            accountSetting(services, "خدمة العملاء", "محادثة مباشرة مع الدعم", "person") { supportScreen() }
+            accountSetting(services, "الإشعارات", "لا توجد إشعارات جديدة", "bell") { notificationsScreen() }
+            accountSetting(services, "خدمة العملاء", "محادثة مباشرة مع الدعم", "chat") { supportScreen() }
             addUiCard(services, bottom = 16)
 
             sectionHeader("الأمان والتذكير", "خيارات خاصة بجهازك", "lock")
             val security = uiCard()
-            val lockToggle = accountSwitch(security, "قفل حقيقي ببصمة الجهاز", "lock",
+            val lockToggle = accountSwitch(security, "قفل حقيقي ببصمة الجهاز", "id-card",
                 prefs.getBoolean("biometric_lock", false))
             val biometricAvailable = deviceBiometricAvailable()
             if (!biometricAvailable) {
@@ -4256,23 +4399,18 @@ class MainActivity : Activity() {
             }
             addUiCard(security, bottom = 16)
 
-            sectionHeader("إدارة الحساب", "خيارات حساسة", "lock")
-            val management = uiCard()
-            accountSetting(management, "إزالة الصورة الشخصية", "تأكيد قبل الحذف", "camera") {
-                AlertDialog.Builder(this).setTitle("حذف الصورة")
-                    .setMessage("هل تريد إزالة صورتك الشخصية؟")
-                    .setPositiveButton("نعم") { _, _ ->
-                        fetchForm("mobile/avatar.php", mapOf("csrf" to csrf, "remove" to "1")) { result ->
-                            if (result.optBoolean("ok")) { avatarGeneration++; refreshAccountAfterMutation() }
-                            else if (needsMutationReconciliation(result)) {
-                                message("حالة حذف الصورة غير مؤكدة. سنعيد قراءة بيانات الحساب قبل أي محاولة أخرى.")
-                                accountScreen()
-                            }
-                        }
-                    }.setNegativeButton("إلغاء", null).show()
+            // V31AccountView has a standalone red logout card below security.
+            val logoutCard = uiCard()
+            val logoutRow = LinearLayout(this).apply {
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                minimumHeight = dp(46)
             }
-            accountSetting(management, "إدارة خصوصية الحساب", "طلب الحذف وإدارة البيانات", "lock") { deletionScreen(response) }
-            accountSetting(management, "تسجيل الخروج", "إنهاء الجلسة على هذا الجهاز", "person") {
+            logoutRow.addView(IosGlyphView(this, "logout", Color.rgb(255, 69, 79)),
+                LinearLayout.LayoutParams(dp(25), dp(25)).apply { marginEnd = dp(10) })
+            logoutRow.addView(uiText("تسجيل الخروج", 17f, true, Color.rgb(255, 69, 79)))
+            logoutCard.addView(tappable(logoutRow, "تسجيل الخروج") {
                 AlertDialog.Builder(this).setTitle("تسجيل الخروج؟")
                     .setMessage("سيتم إنهاء جلسة حسابك على هذا الجهاز.")
                     .setPositiveButton("تسجيل الخروج") { _, _ ->
@@ -4293,11 +4431,8 @@ class MainActivity : Activity() {
                             }
                         }
                     }.setNegativeButton("إلغاء", null).show()
-            }
-            addUiCard(management, bottom = 16)
-
-            button("سياسة الخصوصية", secondary = true) { external("https://www.mur-iq.com/privacy.php") }
-            button("شروط الاستخدام", secondary = true) { external("https://www.mur-iq.com/terms.php") }
+            })
+            addUiCard(logoutCard, bottom = 16)
         }
     }
 
@@ -5304,8 +5439,11 @@ class MainActivity : Activity() {
 
     /** Shared by the standalone activation page and the iPhone-matched inline account card. */
     private fun attemptSubscriptionCodeRedemption(raw: String, activate: Button) {
-        val code = raw.trim()
-        if (code.isBlank()) { message("أدخل رمز الاشتراك."); return }
+        val code = raw.uppercase(java.util.Locale.ROOT).filterNot { it == '-' || it.isWhitespace() }
+        if (!code.matches(Regex("MW[A-F0-9]{24}"))) {
+            message("صيغة الكود غير صحيحة. تأكد من كتابة الكود الصادر من الإدارة كاملاً.")
+            return
+        }
         if (!activate.isEnabled) return
         val pendingKey = "uncertain_redeem_" + student.optInt("id", 0)
         if (prefs.getBoolean(pendingKey, false)) {
@@ -5326,43 +5464,42 @@ class MainActivity : Activity() {
                 }.setNegativeButton("رجوع", null).show()
             return
         }
-        AlertDialog.Builder(this).setMessage("هل تريد تفعيل الرمز الآن؟")
-            .setPositiveButton("تفعيل") { _, _ ->
-                activate.isEnabled = false
-                activate.text = "جارٍ التحقق من التفعيل…"
-                if (!prefs.edit().putBoolean(pendingKey, true).commit()) {
-                    activate.isEnabled = true
-                    message("تعذر تأمين سجل عملية التفعيل على الجهاز. حاول لاحقًا.")
-                    return@setPositiveButton
+        activate.isEnabled = false
+        activate.text = "جاري التحقق من الكود…"
+        if (!prefs.edit().putBoolean(pendingKey, true).commit()) {
+            activate.isEnabled = true
+            activate.text = "تفعيل الاشتراك"
+            message("تعذر تأمين سجل عملية التفعيل على الجهاز. حاول لاحقًا.")
+            return
+        }
+        fetch("mobile/redeem-subscription-code.php",
+            JSONObject().put("csrf", csrf).put("code", code), showError = false) { result ->
+            when {
+                result.optBoolean("ok") && result.optBoolean("subscribed") -> {
+                    prefs.edit().remove(pendingKey).apply()
+                    message(result.optString("message", "تم تأكيد تفعيل اشتراكك من الخادم."))
+                    if (activeScreen == "account") refreshAccountAfterMutation() else refreshHome()
                 }
-                fetch("mobile/redeem-subscription-code.php",
-                    JSONObject().put("csrf", csrf).put("code", code)) { result ->
-                    when {
-                        result.optBoolean("ok") -> {
-                            prefs.edit().remove(pendingKey).apply()
-                            message(result.optString("message", "تم تفعيل الاشتراك."))
-                            if (activeScreen == "account") refreshAccountAfterMutation() else refreshHome()
-                        }
-                        needsMutationReconciliation(result) -> {
-                            activate.text = "حالة التفعيل غير مؤكدة"
-                            message("قد يكون الرمز استُخدم. نتحقق من الاشتراك قبل أي محاولة أخرى.")
-                            fetch("mobile/bootstrap.php", showError = false) { updated ->
-                                if (updated.optBoolean("ok")) {
-                                    applyBootstrap(updated)
-                                    if (subscribed) prefs.edit().remove(pendingKey).apply()
-                                    if (activeScreen == "account") accountScreen()
-                                    else if (subscribed) showHome(updated)
-                                }
-                            }
-                        }
-                        else -> {
-                            prefs.edit().remove(pendingKey).apply()
-                            activate.isEnabled = true
-                            activate.text = "تفعيل الاشتراك"
+                result.optBoolean("ok") || needsMutationReconciliation(result) -> {
+                    activate.text = "حالة التفعيل غير مؤكدة"
+                    message("لم يؤكد الخادم تفعيل الاشتراك. نتحقق من الحالة قبل إعادة استخدام الكود.")
+                    fetch("mobile/bootstrap.php", showError = false) { updated ->
+                        if (updated.optBoolean("ok")) {
+                            applyBootstrap(updated)
+                            if (subscribed) prefs.edit().remove(pendingKey).apply()
+                            if (activeScreen == "account") accountScreen()
+                            else if (subscribed) showHome(updated)
                         }
                     }
                 }
-            }.setNegativeButton("إلغاء", null).show()
+                else -> {
+                    prefs.edit().remove(pendingKey).apply()
+                    activate.isEnabled = true
+                    activate.text = "تفعيل الاشتراك"
+                    message(result.optString("message", "تعذر تفعيل هذا الكود."))
+                }
+            }
+        }
     }
 
     private fun predictionsScreen(subjectId: Int, subject: String) {

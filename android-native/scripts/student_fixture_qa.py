@@ -9,8 +9,11 @@ USER={'id':900001,'name':'طالب فحص افتراضي','grade':'السادس 
 SUBJECTS=[{'id':1,'name':'الرياضيات'},{'id':2,'name':'اللغة العربية'}]
 STATE={'notes':{},'answers':{},'calls':[],'reject_once':False,'logout_reject_once':False,
        'registered':False,'verified':False,'resend_count':0,'invalid_code_count':0,
-       'registered_methods':[],'verified_methods':[]}
-BOOT={'ok':True,'csrf':'synthetic-csrf','user':USER,'subscribed':True,'free_remaining':15,'free_limit':15,'subjects':SUBJECTS,'stats':{},'ads':[{'id':1,'school':'مدرسة افتراضية','text':'إعلان محلي للتحقق من عرض الإعلانات','active':True}]}
+       'registered_methods':[],'verified_methods':[],'subscription_active':True,
+       'checkout_payload':None,'checkout_requests':0,'redeem_requests':0}
+BOOT={'ok':True,'csrf':'synthetic-csrf','user':USER,'subscribed':True,'free_remaining':15,'free_limit':15,
+      'plans':[{'id':'month1','label':'شهر واحد','amount':8000},{'id':'month3','label':'3 أشهر','amount':15000}],
+      'subjects':SUBJECTS,'stats':{},'ads':[{'id':1,'school':'مدرسة افتراضية','text':'إعلان محلي للتحقق من عرض الإعلانات','active':True}]}
 QUESTIONS=[{'id':101,'text':'ما حاصل جمع اثنين وثلاثة؟','type':'mcq','options':[{'id':1,'text':'خمسة'},{'id':2,'text':'ستة'}],'correct_answer':'خمسة','explanation':'نجمع اثنين مع ثلاثة فيكون الناتج خمسة.','submitted':False}, {'id':102,'text':'اكتب ناتج أربعة زائد أربعة.','type':'text','correct_answer':'8','explanation':'أربعة مضافاً إليها أربعة تساوي ثمانية.','submitted':False}]
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*args): pass
@@ -55,9 +58,25 @@ class Handler(BaseHTTPRequestHandler):
    self.send_response(200);self.send_header('Content-Type','text/html; charset=utf-8')
    self.send_header('Set-Cookie','fixture_session=synthetic; Path=/')
    self.end_headers();self.wfile.write(html.encode());return
-  elif path=='/mobile/bootstrap.php': data=BOOT
-  elif path=='/mobile/homepage.php': data=BOOT
-  elif path=='/mobile/account.php': data={**BOOT,'subscription_days_remaining':30,'can_edit_name':True}
+  elif path=='/mobile/bootstrap.php': data={**BOOT,'subscribed':STATE['subscription_active'],
+                                         'free_remaining':0 if not STATE['subscription_active'] else 15}
+  elif path=='/mobile/homepage.php': data={**BOOT,'subscribed':STATE['subscription_active'],
+                                          'free_remaining':0 if not STATE['subscription_active'] else 15}
+  elif path=='/mobile/account.php': data={**BOOT,'subscribed':STATE['subscription_active'],
+                                         'subscription_days_remaining':30,'can_change_name':False}
+  elif path=='/api/payment-checkout.php':
+   if body.get('action')=='checkout':
+    STATE['checkout_requests']+=1
+    STATE['checkout_payload']=body
+    assert body.get('plan') in ('month1','month3'),body
+    assert body.get('customer_name')==USER['name'],body
+    assert body.get('customer_phone')=='07700000000',body
+    assert 'payment_method' not in body,'The active iOS V31 checkout has no in-app method picker'
+    data={'ok':False,'message':'بوابة الدفع التجريبية مغلقة؛ لم تُنشأ عملية دفع.'}
+   else: data={'ok':True,'subscribed':False,'message':'لم يؤكد الخادم التفعيل بعد.'}
+  elif path=='/mobile/redeem-subscription-code.php':
+   STATE['redeem_requests']+=1
+   data={'ok':False,'message':'كود تجريبي غير صالح.'}
   elif path=='/mobile/bound-password-recovery.php':
    data={'ok':True,'contacts':{'email':{'value':'student@example.test','enabled':True},'phone':{'value':'','enabled':False}}}
   elif path=='/mobile/insights.php': data={'ok':True,'insights':{'chapters':[]},'weekly':{}}
@@ -346,7 +365,38 @@ def main():
  button('تأكيد الحساب');ui.wait_for('حسابي')
  assert STATE['verified_methods']==['email','phone'], STATE['verified_methods']
  screenshot(args.output,'student-phone-verified-account')
- args.output.joinpath('fixture-results.json').write_text(json.dumps({'passed':True,'grading_requests':3,'rejected_then_retryable':True,'summary_without_footer':True,'note_roundtrip':True,'welcome_replays_on_resume':True,'config_loaded':True,'logout_reject_then_accept':True,'register_and_verify':True,'registration_methods':STATE['registered_methods'],'verification_methods':STATE['verified_methods'],'phone_segment_resets':True,'registration_draft_survives_back':True,'incomplete_registration_blocked':True,'resend_count':STATE['resend_count'],'invalid_code_count':STATE['invalid_code_count'],'synthetic_only':True},indent=2))
- print('PASS synthetic login, both registration routes, email/phone verification and grading',flush=True)
+
+ # Real Build 498 uses V31SubscriptionView: provider selection is NOT inside
+ # the app. Verify the screenshot-backed hero, two dynamic price cards, account
+ # activation code and exact backend payload against a rejecting fake checkout.
+ button('حسابي');ui.wait_for('تفعيل الاشتراك بكود')
+ button('تسجيل الخروج');ui.wait_for('سيتم إنهاء جلسة حسابك على هذا الجهاز.')
+ button('تسجيل الخروج');ui.wait_for('مساحة تعلّمك')
+ STATE['subscription_active']=False
+ ui.enter_login(393,852)
+ login_field(0,'student@example.test');login_field(1,'fixture-pass')
+ button('دخول');ui.wait_for('حسابي')
+ button('حسابي');ui.wait_for('تفعيل الاشتراك بكود')
+ screenshot(args.output,'student-unsubscribed-account')
+ fill_register_field('MW-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX','INVALID')
+ button('تفعيل الاشتراك');time.sleep(.6)
+ assert STATE['redeem_requests']==0,'Malformed code must not contact the redemption endpoint'
+ # Move to the top, clear the test code, then exercise monthly/quarterly plans.
+ ui.adb('shell','input','swipe','196','230','196','770','330');time.sleep(.5)
+ ui.adb('shell','input','swipe','196','230','196','770','330');time.sleep(.5)
+ button('اشتراك');ui.wait_for('لا تحفظ الإجابة فقط… افهم أين تتطور')
+ screenshot(args.output,'student-subscription-hero')
+ ui.wait_for('ماذا تكسب عند الاشتراك؟')
+ button('3 أشهر');ui.wait_for('اختر الباقة')
+ screenshot(args.output,'student-payment-plans')
+ assert STATE['checkout_requests']==0,'Selecting plans must not submit a payment'
+ button('الانتقال إلى الدفع الخارجي')
+ for _ in range(4):
+  ui.adb('shell','input','swipe','196','725','196','250','280');time.sleep(.2)
+ ui.wait_for('بوابة الدفع التجريبية مغلقة؛ لم تُنشأ عملية دفع.')
+ assert STATE['checkout_requests']==1 and STATE['checkout_payload']['plan']=='month3',STATE['checkout_payload']
+ screenshot(args.output,'student-payment-error')
+ args.output.joinpath('fixture-results.json').write_text(json.dumps({'passed':True,'grading_requests':3,'rejected_then_retryable':True,'summary_without_footer':True,'note_roundtrip':True,'welcome_replays_on_resume':True,'config_loaded':True,'logout_reject_then_accept':True,'register_and_verify':True,'registration_methods':STATE['registered_methods'],'verification_methods':STATE['verified_methods'],'phone_segment_resets':True,'registration_draft_survives_back':True,'incomplete_registration_blocked':True,'account_and_payment_v31':True,'invalid_activation_rejected_locally':True,'checkout_requests':STATE['checkout_requests'],'checkout_external_only':True,'resend_count':STATE['resend_count'],'invalid_code_count':STATE['invalid_code_count'],'synthetic_only':True},indent=2))
+ print('PASS synthetic account, subscription, external checkout contract, both registration routes and grading',flush=True)
  server.shutdown()
 if __name__=='__main__': main()
