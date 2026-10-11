@@ -1410,6 +1410,7 @@ class MainActivity : Activity() {
     }
 
     private fun lastPaymentKey(): String = "last_payment_order_" + student.optInt("id", 0)
+    private fun uncertainCheckoutKey(): String = "uncertain_payment_checkout_" + student.optInt("id", 0)
 
     /** Mirrors the latest iOS V31 flow: plan selection, external HTTPS checkout and status polling. */
     private fun plansScreen(statusText: String = "") {
@@ -1454,6 +1455,10 @@ class MainActivity : Activity() {
         }
         val checkout = button("الانتقال إلى الدفع الخارجي") { beginCheckout() }
         checkout.isEnabled = !paymentBusy && paymentPlan.isNotBlank()
+        if (prefs.getBoolean(uncertainCheckoutKey(), false)) {
+            line("قد يكون الخادم أنشأ طلب دفع لم نستلم رقمه. تحقق من حالة طلباتك مع الدعم قبل إنشاء طلب آخر.", true)
+            button("مراسلات الدعم", secondary = true) { supportScreen() }
+        }
         val lastOrder = prefs.getInt(lastPaymentKey(), 0)
         if (lastOrder > 0) button("التحقق من حالة آخر عملية #$lastOrder", secondary = true) {
             checkPaymentStatus(lastOrder)
@@ -1464,6 +1469,15 @@ class MainActivity : Activity() {
 
     private fun beginCheckout() {
         if (paymentBusy || subscribed || paymentPlan.isBlank()) return
+        if (prefs.getBoolean(uncertainCheckoutKey(), false)) {
+            AlertDialog.Builder(this).setTitle("هل تحققت من طلب الدفع السابق؟")
+                .setMessage("ربما أنشأ الخادم طلباً سابقاً رغم فقدان الاستجابة. تحقق من الطلبات مع الإدارة لتجنب طلبات دفع مكررة.")
+                .setPositiveButton("تحققت، إنشاء طلب جديد") { _, _ ->
+                    prefs.edit().remove(uncertainCheckoutKey()).apply()
+                    beginCheckout()
+                }.setNegativeButton("رجوع", null).show()
+            return
+        }
         paymentBusy = true
         plansScreen("جارٍ تجهيز رابط الدفع…")
         val body = JSONObject().put("csrf", csrf).put("action", "checkout")
@@ -1474,17 +1488,24 @@ class MainActivity : Activity() {
         fetch("api/payment-checkout.php", body, showError = false) { result ->
             paymentBusy = false
             if (!result.optBoolean("ok")) {
-                plansScreen(result.optString("message", "تعذر تجهيز الدفع؛ تحقق من حالة أي طلب سابق."))
+                val ambiguous = needsMutationReconciliation(result)
+                if (ambiguous) prefs.edit().putBoolean(uncertainCheckoutKey(), true).apply()
+                plansScreen(if (ambiguous) "حالة إنشاء طلب الدفع غير مؤكدة. راجع الإدارة قبل إنشاء طلب آخر." else
+                    result.optString("message", "تعذر تجهيز الدفع."))
                 return@fetch
             }
-            if (result.optBoolean("subscribed")) { refreshSubscriptionStatus(); return@fetch }
+            if (result.optBoolean("subscribed")) {
+                prefs.edit().remove(uncertainCheckoutKey()).apply()
+                refreshSubscriptionStatus(); return@fetch
+            }
             val url = result.optString("redirect")
             val order = result.optInt("order_id")
             if (order <= 0 || !AccountRules.safePaymentRedirect(url)) {
+                prefs.edit().putBoolean(uncertainCheckoutKey(), true).apply()
                 plansScreen("لم يُرجع الخادم رابط دفع آمن ورقم طلب صالحاً. تحقق من الطلب قبل المحاولة مجدداً.")
                 return@fetch
             }
-            prefs.edit().putInt(lastPaymentKey(), order).apply()
+            prefs.edit().putInt(lastPaymentKey(), order).remove(uncertainCheckoutKey()).apply()
             plansScreen("تم إنشاء الطلب #$order. أكمل الدفع في المتصفح ثم تحقق من حالته.")
             try {
                 checkoutReturnPending = true
@@ -3370,10 +3391,20 @@ class MainActivity : Activity() {
                 line(obj.optString("body", obj.optString("message")))
             }
             val msg = input("اكتب رسالة لفريق الدعم", multiline = true)
-            button("إرسال الرسالة") {
+            lateinit var send: Button
+            send = button("إرسال الرسالة") {
                 if (msg.text.isBlank()) { message("اكتب رسالتك."); return@button }
+                send.isEnabled = false
+                send.text = "جارٍ إرسال الرسالة…"
                 fetch("mobile/support.php",JSONObject().put("csrf",csrf).put("message",msg.text.toString())) { result ->
                     if (result.optBoolean("ok")) supportScreen()
+                    else if (needsMutationReconciliation(result)) {
+                        send.text = "حالة الإرسال غير مؤكدة"
+                        message("قد تكون الرسالة وصلت. تحقق من مراسلات الدعم قبل إرسالها مجدداً.")
+                    } else {
+                        send.isEnabled = true
+                        send.text = "إرسال الرسالة"
+                    }
                 }
             }
         }
@@ -3383,12 +3414,28 @@ class MainActivity : Activity() {
         base("تفعيل الاشتراك", true)
         line("أدخل رمز الاشتراك الرسمي الذي حصلت عليه من إدارة المنصة.")
         val code = input("رمز الاشتراك")
-        button("تفعيل الكود") {
+        lateinit var activate: Button
+        activate = button("تفعيل الكود") {
             if (code.text.isBlank()) { message("أدخل رمز الاشتراك."); return@button }
             AlertDialog.Builder(this).setMessage("هل تريد تفعيل الرمز الآن؟")
                 .setPositiveButton("تفعيل") { _, _ ->
+                    activate.isEnabled = false
+                    activate.text = "جارٍ التحقق من التفعيل…"
                     fetch("mobile/redeem-subscription-code.php", JSONObject().put("csrf",csrf).put("code",code.text.toString().trim())) { result ->
                         if (result.optBoolean("ok")) { message(result.optString("message","تم تفعيل الاشتراك.")); refreshHome() }
+                        else if (needsMutationReconciliation(result)) {
+                            activate.text = "حالة التفعيل غير مؤكدة"
+                            message("قد يكون الرمز استُخدم بنجاح. سنراجع حالة الاشتراك قبل إعادة المحاولة.")
+                            fetch("mobile/bootstrap.php", showError = false) { account ->
+                                if (account.optBoolean("ok")) {
+                                    applyBootstrap(account)
+                                    if (subscribed) showHome(account)
+                                }
+                            }
+                        } else {
+                            activate.isEnabled = true
+                            activate.text = "تفعيل الكود"
+                        }
                     }
                 }.setNegativeButton("إلغاء",null).show()
         }
