@@ -128,12 +128,32 @@ def check_controls(directory: Path, name: str, width: int, height: int) -> None:
     print("PASS registration screen and Android back", flush=True)
 
 
+def launch_native() -> None:
+    for attempt in range(2):
+        adb("shell", "am", "force-stop", PACKAGE)
+        adb("shell", "am", "start", "-n", f"{PACKAGE}/.MainActivity")
+        try:
+            wait_for("منصة المرشد الوزاري")
+            return
+        except AssertionError:
+            # A freshly booted API-33 emulator may show a *system launcher* ANR
+            # over our Activity. Dismiss only this known OS dialog, once.
+            if attempt != 0:
+                raise
+            root, _ = ui_tree()
+            launcher = find(root, "Pixel Launcher isn't responding")
+            close = find(root, "Close app")
+            if launcher is None or close is None:
+                raise
+            tap_node(close)
+            print("RECOVER dismissed emulator Pixel Launcher ANR before app launch", flush=True)
+            time.sleep(1.5)
+
+
 def test_size(directory: Path, name: str, width: int, height: int, scale: float) -> None:
     adb("shell", "settings", "put", "system", "font_scale", str(scale))
     adb("shell", "wm", "size", f"{width}x{height}")
-    adb("shell", "am", "force-stop", PACKAGE)
-    adb("shell", "am", "start", "-n", f"{PACKAGE}/.MainActivity")
-    wait_for("منصة المرشد الوزاري")
+    launch_native()
     if not adb("shell", "pidof", PACKAGE).strip():
         raise AssertionError("Native app process did not survive launch")
     capture(directory, name)
