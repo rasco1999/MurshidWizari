@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Native fallback for the account header: matches the iPhone's neutral
+     person silhouette. The gold platform emblem belongs to the inactive tab. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#E7EBF0"
+        android:pathData="M50,0 a50,50 0,1 0,0 100 a50,50 0,1 0,0 -100" />
+    <path
+        android:fillColor="#10315A"
+        android:pathData="M50,21 a16,16 0,1 0,0 32 a16,16 0,1 0,0 -32" />
+    <path
+        android:fillColor="#10315A"
+        android:pathData="M12,100 L12,91 C12,73 28,63 50,63 C72,63 88,73 88,91 L88,100 Z" />
+</vector>
