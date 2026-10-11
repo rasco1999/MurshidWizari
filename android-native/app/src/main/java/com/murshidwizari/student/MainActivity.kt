@@ -13,6 +13,7 @@ import android.graphics.Color
 import android.graphics.BitmapFactory
 import android.graphics.Bitmap
 import android.graphics.Matrix
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
@@ -72,7 +73,7 @@ class MainActivity : Activity() {
     private var questionIndex = 0
     private var busyAnswer = false
     private var submissionUncertain = false
-    private var activeScreen = "login"
+    private var activeScreen = "welcome"
     private var subscribed = false
     private val competitionHistory = ArrayDeque<String>()
     private var dailyQuestions = emptyList<CompetitionRules.Question>()
@@ -129,6 +130,7 @@ class MainActivity : Activity() {
     private var checkoutReturnPending = false
     private var recoveryBusy = false
     private var recoverReturnScreen = "login"
+    private var registerReturnScreen = "guest"
     private var pendingVerificationRemember = false
     private var focusMinutes = 25
     private var focusBusy = false
@@ -170,11 +172,21 @@ class MainActivity : Activity() {
         night = VisualRules.initialNight(if (prefs.contains("night")) prefs.getBoolean("night", false) else null,
             systemNight)
         setTheme(if (night) R.style.MurshidDark else R.style.MurshidLight)
-        loginScreen()
+        showAcademicWelcome()
+        val minimumWelcomeMs = 1250L // iOS AcademicWelcomeView duration.
+        val readyAt = SystemClock.elapsedRealtime() + minimumWelcomeMs
         if (api.hasRememberedSession()) {
+            // Restore the encrypted session before replacing the welcome screen.
             fetch("mobile/bootstrap.php", showError = false) { response ->
-                if (response.optBoolean("ok")) showHome(response)
+                main.postDelayed({
+                    if (activeScreen == "welcome") {
+                        if (response.optBoolean("ok")) showHome(response)
+                        else guestLandingScreen()
+                    }
+                }, (readyAt - SystemClock.elapsedRealtime()).coerceAtLeast(0))
             }
+        } else {
+            main.postDelayed({ if (activeScreen == "welcome") guestLandingScreen() }, minimumWelcomeMs)
         }
     }
 
@@ -799,7 +811,7 @@ class MainActivity : Activity() {
         homeInsightsLoaded = false; homeInsights = JSONObject(); homeWeekly = JSONObject()
         busyAnswer = false; submissionUncertain = false; dailyBusy = false; dailyUncertain = false
         prefs.edit().remove("last_payment_order").apply()
-        loginScreen()
+        guestLandingScreen()
         message("انتهت جلسة الدخول. سجّل الدخول مجدداً.")
     }
     private fun fetch(path: String, body: JSONObject? = null, showError: Boolean = true, done: (JSONObject) -> Unit) {
@@ -883,93 +895,355 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun loginScreen() {
-        activeScreen = "login"
-        window.statusBarColor = if (night) Color.rgb(13, 29, 54) else navy
-        window.navigationBarColor = appColor
-        setupRoot(horizontalPadding = 20, topPadding = 18)
-
-        val header = LinearLayout(this).apply {
+    /** iOS 4.8.18 AcademicWelcomeView precedes both session recovery and guest navigation. */
+    private fun showAcademicWelcome() {
+        activeScreen = "welcome"
+        window.statusBarColor = navy
+        window.navigationBarColor = navy
+        val background = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(16), dp(27), dp(16), dp(27))
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Color.rgb(15, 40, 79), Color.rgb(39, 91, 165))
-            ).apply { cornerRadius = dp(28).toFloat() }
+            setPadding(dp(26), dp(36), dp(26), dp(26))
+            this.background = GradientDrawable(GradientDrawable.Orientation.TR_BL,
+                intArrayOf(navy, Color.rgb(10, 46, 97), blue))
         }
+        background.addView(Space(this), LinearLayout.LayoutParams(1, 0, 1f))
         val emblem = ImageView(this).apply {
             setImageResource(R.drawable.ic_ios_v4818)
             scaleType = ImageView.ScaleType.FIT_CENTER
-            background = GradientDrawable().apply {
-                setColor(Color.WHITE)
-                cornerRadius = dp(24).toFloat()
-            }
-            contentDescription = "شعار المرشد الوزاري"
+            contentDescription = "منصة المرشد الوزاري"
+            alpha = 0f
+            scaleX = 0.78f
+            scaleY = 0.78f
         }
-        header.addView(emblem, LinearLayout.LayoutParams(dp(76), dp(76)).apply {
-            bottomMargin = dp(14)
+        background.addView(emblem, LinearLayout.LayoutParams(dp(190), dp(190)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            bottomMargin = dp(20)
         })
-        header.addView(TextView(this).apply {
-            text = "منصة المرشد الوزاري"
-            textSize = 25f
-            typeface = Typeface.DEFAULT_BOLD
+        val title = uiText("منصة المرشد الوزاري", 30f, true, Color.WHITE).apply {
             gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-        })
-        header.addView(TextView(this).apply {
-            text = "خطوتك الواثقة نحو التفوق الوزاري"
-            textSize = 14f
-            gravity = Gravity.CENTER
-            setTextColor(Color.rgb(218, 230, 249))
-            setPadding(0, dp(9), 0, 0)
-        })
-        root.addView(header, LinearLayout.LayoutParams(-1, -2).apply {
-            bottomMargin = dp(24)
-        })
+            alpha = 0f
+        }
+        background.addView(title)
+        val subtitle = uiText("ابدأ بثقة • تعلّم بذكاء • تقدّم كل يوم", 15f,
+            tint = Color.rgb(218, 230, 249)).apply { gravity = Gravity.CENTER; alpha = 0f }
+        background.addView(subtitle, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
+        background.addView(Space(this), LinearLayout.LayoutParams(1, 0, 1f))
+        val footer = uiText("✓ منهجك الوزاري في مكان واحد", 13f, true,
+            Color.rgb(202, 217, 236)).apply { gravity = Gravity.CENTER; alpha = 0f }
+        background.addView(footer, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(30) })
+        setContentView(background)
+        emblem.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(650).start()
+        title.animate().alpha(1f).setStartDelay(250).setDuration(550).start()
+        subtitle.animate().alpha(1f).setStartDelay(250).setDuration(550).start()
+        footer.animate().alpha(1f).setStartDelay(250).setDuration(550).start()
+    }
 
-        val welcome = TextView(this).apply {
-            text = "أهلاً بعودتك!"
-            textSize = 23f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(textColor)
-            setPadding(0, 0, 0, dp(6))
+    /** GuestLandingView: the iPhone's first unauthenticated screen, including its live navigation. */
+    private fun guestLandingScreen() {
+        activeScreen = "guest"
+        window.statusBarColor = if (night) Color.BLACK else navy
+        window.navigationBarColor = appColor
+        setupRoot(horizontalPadding = 18, topPadding = 10)
+        val scroll = screenFrame?.parent as? ScrollView
+        val anchors = mutableMapOf<String, View>()
+        fun jumpTo(id: String) {
+            val target = anchors[id] ?: return
+            val area = Rect()
+            target.getDrawingRect(area)
+            root.offsetDescendantRectToMyCoords(target, area)
+            scroll?.smoothScrollTo(0, (area.top - dp(12)).coerceAtLeast(0))
         }
-        root.addView(welcome)
-        caption("سجّل دخولك وأكمل رحلتك التعليمية.")
-        gap(10)
-        val identifier = input("البريد الإلكتروني أو رقم الهاتف")
-        identifier.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
-        val password = input("كلمة المرور", password = true)
-        val settingsRow = LinearLayout(this).apply {
+
+        val top = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
             gravity = Gravity.CENTER_VERTICAL
         }
-        val preview = CheckBox(this).apply {
-            text = "إظهار كلمة المرور"
-            textSize = 13f
-            setTextColor(textColor)
-            buttonTintList = android.content.res.ColorStateList.valueOf(accent)
+        top.addView(ImageView(this).apply {
+            setImageResource(R.drawable.ic_ios_v4818)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = "شعار المرشد الوزاري"
+        }, LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(12) })
+        val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        labels.addView(uiText("منصة المرشد الوزاري", 16f, true))
+        labels.addView(uiText("مساحة تعلّمك", 12f, tint = mutedText))
+        top.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
+        top.addView(makeButton("تسجيل الدخول", secondary = true) { loginScreen() },
+            LinearLayout.LayoutParams(dp(118), -2))
+        root.addView(top, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(28) })
+
+        root.addView(uiText("تعلّم بتركيز. تقدّم بثقة.", 15f, true, blue),
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+        root.addView(uiText("خطوة واضحة،\nنحو نجاحك.", 38f, true),
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(13) })
+        root.addView(uiText("رتّب دراستك، اختبر فهمك، وارجع لما يحتاج مراجعة. مساحة هادئة تجمع رحلتك الدراسية في مكان واحد.",
+            16f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(15) })
+        val heroActions = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
         }
-        preview.setOnCheckedChangeListener { _, checked ->
-            password.transformationMethod = if (checked)
+        heroActions.addView(makeButton("ابدأ رحلتك") { registerReturnScreen = "guest"; registerScreen() },
+            LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(5) })
+        heroActions.addView(makeButton("اكتشف المنصة", secondary = true) { jumpTo("platform-value") },
+            LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(5) })
+        root.addView(heroActions, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
+        root.addView(uiText("✓ منصة تعليمية مستقلة · غير تابعة لأي جهة حكومية", 12f,
+            true, mutedText), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(25) })
+
+        val example = uiCard()
+        val exampleTitle = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        exampleTitle.addView(IosGlyphView(this, "book", blue), LinearLayout.LayoutParams(dp(20), dp(20)))
+        exampleTitle.addView(uiText("مساحة التدريب", 17f, true),
+            LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(8) })
+        exampleTitle.addView(uiText("مثال توضيحي", 12f, tint = mutedText))
+        example.addView(exampleTitle)
+        example.addView(uiText("كل سؤال، خطوة جديدة", 13f, true, blue),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(18) })
+        example.addView(uiText("ما ناتج 3² ؟", 23f, true),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10); bottomMargin = dp(8) })
+        for ((choice, correct) in listOf("6" to false, "9" to true, "12" to false)) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(14), dp(10), dp(14), dp(10))
+                background = shape(if (correct) Color.argb(28, 34, 160, 80)
+                    else if (night) Color.rgb(45,45,49) else Color.rgb(249,249,251), dp(13).toFloat())
+            }
+            row.addView(uiText(choice, 17f, true), LinearLayout.LayoutParams(0, -2, 1f))
+            row.addView(IosGlyphView(this, if (correct) "check" else "circle",
+                if (correct) Color.rgb(39, 167, 85) else mutedText), LinearLayout.LayoutParams(dp(21), dp(21)))
+            example.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+        }
+        example.addView(uiText("افهم الفكرة، ثم جرّب بنفسك.", 13f, tint = mutedText))
+        addUiCard(example, bottom = 22)
+
+        val jumps = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
+        val jumpRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        for ((label, id) in listOf("لماذا المنصة؟" to "platform-value",
+            "كيف تبدأ" to "how", "الأسئلة المجانية" to "instruction-3",
+            "تحدي المليون" to "instruction-5", "خدمة العملاء" to "instruction-7")) {
+            jumpRow.addView(makeButton(label, secondary = true) { jumpTo(id) },
+                LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(6) })
+        }
+        jumps.addView(jumpRow)
+        root.addView(jumps, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(27) })
+
+        val platform = uiText("مصممة لطريقتك في الدراسة", 15f, true, blue)
+        anchors["platform-value"] = platform
+        root.addView(platform, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
+        root.addView(uiText("لماذا تختار منصة المرشد الوزاري؟", 24f, true),
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(11) })
+        root.addView(uiText("من اختيار موضوعك إلى مراجعة إجابتك، أدوات بسيطة تساعدك على معرفة خطوتك التالية.",
+            15f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(15) })
+        val features = listOf(
+            Triple("أسئلة مرتبة حسب الموضوع", "تنقّل بين المواد والمواضيع المنشورة واعرف عدد الأسئلة قبل أن تبدأ.", "list"),
+            Triple("تعلّم من إجابتك", "ارجع إلى الإجابات والتوضيحات المتاحة، وأبلغ عن أي ملاحظة لتُراجع.", "brain"),
+            Triple("اختبارات سريعة ومستقرة", "تجربة خفيفة وواضحة تحفظ التقدم والنتائج داخل الحساب.", "check"),
+            Triple("تجربة مجانية حقيقية", "15 سؤالًا مجانيًا للحساب الجديد لتجربة المنصة قبل الاشتراك.", "gift"),
+            Triple("دفع إلكتروني سهل", "خطوات اشتراك واضحة مع تأكيد حالة الدفع داخل المنصة.", "creditcard"),
+            Triple("نتائج وتفسير للأخطاء", "متابعة المستوى ومعرفة نقاط القوة والموضوعات التي تحتاج مراجعة.", "chart"),
+            Triple("تحديثات مستمرة", "إضافة ومراجعة المحتوى باستمرار استعدادًا لمواعيد الامتحانات.", "history"),
+            Triple("دعم سريع وموثوق", "خدمة عملاء واضحة لمتابعة مشكلات الحساب والاشتراك والاستخدام.", "chat")
+        )
+        for ((heading, description, glyph) in features) {
+            val card = uiCard()
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                gravity = Gravity.TOP
+            }
+            row.addView(iconBubble(glyph, 38), LinearLayout.LayoutParams(dp(38), dp(38)).apply {
+                marginEnd = dp(13)
+            })
+            val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            labels.addView(uiText(heading, 17f, true))
+            labels.addView(uiText(description, 14f, tint = mutedText),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
+            row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
+            card.addView(row)
+            addUiCard(card, bottom = 13)
+        }
+
+        val how = uiText("تعليمات الاستخدام", 15f, true, blue)
+        anchors["how"] = how
+        root.addView(how, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16); bottomMargin = dp(6) })
+        root.addView(uiText("كيف تبدأ وتستفيد من المنصة", 24f, true),
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(15) })
+        val instructions = listOf(
+            "الحساب وتسجيل الدخول" to "استخدم بيانات صحيحة عند إنشاء الحساب، واحفظ كلمة المرور الخاصة بك. تسجيل الدخول متاح برقم الهاتف أو البريد الإلكتروني المسجل في الحساب.",
+            "الاختبارات" to "اختر الصف والمادة والموضوع ثم ابدأ الاختبار. يتم حفظ الإجابات والتقدم والنتائج داخل حساب الطالب، ويمكن متابعة الاختبار من الموضع المحفوظ.",
+            "الأسئلة المجانية" to "يتوفر للحساب الجديد رصيد مقداره 15 سؤالًا مجانيًا بالضبط. بعد استهلاك الرصيد المجاني يتطلب الوصول إلى الأسئلة الإضافية اشتراكًا فعالًا.",
+            "قسم النجاح" to "يعرض قسم النجاح أداء الطالب استنادًا إلى إجاباته وتقدمه، ويتضمن المواد الأقوى والموضوعات التي تحتاج إلى مراجعة. هذه المؤشرات خاصة بمتابعة المستوى داخل المنصة.",
+            "تحدي المليون" to "يعتمد الترتيب على النقاط المسجلة وفق نظام المنصة. يستطيع الطالب متابعة مركزه والمتصدرين والفارق بينه وبين المراكز الأعلى من صفحة التحدي.",
+            "بيانات الحساب" to "لا تشارك كلمة المرور أو بيانات الدخول مع أي شخص. يجب استخدام الحساب من صاحبه فقط لضمان سلامة النتائج والنقاط وسجل الاختبارات.",
+            "خدمة العملاء" to "عند وجود مشكلة في الحساب أو الاشتراك أو استخدام الموقع، استخدم زر خدمة العملاء الموجود داخل المنصة بعد الدخول لإرسال طلب الدعم."
+        )
+        instructions.forEachIndexed { index, (heading, description) ->
+            val card = uiCard()
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.TOP }
+            val number = uiText((index + 1).toString().padStart(2, '0'), 14f, true, blue).apply {
+                gravity = Gravity.CENTER
+                background = shape(Color.argb(26, 45, 108, 223), dp(12).toFloat())
+            }
+            row.addView(number, LinearLayout.LayoutParams(dp(46), dp(46)).apply { marginEnd = dp(13) })
+            val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            content.addView(uiText(heading, 17f, true))
+            content.addView(uiText(description, 14f, tint = mutedText),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+            row.addView(content, LinearLayout.LayoutParams(0, -2, 1f))
+            card.addView(row)
+            anchors["instruction-${index + 1}"] = card
+            addUiCard(card, bottom = 13)
+        }
+
+        val finalCard = uiCard()
+        finalCard.addView(uiText("بعد قراءة التعليمات", 15f, true, blue).apply { gravity = Gravity.CENTER })
+        finalCard.addView(uiText("اختر طريقة الدخول إلى المنصة", 22f, true).apply { gravity = Gravity.CENTER },
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7); bottomMargin = dp(16) })
+        finalCard.addView(makeButton("إنشاء حساب") { registerReturnScreen = "guest"; registerScreen() },
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+        finalCard.addView(makeButton("تسجيل الدخول", secondary = true) { loginScreen() })
+        addUiCard(finalCard, bottom = 17)
+
+        root.addView(uiText("© 2026 المرشد الوزاري · منصة تعليمية مستقلة", 12f, tint = mutedText)
+            .apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+        val social = LinearLayout(this).apply { gravity = Gravity.CENTER; orientation = LinearLayout.HORIZONTAL }
+        for ((symbol, label, link) in listOf(
+            Triple("instagram", "Instagram", "https://www.instagram.com/murshid.iq/"),
+            Triple("facebook", "Facebook", "https://www.facebook.com/Murshidiq/"),
+            Triple("telegram", "Telegram", "https://t.me/El_Murshed_iq"))) {
+            social.addView(tappable(FrameLayout(this).apply {
+                addView(IosGlyphView(this@MainActivity, symbol, blue),
+                    FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
+            }, label) { external(link) }, LinearLayout.LayoutParams(dp(52), dp(43)))
+        }
+        root.addView(social)
+        root.addView(uiText("الثالث المتوسط · السادس العلمي · السادس الأدبي", 12f,
+            tint = mutedText).apply { gravity = Gravity.CENTER },
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(9) })
+        val policies = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+        policies.addView(makeButton("الخصوصية", secondary = true) { external("https://mur-iq.com/privacy.php") })
+        policies.addView(makeButton("شروط الاستخدام", secondary = true) { external("https://mur-iq.com/terms.php") },
+            LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(10) })
+        root.addView(policies)
+    }
+
+    private fun loginScreen() {
+        activeScreen = "login"
+        window.statusBarColor = if (night) Color.BLACK else navy
+        window.navigationBarColor = appColor
+        setupRoot(horizontalPadding = 18, topPadding = 8)
+        backHeader("تسجيل الدخول")
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(12), dp(16), dp(12), dp(14))
+        }
+        val mark = FrameLayout(this).apply {
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(blue, navy))
+                .apply { cornerRadius = dp(24).toFloat() }
+            elevation = dp(6).toFloat()
+            contentDescription = "المرشد الوزاري"
+        }
+        mark.addView(IosGlyphView(this, "graduation", Color.WHITE),
+            FrameLayout.LayoutParams(dp(38), dp(38), Gravity.CENTER))
+        header.addView(mark, LinearLayout.LayoutParams(dp(82), dp(82)).apply { bottomMargin = dp(14) })
+        header.addView(uiText("المرشد الوزاري", 30f, true).apply {
+            gravity = Gravity.CENTER
+        })
+        header.addView(uiText("سجّل الدخول وواصل دراستك من حيث توقفت", 15f,
+            tint = mutedText).apply { gravity = Gravity.CENTER },
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        root.addView(header, LinearLayout.LayoutParams(-1, -2).apply {
+            bottomMargin = dp(12)
+        })
+        val form = uiCard()
+        form.addView(uiText("تسجيل الدخول", 22f, true),
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(17) })
+        fun field(hint: String, passwordField: Boolean = false): EditText = EditText(this).apply {
+            this.hint = hint
+            textSize = 16f
+            setSingleLine(true)
+            setTextColor(textColor)
+            setHintTextColor(mutedText)
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            minHeight = dp(48)
+            background = GradientDrawable().apply {
+                setColor(if (night) Color.rgb(38, 38, 40) else Color.rgb(249, 249, 251))
+                cornerRadius = dp(13).toFloat()
+                setStroke(dp(1), if (night) Color.rgb(69, 69, 72) else Color.rgb(224, 224, 230))
+            }
+            if (passwordField) {
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                transformationMethod = PasswordTransformationMethod.getInstance()
+            } else inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+        }
+        form.addView(uiText("البريد الإلكتروني أو رقم الهاتف", 15f, true),
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
+        val identifier = field("example@email.com أو 07XXXXXXXXX")
+        form.addView(identifier, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(17) })
+        form.addView(uiText("كلمة المرور", 15f, true),
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
+        val passwordWrap = FrameLayout(this)
+        val password = field("أدخل كلمة المرور", passwordField = true).apply {
+            setPadding(dp(48), dp(10), dp(14), dp(10))
+        }
+        passwordWrap.addView(password, FrameLayout.LayoutParams(-1, -2))
+        val revealControl = FrameLayout(this).apply {
+            contentDescription = "إظهار كلمة المرور"
+            isClickable = true
+            isFocusable = true
+        }
+        fun setEye(revealed: Boolean) {
+            revealControl.removeAllViews()
+            revealControl.addView(IosGlyphView(this, if (revealed) "eye-off" else "eye", blue),
+                FrameLayout.LayoutParams(dp(23), dp(23), Gravity.CENTER))
+            revealControl.contentDescription = if (revealed) "إخفاء كلمة المرور" else "إظهار كلمة المرور"
+        }
+        setEye(false)
+        var revealed = false
+        revealControl.setOnClickListener {
+            revealed = !revealed
+            password.transformationMethod = if (revealed)
                 HideReturnsTransformationMethod.getInstance()
             else PasswordTransformationMethod.getInstance()
             password.setSelection(password.text.length)
+            setEye(revealed)
         }
-        val remember = CheckBox(this).apply {
-            text = "تذكرني"
-            textSize = 13f
+        passwordWrap.addView(revealControl, FrameLayout.LayoutParams(dp(44), dp(48),
+            Gravity.LEFT or Gravity.CENTER_VERTICAL))
+        form.addView(passwordWrap, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+        val remember = Switch(this).apply {
+            text = "تذكرني على هذا الجهاز"
+            textSize = 15f
             setTextColor(textColor)
             buttonTintList = android.content.res.ColorStateList.valueOf(accent)
-            isChecked = api.hasRememberedSession()
+            isChecked = true // SwiftUI LoginView remembers by default.
         }
-        settingsRow.addView(preview, LinearLayout.LayoutParams(0, -2, 1f))
-        settingsRow.addView(remember, LinearLayout.LayoutParams(0, -2, 1f))
-        root.addView(settingsRow)
-        gap(14)
-
-        val submit = button("تسجيل الدخول") {}
+        form.addView(remember, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(15) })
+        val submit = makeButton("دخول") {}
+        form.addView(submit, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+        val forgot = makeButton("نسيت كلمة المرور؟", secondary = true) { recoverScreen() }
+        form.addView(forgot)
+        addUiCard(form, bottom = 17)
+        val register = makeButton("إنشاء حساب طالب جديد", secondary = true) {
+            registerReturnScreen = "login"
+            registerScreen()
+        }
+        root.addView(register, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(32) })
+        fun updateSubmit() { submit.isEnabled = identifier.text.toString().trim().isNotEmpty() && password.text.isNotEmpty() }
+        val watcher = object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = updateSubmit()
+            override fun afterTextChanged(s: Editable?) = Unit
+        }
+        identifier.addTextChangedListener(watcher)
+        password.addTextChangedListener(watcher)
+        updateSubmit()
         submit.setOnClickListener {
             val id = identifier.text.toString().trim()
             val pass = password.text.toString()
@@ -981,8 +1255,8 @@ class MainActivity : Activity() {
                 val data = JSONObject().put("identifier", id).put("password", pass)
                     .put("remember_me", remember.isChecked)
                 fetch("api/login.php", data) { response ->
-                    submit.isEnabled = true
-                    submit.text = "تسجيل الدخول"
+                    updateSubmit()
+                    submit.text = "دخول"
                     if (response.optBoolean("ok")) {
                         if (response.optBoolean("email_verification_required") ||
                             response.optBoolean("phone_verification_required")) {
@@ -1005,30 +1279,6 @@ class MainActivity : Activity() {
                 }
             }
         }
-        gap(6)
-        button("إنشاء حساب طالب جديد", secondary = true) { registerScreen() }
-        button("نسيت كلمة المرور؟", secondary = true) { recoverScreen() }
-        button("تعليمات استخدام المنصة", secondary = true) {
-            instructionsReturnScreen = "login"
-            instructionsScreen()
-        }
-        gap(12)
-        root.addView(TextView(this).apply {
-            text = "mur-iq.com  •  منصة تعليمية عراقية"
-            textSize = 12f
-            gravity = Gravity.CENTER
-            setTextColor(if (night) Color.LTGRAY else Color.GRAY)
-            setPadding(0, dp(10), 0, dp(8))
-        })
-        val privacy = TextView(this).apply {
-            text = "سياسة الخصوصية"
-            textSize = 13f
-            gravity = Gravity.CENTER
-            setTextColor(accent)
-            setPadding(0, dp(8), 0, dp(8))
-            setOnClickListener { external("https://mur-iq.com/privacy.php") }
-        }
-        root.addView(privacy)
     }
 
     /** The seven usage instructions shipped in the iOS 4.x GuestLandingView. */
@@ -3143,7 +3393,7 @@ class MainActivity : Activity() {
                             sessionGeneration++
                             api.clear(); csrf = ""; student = JSONObject()
                             homeInsightsLoaded = false; homeInsights = JSONObject(); homeWeekly = JSONObject()
-                            loginScreen()
+                            guestLandingScreen()
                         }
                     }.setNegativeButton("إلغاء", null).show()
             }
@@ -4758,8 +5008,11 @@ class MainActivity : Activity() {
             "instructions" -> if (instructionsReturnScreen == "account") accountScreen() else loginScreen()
             "account" -> showHome(homepage)
             "plans" -> if (plansReturnScreen == "account") accountScreen() else showHome(homepage)
-            "login" -> finish()
-            else -> if (homepage.optBoolean("ok")) showHome(homepage) else loginScreen()
+            "register" -> if (registerReturnScreen == "login") loginScreen() else guestLandingScreen()
+            "verification" -> loginScreen()
+            "login" -> guestLandingScreen()
+            "guest" -> finish()
+            else -> if (homepage.optBoolean("ok")) showHome(homepage) else guestLandingScreen()
         }
     }
 

@@ -285,6 +285,18 @@ class IosGlyphView(context: Context, private val symbol: String, private val tin
                 path(6f, 11f, 6f, 17f, 12f, 20f, 18f, 17f, 18f, 11f)
                 path(22f, 9f, 22f, 17f)
             }
+            "gift" -> {
+                canvas.drawRoundRect(3f, 10f, 21f, 22f, 1.5f, 1.5f, ink)
+                canvas.drawRoundRect(2f, 7f, 22f, 11f, 1.5f, 1.5f, ink)
+                path(12f, 7f, 12f, 22f)
+                canvas.drawOval(5f, 2f, 12f, 8f, ink)
+                canvas.drawOval(12f, 2f, 19f, 8f, ink)
+            }
+            "creditcard" -> {
+                canvas.drawRoundRect(2f, 4f, 22f, 20f, 2.5f, 2.5f, ink)
+                path(2f, 10f, 22f, 10f)
+                path(6f, 16f, 10f, 16f)
+            }
             "book" -> {
                 path(12f, 6f, 7f, 4f, 3f, 4f, 3f, 19f, 8f, 19f, 12f, 21f)
                 path(12f, 6f, 17f, 4f, 21f, 4f, 21f, 19f, 16f, 19f, 12f, 21f, 12f, 6f)
@@ -303,6 +315,17 @@ class IosGlyphView(context: Context, private val symbol: String, private val tin
             "search" -> {
                 canvas.drawCircle(10f, 10f, 6f, ink)
                 path(14.5f, 14.5f, 21f, 21f)
+            }
+            "eye", "eye-off" -> {
+                val eye = Path().apply {
+                    moveTo(2f, 12f)
+                    cubicTo(6f, 4f, 18f, 4f, 22f, 12f)
+                    cubicTo(18f, 20f, 6f, 20f, 2f, 12f)
+                    close()
+                }
+                canvas.drawPath(eye, ink)
+                canvas.drawCircle(12f, 12f, 3f, ink)
+                if (symbol == "eye-off") path(3f, 3f, 21f, 21f)
             }
             "calendar" -> {
                 canvas.drawRoundRect(3f, 5f, 21f, 21f, 2f, 2f, ink)

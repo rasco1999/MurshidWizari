@@ -116,24 +116,20 @@ def capture(directory: Path, name: str, marker: str = "منصة المرشد ا�
 
 
 def check_controls(directory: Path, name: str, width: int, height: int) -> None:
-    label = "إظهار كلمة المرور"
-    # Each tap must produce an observable state change. A newly booted emulator
-    # occasionally drops its first synthetic input event; retry only when the
-    # hierarchy still proves the old state, and surface the retry in CI logs.
-    wait_for(label, checked="false")
-    for desired in ("true", "false"):
+    # The iPhone login uses an eye affordance inside the password field, not
+    # the old Android checkbox. Verify both transitions through accessibility.
+    wait_for("إظهار كلمة المرور")
+    for label, desired in (("إظهار كلمة المرور", "إخفاء كلمة المرور"),
+                           ("إخفاء كلمة المرور", "إظهار كلمة المرور")):
         for attempt in range(2):
-            node, _ = wait_for(label)
-            if node.attrib.get("checked") == desired:
-                break
             tap_visible(label, width, height)
             try:
-                wait_for(label, seconds=8, checked=desired)
+                wait_for(desired, seconds=8)
                 break
             except AssertionError:
                 if attempt == 1:
                     raise
-                print(f"RETRY emulator input for {label!r}, desired={desired}", flush=True)
+                print(f"RETRY emulator input for {label!r} -> {desired!r}", flush=True)
     print("PASS password visibility toggle", flush=True)
 
     tap_visible("نسيت كلمة المرور؟", width, height)
@@ -141,7 +137,7 @@ def check_controls(directory: Path, name: str, width: int, height: int) -> None:
     wait_for("متابعة الاستعادة")
     capture(directory, name + "-recovery", "استعادة كلمة المرور")
     adb("shell", "input", "keyevent", "KEYCODE_BACK")
-    wait_for("منصة المرشد الوزاري")
+    wait_for("إظهار كلمة المرور")
     print("PASS recovery screen and Android back", flush=True)
 
     tap_visible("إنشاء حساب طالب جديد", width, height)
@@ -149,7 +145,7 @@ def check_controls(directory: Path, name: str, width: int, height: int) -> None:
     wait_for("طريقة التسجيل")
     capture(directory, name + "-register", "إنشاء حساب جديد")
     adb("shell", "input", "keyevent", "KEYCODE_BACK")
-    wait_for("منصة المرشد الوزاري")
+    wait_for("إظهار كلمة المرور")
     print("PASS registration screen and Android back", flush=True)
 
 
@@ -158,7 +154,7 @@ def launch_native() -> None:
         adb("shell", "am", "force-stop", PACKAGE)
         adb("shell", "am", "start", "-n", f"{PACKAGE}/.MainActivity")
         try:
-            wait_for("منصة المرشد الوزاري")
+            wait_for("تعلّم بتركيز. تقدّم بثقة.")
             return
         except AssertionError:
             # A freshly booted API-33 emulator may show a *system launcher* ANR
@@ -181,7 +177,11 @@ def test_size(directory: Path, name: str, width: int, height: int, scale: float)
     launch_native()
     if not adb("shell", "pidof", PACKAGE).strip():
         raise AssertionError("Native app process did not survive launch")
-    capture(directory, name)
+    capture(directory, name + "-guest", "تعلّم بتركيز. تقدّم بثقة.")
+    # The iOS GuestLandingView is the true entry screen after the animated welcome.
+    tap_visible("تسجيل الدخول", width, height)
+    wait_for("إظهار كلمة المرور")
+    capture(directory, name, "المرشد الوزاري")
     check_controls(directory, name, width, height)
 
 
@@ -193,7 +193,10 @@ def capture_additional_layout(directory: Path, name: str, width: int, height: in
     launch_native()
     if not adb("shell", "pidof", PACKAGE).strip():
         raise AssertionError(f"Native process exited at extra layout {name}")
-    capture(directory, name)
+    capture(directory, name + "-guest", "تعلّم بتركيز. تقدّم بثقة.")
+    tap_visible("تسجيل الدخول", width, height)
+    wait_for("إظهار كلمة المرور")
+    capture(directory, name, "المرشد الوزاري")
 
 
 def main() -> None:
