@@ -49,6 +49,26 @@ Legend: `A` = matched in Android source and exercised by a controlled emulator; 
 
 ## What was actually verified on Android
 
+### Follow-up: explicit exam submission and specialized forms
+
+The next Android change follows the actual Build 498 `V3ExamView.optionButton`:
+selecting or changing an MCQ/true-false answer is now local, with a separate
+`إرسال الإجابة` button. Previously Android sent a grading request immediately
+on selection. Arabic option letters, selected styling, real exam year/round,
+submission feedback, the result title and first-wrong-question review were
+also aligned with the SwiftUI source. Text, calculation, genetics, Tajweed and
+English-matching drafts now remain with their question during previous/next
+navigation in the current exam. These are **in-memory drafts**, not a claim
+of process-death persistence.
+
+`specialized_exam_qa.py` adds controlled UI coverage for true/false,
+calculation values/choices, English matching, Tajweed type/reason and Punnett
+cells. It checks exact submitted payloads, incomplete/duplicate-choice guards,
+draft restoration and first-wrong review. The existing account test now
+scrolls the unread row into view before asserting it: API 35 correctly omits
+off-screen nodes from its accessibility hierarchy. **New CI results must be
+recorded before these new checks are considered passed.**
+
 - The improved native build at commit `13b62e18917791ed856c45bb04b4a3c4e3504fb5` **passed** compilation and unit tests (Actions run `38140898473`), including the production-origin debug APK artifact signed with an Android test/debug key.
 - The **entire four-API emulator matrix passed** at the same commit: Android API 26, 29, 33 and 35 (Actions run `38140898498`; four successful jobs). Android 8, 10, 13 and 15 were thus exercised with synthetic local fixtures, not real student accounts.
 - The matrix covers login, all five tabs, background-return welcome replay, topic exam, server-confirmed grading, rejected-answer retry, note persistence, text answers, result page, account recovery, configuration loading, rejection-then-confirmed logout and final guest screen. These checks are *not* a substitute for live-backend and side-by-side iPhone testing.

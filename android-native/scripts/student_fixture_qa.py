@@ -93,7 +93,9 @@ class Handler(BaseHTTPRequestHandler):
    else:
     grades={}
     for key,answer in body['answers'].items():
-     q=next(q for q in QUESTIONS if str(q['id'])==key); correct=answer['text']==q['correct_answer']
+     q=next(q for q in QUESTIONS if str(q['id'])==key)
+     try: correct=json.loads(answer['text'])==json.loads(q['correct_answer'])
+     except (ValueError,TypeError): correct=answer['text']==q['correct_answer']
      STATE['answers'][key]={**answer,'correct':correct}
      grades[key]={'is_correct':correct,'correct_answer':q['correct_answer'],'explanation':q['explanation']}
     data={'ok':True,'grades':grades,'subscribed':True,'free_remaining':15}
@@ -249,7 +251,12 @@ def main():
  button('الرياضيات');ui.wait_for('موضوع فحص افتراضي');screenshot(args.output,'student-topics')
  button('موضوع فحص افتراضي')
  ui.wait_for('ما حاصل جمع اثنين وثلاثة؟');screenshot(args.output,'student-exam-before-answer')
- button('خمسة');ui.wait_for('إجابة صحيحة');screenshot(args.output,'student-exam-graded')
+ button('ستة')
+ assert not STATE['answers'],'Selecting an option must not submit or consume a free answer'
+ button('خمسة')
+ assert not any(path=='/api/progress.php' for _,path in STATE['calls']), 'Changing a selection must stay local'
+ screenshot(args.output,'student-exam-selected')
+ button('إرسال الإجابة');ui.wait_for('إجابة صحيحة');screenshot(args.output,'student-exam-graded')
  button('ملاحظتي الخاصة');ui.wait_for('حفظ');tree,_=ui.ui_tree();field=next(n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText')
  input_text(field,'fixture-note');back();button('حفظ');time.sleep(1)
  assert STATE['notes'].get('101')=='fixture-note',STATE['notes']
@@ -264,9 +271,9 @@ def main():
  # A definitive application-level rejection must leave the form retryable.
  # This is not a timeout: uncertain submissions must still be reconciled.
  STATE['reject_once']=True
- button('تصحيح الإجابة');time.sleep(1)
+ button('إرسال الإجابة');time.sleep(1)
  assert '102' not in STATE['answers'],'Rejected answer must not be counted'
- button('تصحيح الإجابة');ui.wait_for('إجابة صحيحة');screenshot(args.output,'student-text-question-graded')
+ button('إرسال الإجابة');ui.wait_for('إجابة صحيحة');screenshot(args.output,'student-text-question-graded')
  button('عرض النتيجة ›');ui.wait_for('أداء ممتاز');screenshot(args.output,'student-exam-summary')
  tree,_=ui.ui_tree()
  assert not any('السؤال التالي' in n.attrib.get('content-desc','') for n in tree.iter('node')), (
@@ -378,12 +385,15 @@ def main():
  login_field(0,'student@example.test');login_field(1,'fixture-pass')
  button('دخول');ui.wait_for('حسابي')
  button('حسابي');ui.wait_for('تفعيل الاشتراك بكود')
- ui.wait_for('لديك 2 غير مقروء')
  screenshot(args.output,'student-unsubscribed-account')
  fill_register_field('MW-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX','INVALID')
  button('تفعيل الاشتراك');time.sleep(.6)
  assert STATE['redeem_requests']==0,'Malformed code must not contact the redemption endpoint'
  hide_keyboard_if_visible()
+ # Android 15 clips off-screen accessibility nodes. Reveal the inbox row
+ # before asserting the unread count; never assume it shares the code viewport.
+ ui.reveal('لديك 2 غير مقروء',393,852)
+ screenshot(args.output,'student-account-unread-count')
  # The real V31 account continues below security/logout with version and policies.
  for _ in range(4):
   ui.adb('shell','input','swipe','196','740','196','245','270');time.sleep(.12)

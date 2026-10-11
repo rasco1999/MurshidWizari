@@ -2,6 +2,9 @@ package com.murshidwizari.student
 
 /** Pure exam rules, shared by the Android UI and local JVM regression tests. */
 internal object ExamRules {
+    fun optionLetter(index: Int): String = listOf("أ", "ب", "ج", "د", "هـ", "و")
+        .getOrNull(index) ?: (index + 1).toString()
+
     fun knownBoolean(value: Any?): Boolean? = when (value) {
         is Boolean -> value
         is Number -> when (value.toInt()) { 1 -> true; 0 -> false; else -> null }

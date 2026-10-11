@@ -68,8 +68,7 @@ class MainActivity : Activity() {
     private var lastPopupPoll = 0L
     private var popupChecking = false
     private var currentAdDialog: AlertDialog? = null
-    private var examTextDraft = ""
-    private var examDraftQuestion = -1
+    private var examSubmitButton: Button? = null
     private var csrf = ""
     private var student = JSONObject()
     private var homepage = JSONObject()
@@ -563,7 +562,9 @@ class MainActivity : Activity() {
             background = shape(if (night) Color.BLACK else Color.WHITE, dp(14).toFloat())
             alpha = if (canPrevious) 1f else 0.55f
             isEnabled = canPrevious
-            if (canPrevious) setOnClickListener { questionIndex--; renderQuestion() }
+            if (canPrevious) setOnClickListener {
+                if (!busyAnswer) { questionIndex--; renderQuestion() }
+            }
             contentDescription = "السؤال السابق"
         }
         addView(prev, LinearLayout.LayoutParams(dp(104), -1))
@@ -751,7 +752,8 @@ class MainActivity : Activity() {
         gap()
     }
     private fun gap(n: Int = 10) { root.addView(Space(this).apply { minimumHeight = dp(n) }) }
-    private fun input(hint: String, password: Boolean = false, multiline: Boolean = false): EditText {
+    private fun input(hint: String, password: Boolean = false, multiline: Boolean = false,
+                      parent: LinearLayout = root): EditText {
         val field = EditText(this).apply {
             this.hint = hint
             textSize = 16f
@@ -768,7 +770,7 @@ class MainActivity : Activity() {
             }
             background = shape(surface)
         }
-        root.addView(field, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(11) })
+        parent.addView(field, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(11) })
         return field
     }
     private fun makeButton(text: String, secondary: Boolean = false, action: () -> Unit): Button =
@@ -3545,31 +3547,52 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
         }
         eyebrow.addView(uiText("سؤال ${questionIndex + 1}", 12f, true, blue))
-        val label = uiText("وزاري", 12f, true, blue).apply {
-            setPadding(dp(8), dp(5), dp(8), dp(5))
-            background = shape(Color.argb(26,45,108,223), dp(12).toFloat())
+        for (key in listOf("exam_year", "exam_round")) {
+            val value = question.optString(key).takeUnless { question.isNull(key) }.orEmpty()
+            if (value.isBlank()) continue
+            eyebrow.addView(uiText(value, 12f, tint = mutedText),
+                LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(8) })
         }
-        eyebrow.addView(label, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(7) })
         card.addView(eyebrow)
         card.addView(uiText(question.optString("text"), 20f, true),
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(11) })
         addUiCard(card, bottom = 16)
     }
 
-    private fun examOptionButton(answer: String, parent: LinearLayout, action: () -> Unit) {
+    private fun examOptionButton(answer: String, index: Int, parent: LinearLayout,
+                                 action: () -> Unit): (Boolean) -> Unit {
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), dp(12), dp(12), dp(12))
             minimumHeight = dp(50)
-            background = shape(if (night) Color.rgb(49,49,52) else Color.rgb(242,242,247), dp(14).toFloat())
         }
-        content.addView(IosGlyphView(this, "circle", mutedText),
-            LinearLayout.LayoutParams(dp(22), dp(22)).apply { marginEnd = dp(11) })
+        val letter = uiText(ExamRules.optionLetter(index), 15f, true, blue).apply { gravity = Gravity.CENTER }
+        content.addView(letter, LinearLayout.LayoutParams(dp(34), dp(34)).apply { marginEnd = dp(12) })
         content.addView(uiText(answer, 16f), LinearLayout.LayoutParams(0, -2, 1f))
+        val check = FrameLayout(this)
+        content.addView(check, LinearLayout.LayoutParams(dp(22), dp(22)).apply { marginStart = dp(8) })
         parent.addView(tappable(content, "إجابة: $answer", action),
             LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(9) })
+        return { selected ->
+            content.isSelected = selected
+            content.background = GradientDrawable().apply {
+                cornerRadius = dp(15).toFloat()
+                setColor(if (selected) Color.argb(21,45,108,223)
+                    else if (night) Color.rgb(40,40,43) else Color.rgb(249,249,250))
+                setStroke(dp(1), if (selected) Color.argb(77,45,108,223)
+                    else if (night) Color.rgb(51,51,54) else Color.rgb(237,237,240))
+            }
+            letter.setTextColor(if (selected) Color.WHITE else blue)
+            letter.background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(if (selected) blue else Color.argb(26,45,108,223))
+            }
+            check.removeAllViews()
+            check.addView(IosGlyphView(this, if (selected) "check" else "circle",
+                if (selected) blue else mutedText), FrameLayout.LayoutParams(-1, -1))
+        }
     }
 
     private fun examFeedbackCard(question: JSONObject, previous: JSONObject?) {
@@ -3658,7 +3681,12 @@ class MainActivity : Activity() {
             13f, tint = gold), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
         addUiCard(next, bottom = 14)
         button(if (score.wrong > 0) "راجع الأسئلة التي تحتاج انتباها" else "مراجعة جميع الأسئلة") {
-            questionIndex = 0; renderQuestion()
+            questionIndex = (0 until examQuestions.length()).firstOrNull { index ->
+                val q = examQuestions.optJSONObject(index)
+                q != null && isSubmitted(q) &&
+                    ExamRules.knownBoolean(q.optJSONObject("answer")?.opt("correct")) == false
+            } ?: 0
+            renderQuestion()
         }
         button("فتح المراجعة الذكية", secondary = true) { reviewScreen() }
         button("طلب أسئلة جديدة", secondary = true) { questionRequest() }
@@ -3669,7 +3697,9 @@ class MainActivity : Activity() {
 
     private fun renderQuestion() {
         activeScreen = "exam"
-        base(chapterName, true)
+        examSubmitButton = null
+        base(if (questionIndex >= examQuestions.length() && examQuestions.length() > 0)
+            "نتيجة الاختبار" else chapterName, true)
         if (examQuestions.length() == 0) {
             line("لا توجد أسئلة في هذا الموضوع.")
             return
@@ -3698,7 +3728,6 @@ class MainActivity : Activity() {
             return
         }
         val id = question.optInt("id")
-        if (examDraftQuestion != id) { examDraftQuestion = id; examTextDraft = "" }
         val submitted = isSubmitted(question)
         examProgressHeader()
         examQuestionCard(question)
@@ -3728,27 +3757,57 @@ class MainActivity : Activity() {
                     val answersCard = uiCard()
                     answersCard.addView(uiText("إجابتك", 17f, true),
                         LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+                    val selectionViews = ArrayList<Pair<String, (Boolean) -> Unit>>()
+                    var selectedText = question.optString("_draft_text")
+                    var selectedId = question.optInt("_draft_option")
+                    val submit = makeButton("إرسال الإجابة") {
+                        sendAnswer(question, selectedText, selectedId)
+                    }
+                    examSubmitButton = submit
+                    submit.isEnabled = selectedText.isNotBlank() && !busyAnswer && !submissionUncertain
                     for (i in 0 until options.length()) {
                         val option = options.optJSONObject(i)
                         val chosen = option?.optString("text") ?: options.optString(i)
                         val optionId = option?.optInt("id") ?: 0
-                        examOptionButton(chosen, answersCard) {
-                            sendAnswer(question, chosen, optionId)
+                        val update = examOptionButton(chosen, i, answersCard) {
+                            if (!busyAnswer && !submissionUncertain) {
+                                selectedText = chosen; selectedId = optionId
+                                question.put("_draft_text", chosen).put("_draft_option", optionId)
+                                selectionViews.forEach { (text, updateState) -> updateState(text == chosen) }
+                                submit.isEnabled = true
+                            }
                         }
+                        selectionViews.add(chosen to update)
+                        update(chosen == selectedText)
                     }
+                    answersCard.addView(submit, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+                    answersCard.addView(uiText("لا يُخصم من رصيدك المجاني إلا بعد إرسال الإجابة.",
+                        11f, tint = mutedText).apply { gravity = Gravity.CENTER },
+                        LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
                     addUiCard(answersCard, bottom = 16)
                 }
                 else -> {
-                    val field = input("اكتب إجابتك هنا", multiline = true)
-                    field.setText(examTextDraft)
-                    field.addTextChangedListener(object : TextWatcher {
-                        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-                        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { examTextDraft = s?.toString().orEmpty() }
-                        override fun afterTextChanged(s: Editable?) = Unit
-                    })
-                    button("تصحيح الإجابة") {
+                    val answersCard = examAnswersCard()
+                    val field = input("اكتب إجابتك هنا", multiline = true, parent = answersCard).apply {
+                        minHeight = dp(120)
+                        background = shape(if (night) Color.rgb(44,44,46) else Color.rgb(242,242,247), dp(14).toFloat())
+                    }
+                    field.setText(question.optString("_draft_text"))
+                    val submit = makeButton("إرسال الإجابة") {
                         sendAnswer(question, field.text.toString().trim(), 0)
                     }
+                    examSubmitButton = submit
+                    submit.isEnabled = field.text.isNotBlank() && !busyAnswer && !submissionUncertain
+                    field.addTextChangedListener(object : TextWatcher {
+                        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                            question.put("_draft_text", s?.toString().orEmpty())
+                            submit.isEnabled = !s.isNullOrBlank() && !busyAnswer && !submissionUncertain
+                        }
+                        override fun afterTextChanged(s: Editable?) = Unit
+                    })
+                    answersCard.addView(submit, LinearLayout.LayoutParams(-1, -2))
+                    addUiCard(answersCard, bottom = 16)
                 }
             }
         }
@@ -3786,6 +3845,9 @@ class MainActivity : Activity() {
             return
         }
         busyAnswer = true
+        val submitControl = examSubmitButton
+        submitControl?.isEnabled = false
+        submitControl?.text = "جاري حفظ الإجابة…"
         val id = question.optInt("id")
         val sentIndex = questionIndex
         val sentChapterId = chapterId
@@ -3797,11 +3859,14 @@ class MainActivity : Activity() {
             .put("completed", sentIndex == examQuestions.length() - 1)
         fetch("api/progress.php", data, showError = true) { result ->
             busyAnswer = false
+            submitControl?.text = "إرسال الإجابة"
+            submitControl?.isEnabled = true
             if (!result.optBoolean("ok")) {
                 if (!result.optBoolean("payment_required") &&
                     NetworkRules.requiresReconciliation(result.optBoolean("network_error"),
                         result.optBoolean("transport_uncertain"))) {
                     submissionUncertain = true
+                    submitControl?.isEnabled = false
                     AlertDialog.Builder(this).setTitle("التحقق من حفظ الإجابة")
                         .setMessage("قد تكون الإجابة قد حُفظت رغم انقطاع الاتصال. حدّث الاختبار للتحقق قبل المحاولة مجدداً.")
                         .setPositiveButton("التحقق الآن") { _, _ ->
@@ -3822,6 +3887,7 @@ class MainActivity : Activity() {
             val confirmed = grade != null
             if (!confirmed) {
                 submissionUncertain = true
+                submitControl?.isEnabled = false
                 AlertDialog.Builder(this).setTitle("لم يصل تأكيد الحفظ")
                     .setMessage("سنقرأ الإجابة المحفوظة من الخادم قبل السماح بمحاولة أخرى.")
                     .setPositiveButton("تحديث الاختبار") { _, _ ->
@@ -3846,24 +3912,73 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun examAnswersCard(): LinearLayout = uiCard().apply {
+        addView(uiText("إجابتك", 17f, true),
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(13) })
+    }
+
+    /** Per-question drafts stay attached to the current exam, never to API answer payloads. */
+    private fun examFieldsDraft(question: JSONObject): JSONObject =
+        question.optJSONObject("_draft_fields") ?: JSONObject().also { question.put("_draft_fields", it) }
+
+    private fun examDraftInput(question: JSONObject, key: String, hint: String,
+                               parent: LinearLayout, number: Boolean = false): EditText =
+        input(hint, parent = parent).apply {
+            minHeight = dp(48)
+            if (number) inputType = InputType.TYPE_CLASS_NUMBER or
+                InputType.TYPE_NUMBER_FLAG_DECIMAL or InputType.TYPE_NUMBER_FLAG_SIGNED
+            background = shape(if (night) Color.rgb(44,44,46) else Color.rgb(242,242,247), dp(12).toFloat())
+            setText(examFieldsDraft(question).optString(key))
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                    examFieldsDraft(question).put(key, s?.toString().orEmpty())
+                }
+                override fun afterTextChanged(s: Editable?) = Unit
+            })
+        }
+
+    private fun examDraftPicker(question: JSONObject, key: String, keys: List<String>,
+                                labels: List<String>, parent: LinearLayout,
+                                description: String = "اختر الإجابة"): Spinner = Spinner(this).apply {
+        adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, labels)
+        minimumHeight = dp(48)
+        contentDescription = description
+        setSelection(keys.indexOf(examFieldsDraft(question).optString(key)).coerceAtLeast(0))
+        onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(view: AdapterView<*>?, item: View?, position: Int, id: Long) {
+                examFieldsDraft(question).put(key, keys.getOrNull(position).orEmpty())
+            }
+            override fun onNothingSelected(view: AdapterView<*>?) = Unit
+        }
+        parent.addView(this, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+    }
+
     private fun stagesQuestion(question: JSONObject, field: String) {
         val stages = question.optJSONObject(field)?.optJSONArray("stages") ?: JSONArray()
         if (stages.length() == 0) { line("هذا النوع من الأسئلة يحتاج إلى بيانات مراحل غير متاحة حالياً."); return }
         val values = LinkedHashMap<String, EditText>()
         val selections = LinkedHashMap<String, Spinner>()
+        val card = examAnswersCard()
         for (i in 0 until stages.length()) {
             val stage = stages.optJSONObject(i) ?: continue
             val key = stage.optString("key", "step" + i)
-            caption(stage.optString("label", key))
+            card.addView(uiText(stage.optString("label", key), 15f, true),
+                LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8); topMargin = dp(5) })
             if (stage.optString("kind") == "info" || stage.optBoolean("ungraded")) {
                 val info = stage.optString("value")
-                if (info.isNotBlank()) line(info)
+                if (info.isNotBlank()) card.addView(uiText(info, 15f, tint = mutedText),
+                    LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
                 continue
             }
             if (stage.optString("kind") == "punnett") {
                 val cells = stage.optJSONArray("cells") ?: JSONArray()
                 for (j in 0 until cells.length()) {
-                    values[key + "_" + j] = input("المربع " + (j+1))
+                    val cellKey = key + "_" + j
+                    card.addView(uiText("المربع " + (j + 1), 13f, tint = mutedText))
+                    values[cellKey] = examDraftInput(question, cellKey,
+                        cells.optJSONObject(j)?.optString("placeholder")?.takeIf { it.isNotBlank() }
+                            ?: "أدخل الإجابة", card)
                 }
             } else if (stage.optString("kind") == "choice") {
                 val options = stage.optJSONArray("options") ?: JSONArray()
@@ -3875,14 +3990,18 @@ class MainActivity : Activity() {
                     keys.add(opt?.optString("value") ?: options.optString(j))
                     labels.add(opt?.optString("label") ?: options.optString(j))
                 }
-                val spinner = Spinner(this)
-                spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, labels)
-                root.addView(spinner)
+                val spinner = examDraftPicker(question, key, keys, labels, card, stage.optString("label", "اختر الإجابة"))
                 selections[key] = spinner
                 spinner.tag = keys
-            } else values[key] = input(stage.optString("placeholder", "اكتب جواب هذه المرحلة"))
+            } else {
+                values[key] = examDraftInput(question, key,
+                    stage.optString("placeholder", "أدخل الإجابة"), card, stage.optString("kind") == "number")
+                val unit = stage.optString("unit").takeUnless { stage.isNull("unit") }.orEmpty()
+                if (unit.isNotBlank()) card.addView(uiText(unit, 13f, tint = mutedText),
+                    LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+            }
         }
-        button("إرسال الحل للتصحيح") {
+        val submit = makeButton("إرسال الإجابة") submit@{
             val payload = JSONObject()
             values.forEach { (key, v) ->
                 val value = v.text.toString().trim()
@@ -3894,35 +4013,43 @@ class MainActivity : Activity() {
                 if (v.isNotBlank()) payload.put(key, v)
             }
             val needed = values.size + selections.size
-            if (payload.length() != needed) { message("أكمل جميع مراحل الحل أولاً."); return@button }
+            if (payload.length() != needed) { message("أكمل جميع مراحل الحل أولاً."); return@submit }
             sendAnswer(question, JSONObject().put("stages", payload).toString(), 0)
         }
+        examSubmitButton = submit
+        card.addView(submit, LinearLayout.LayoutParams(-1, -2))
+        addUiCard(card, bottom = 16)
     }
 
     private fun tajweedQuestion(question: JSONObject) {
         val items = question.optJSONArray("match_items") ?: JSONArray()
         if (items.length() == 0) { line("لم ترد عناصر المطابقة من الخادم."); return }
-        val types = listOf("اختر نوع المد", "مد طبيعي", "مد متصل", "مد منفصل", "مد بدل", "مد لازم", "مد عارض للسكون", "مد لين", "مد صلة صغرى", "مد صلة كبرى", "مد تمكين", "مد عوض")
+        val types = listOf("اختر نوع المد", "مد طبيعي", "مد بدل", "مد متصل", "مد منفصل", "مد لازم", "مد عارض للسكون", "مد لين")
+        val card = examAnswersCard()
         val fields = ArrayList<Triple<Int, Spinner, EditText>>()
         for (i in 0 until items.length()) {
             val item = items.optJSONObject(i) ?: continue
-            caption(item.optString("mad_word"))
-            val spinner = Spinner(this)
-            spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, types)
-            root.addView(spinner)
-            val reason = input("سبب نوع المد")
+            val itemId = item.optInt("id")
+            card.addView(uiText(item.optString("mad_word"), 17f, true, blue),
+                LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+            val spinner = examDraftPicker(question, "match_${itemId}_type",
+                listOf("") + types.drop(1), types, card, "نوع المد: " + item.optString("mad_word"))
+            val reason = examDraftInput(question, "match_${itemId}_reason", "اكتب السبب", card)
             fields.add(Triple(item.optInt("id"), spinner, reason))
         }
-        button("إرسال الإجابة") {
+        val submit = makeButton("إرسال الإجابة") submit@{
             val responses = JSONObject()
             for ((id, spinner, field) in fields) {
                 if (spinner.selectedItemPosition == 0 || field.text.isBlank()) {
-                    message("حدد نوع المد واكتب السبب لكل كلمة."); return@button
+                    message("حدد نوع المد واكتب السبب لكل كلمة."); return@submit
                 }
                 responses.put(id.toString(), JSONObject().put("type",types[spinner.selectedItemPosition]).put("reason", field.text.toString().trim()))
             }
             sendAnswer(question, JSONObject().put("items", responses).toString(), 0)
         }
+        examSubmitButton = submit
+        card.addView(submit, LinearLayout.LayoutParams(-1, -2))
+        addUiCard(card, bottom = 16)
     }
 
     private fun englishMatchQuestion(question: JSONObject) {
@@ -3937,25 +4064,28 @@ class MainActivity : Activity() {
             keys.add(key); choices.add(key + " : " + right.optString(key))
         }
         val pairFields = ArrayList<Pair<String, Spinner>>()
+        val card = examAnswersCard()
         val leftKeys = left.keys().asSequence().toList().sortedWith(compareBy({ it.toIntOrNull() ?: Int.MAX_VALUE }, { it }))
         for (key in leftKeys) {
-            caption(key + " : " + left.optString(key))
-            val spinner = Spinner(this)
-            spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, choices)
-            root.addView(spinner)
+            card.addView(uiText(key + ". " + left.optString(key), 17f, true),
+                LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8); topMargin = dp(5) })
+            val spinner = examDraftPicker(question, "english_$key", keys, choices, card, "مطابقة العبارة $key")
             pairFields.add(key to spinner)
         }
-        button("تسليم التوصيلات") {
+        val submit = makeButton("إرسال الإجابة") submit@{
             val lines = ArrayList<String>()
             val used = HashSet<String>()
             for ((key, spinner) in pairFields) {
                 val selected = keys.getOrNull(spinner.selectedItemPosition).orEmpty()
-                if (selected.isBlank()) { message("أكمل جميع التوصيلات أولاً."); return@button }
-                if (!used.add(selected)) { message("لا يمكن وصل خيار واحد بأكثر من عبارة."); return@button }
+                if (selected.isBlank()) { message("أكمل جميع التوصيلات أولاً."); return@submit }
+                if (!used.add(selected)) { message("لا يمكن وصل خيار واحد بأكثر من عبارة."); return@submit }
                 lines.add(key + "-" + selected)
             }
             sendAnswer(question, lines.joinToString(", "), 0)
         }
+        examSubmitButton = submit
+        card.addView(submit, LinearLayout.LayoutParams(-1, -2))
+        addUiCard(card, bottom = 16)
     }
 
     private fun reportQuestion(id: Int) {

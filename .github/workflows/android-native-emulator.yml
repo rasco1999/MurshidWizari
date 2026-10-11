@@ -50,6 +50,7 @@ jobs:
           script: |
             python3 android-native/scripts/anonymous_emulator_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa"
             python3 android-native/scripts/student_fixture_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/student"
+            python3 android-native/scripts/specialized_exam_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/specialized"
       - name: Upload anonymous layout screenshots and accessibility hierarchy
         if: always()
         uses: actions/upload-artifact@v4

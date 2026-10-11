@@ -44,7 +44,6 @@ def ui_tree() -> tuple[ET.Element, bytes]:
             continue
         return root, raw
     raise AssertionError("Android emulator kept displaying the system immersive-screen tutorial after six attempts")
-    raise AssertionError("Could not read Android UI hierarchy")
 
 
 def find(root: ET.Element, target: str):
@@ -90,7 +89,7 @@ def tap_node(node: ET.Element) -> None:
     adb("shell", "input", "tap", str((left + right) // 2), str((top + bottom) // 2))
 
 
-def tap_visible(text: str, width: int, height: int):
+def reveal(text: str, width: int, height: int):
     for attempt in range(6):
         root, _ = ui_tree()
         node = find(root, text)
@@ -103,14 +102,17 @@ def tap_visible(text: str, width: int, height: int):
                 # not the outer edge of its visible accessibility bounds.
                 if (24 <= (top + bottom) // 2 <= height - 24 and
                         0 <= (left + right) // 2 <= width):
-                    tap_node(node)
-                    return
+                    return node
         # Scroll the native login form to reach buttons below the viewport.
         if attempt < 5:
             adb("shell", "input", "swipe", str(width // 2), str(height * 4 // 5),
                 str(width // 2), str(height // 4), "350")
             time.sleep(0.5)
     raise AssertionError(f"Cannot reach {text!r}; visible={visible_texts(root)!r}")
+
+
+def tap_visible(text: str, width: int, height: int):
+    tap_node(reveal(text, width, height))
 
 
 def capture(directory: Path, name: str, marker: str = "منصة المرشد الوزاري") -> None:

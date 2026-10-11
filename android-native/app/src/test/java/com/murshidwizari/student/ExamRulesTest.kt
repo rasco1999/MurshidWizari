@@ -4,6 +4,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ExamRulesTest {
+    @Test fun optionLabelsFollowTheIPhoneArabicOrder() {
+        assertEquals(listOf("أ", "ب", "ج", "د", "هـ", "و", "7"),
+            (0..6).map(ExamRules::optionLetter))
+    }
+
     private fun question(type: String = "text") = ExamRules.Shape(
         id = 25, text = "اذكر أهمية هذا الدرس", type = type, correctAnswer = "الإجابة العلمية"
     )
