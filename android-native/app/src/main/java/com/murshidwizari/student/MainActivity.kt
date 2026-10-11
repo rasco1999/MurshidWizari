@@ -397,7 +397,8 @@ class MainActivity : Activity() {
         screenFrame!!.addView(root, FrameLayout.LayoutParams(contentWidth(), -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
         scroll.addView(screenFrame)
         container.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        val examNavigation = tab == null && activeScreen == "exam"
+        val examNavigation = tab == null && activeScreen == "exam" &&
+            VisualRules.showExamNavigation(questionIndex, examQuestions.length())
         if (tab != null || examNavigation) {
             val footer = if (tab != null) mainTabBar(tab) else examNavigationFooter()
             container.addView(footer, LinearLayout.LayoutParams(-1, dp(if (tab != null) 61 else 82)))
@@ -2858,6 +2859,7 @@ class MainActivity : Activity() {
         row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
         row.addView(uiText("${questionIndex + 1} / ${examQuestions.length()}", 15f, true).apply {
             // Numeric fractions must keep the iOS 1 / 73 order inside RTL rows.
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
             textDirection = View.TEXT_DIRECTION_LTR
             gravity = Gravity.CENTER
             setPadding(dp(10), dp(6), dp(10), dp(6))
@@ -3079,7 +3081,9 @@ class MainActivity : Activity() {
         fetch("api/progress.php", data, showError = true) { result ->
             busyAnswer = false
             if (!result.optBoolean("ok")) {
-                if (!result.has("payment_required") && !result.has("session_expired")) {
+                if (!result.optBoolean("payment_required") &&
+                    NetworkRules.requiresReconciliation(result.optBoolean("network_error"),
+                        result.optBoolean("transport_uncertain"))) {
                     submissionUncertain = true
                     AlertDialog.Builder(this).setTitle("التحقق من حفظ الإجابة")
                         .setMessage("قد تكون الإجابة قد حُفظت رغم انقطاع الاتصال. حدّث الاختبار للتحقق قبل المحاولة مجدداً.")

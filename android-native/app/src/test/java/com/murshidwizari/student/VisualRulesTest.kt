@@ -1,11 +1,20 @@
 package com.murshidwizari.student
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VisualRulesTest {
+    @Test fun examSummaryDoesNotRenderInactiveNavigationBar() {
+        assertFalse(VisualRules.showExamNavigation(0, 0))
+        assertTrue(VisualRules.showExamNavigation(0, 2))
+        assertTrue(VisualRules.showExamNavigation(1, 2))
+        assertFalse(VisualRules.showExamNavigation(2, 2))
+        assertFalse(VisualRules.showExamNavigation(-1, 2))
+    }
+
     @Test fun currentOwnerScreenshotsUseFiveRtlMainTabs() {
         assertEquals(listOf("home", "tests", "predictions", "ads", "account"),
             VisualRules.mainTabs.map { it.id })

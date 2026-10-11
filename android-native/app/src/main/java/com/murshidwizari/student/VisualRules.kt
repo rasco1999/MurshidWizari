@@ -48,6 +48,9 @@ object VisualRules {
     // The SwiftUI Home/Tests use two .flexible GridItems at phone and tablet widths.
     fun homeColumns(): Int = 2
 
+    /** The completed-exam summary owns its actions; no inert Next/Back toolbar. */
+    fun showExamNavigation(index: Int, total: Int): Boolean = total > 0 && index in 0 until total
+
     // Larger Android tablets keep the reading column centered, like a compact iPad layout.
     fun contentWidthDp(widthDp: Int): Int? = if (widthDp >= 740) 700 else null
 
