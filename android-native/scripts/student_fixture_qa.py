@@ -1,5 +1,5 @@
 """Synthetic end-to-end UI checks. Local QA origin only, no production accounts."""
-import argparse, json, threading, time
+import argparse, json, subprocess, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
@@ -111,15 +111,24 @@ def main():
  # iPhone Build 498 replays its cinematic welcome after a real background
  # visit longer than three seconds. Verify Android's overlay without killing
  # the student's in-progress Activity or losing the authenticated session.
- ui.adb('shell','input','keyevent','KEYCODE_HOME');time.sleep(3.5)
- # API-26 emulator can reject logcat buffer clearing (exit 1); replay has a unique tag.
+ ui.adb('shell','input','keyevent','KEYCODE_HOME')
+ # Keep a live logcat reader across resume. API 26 rejects buffer clearing,
+ # and reading the ring buffer after resume can lose the brief replay event.
+ live_log=subprocess.Popen(['adb','logcat','-v','brief','-s','MurshidWelcome:I','*:S'],
+                          stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+ time.sleep(4.2)
  ui.adb('shell','am','start','-n',f'{ui.PACKAGE}/{ui.MAIN_ACTIVITY}')
  # UIAutomator hierarchy dumps can take longer than the 2.7s welcome,
  # making accessibility polling a false negative. Capture pixels immediately
  # and assert the native Activity's non-personal replay event in logcat.
  args.output.joinpath('student-welcome-after-background.png').write_bytes(
   ui.adb('exec-out','screencap','-p'))
- log=ui.adb('logcat','-d','-s','MurshidWelcome:I','*:S').decode(errors='replace')
+ time.sleep(.35)
+ live_log.terminate()
+ logged,errors=live_log.communicate(timeout=8)
+ log=logged.decode(errors='replace')
+ if 'background-replay-started' not in log:
+  print('Replay logcat captured:',repr(log[-1300:]),'stderr:',repr(errors[-500:]),flush=True)
  assert 'background-replay-started' in log,'Returning from HOME must replay the native welcome overlay'
  time.sleep(3.2)
  tree,_=ui.ui_tree()
