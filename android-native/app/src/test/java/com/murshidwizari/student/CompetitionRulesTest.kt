@@ -4,6 +4,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CompetitionRulesTest {
+    @Test fun competitionBackRestoresItsRealOrigin() {
+        for (origin in listOf("account", "tests", "success", "subjects", "topics",
+            "daily_challenge", "contest", "achievements")) {
+            assertEquals(origin, CompetitionRules.backDestination(origin))
+        }
+        assertEquals("home", CompetitionRules.backDestination("home"))
+        assertEquals("home", CompetitionRules.backDestination("unexpected"))
+    }
+
     private val questions = listOf(
         CompetitionRules.Question(1, "mcq", "اختر الإجابة الصحيحة", listOf("أ", "ب")),
         CompetitionRules.Question(2, "true_false", "الأرض كروية أم مسطحة؟", emptyList()),

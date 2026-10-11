@@ -2,6 +2,13 @@ package com.murshidwizari.student
 
 /** Server-compatible daily challenge form rules; no local score or invented rewards. */
 internal object CompetitionRules {
+    /** A contest opened from an account or study tab returns to that tab, not home. */
+    fun backDestination(origin: String): String = when (origin) {
+        "daily_challenge", "contest", "achievements", "account", "tests", "success",
+        "subjects", "topics" -> origin
+        else -> "home"
+    }
+
     data class Question(val id: Int, val type: String, val text: String, val options: List<String>) {
         fun choices(): List<String> = if (type == "true_false" && options.isEmpty())
             listOf("صح", "خطأ") else options.map(String::trim).filter(String::isNotEmpty).distinct()

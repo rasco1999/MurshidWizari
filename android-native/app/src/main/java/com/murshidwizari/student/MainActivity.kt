@@ -3427,7 +3427,13 @@ class MainActivity : Activity() {
         base("تحدي اليوم", true)
         caption("جارٍ تحميل أسئلة التحدي ونتيجتك من الخادم…")
         fetch("mobile/challenge.php") { response ->
-            if (activeScreen != "daily_challenge" || !response.optBoolean("ok")) return@fetch
+            if (activeScreen != "daily_challenge") return@fetch
+            if (!response.optBoolean("ok")) {
+                base("تحدي اليوم", true)
+                caption("تعذر تحميل أسئلة التحدي. تحقق من الإنترنت وأعد المحاولة؛ لن تُرسل أي إجابة من جديد.")
+                button("إعادة المحاولة") { loadDailyChallenge() }
+                return@fetch
+            }
             csrf = response.optString("csrf", csrf)
             dailyAvailable = ExamRules.knownBoolean(response.opt("available")) ?: true
             dailyDone = ExamRules.knownBoolean(response.opt("done")) == true
@@ -3595,7 +3601,13 @@ class MainActivity : Activity() {
         base("تحدي المليون", true)
         caption("جارٍ تحميل ترتيبك والمتصدرين…")
         fetch("mobile/contest.php") { first ->
-            if (activeScreen != "contest" || !first.optBoolean("ok")) return@fetch
+            if (activeScreen != "contest") return@fetch
+            if (!first.optBoolean("ok")) {
+                base("تحدي المليون", true)
+                caption("تعذر تحميل الترتيب. راجع اتصال الإنترنت ثم أعد المحاولة.")
+                button("إعادة المحاولة") { loadContest() }
+                return@fetch
+            }
             contest = first
             fetch("mobile/season.php", showError = false) { second ->
                 if (activeScreen != "contest") return@fetch
@@ -3658,7 +3670,13 @@ class MainActivity : Activity() {
         base("الإنجازات", true)
         caption("جارٍ تحميل المستوى والشارات من حسابك…")
         fetch("mobile/achievements.php") { response ->
-            if (activeScreen != "achievements" || !response.optBoolean("ok")) return@fetch
+            if (activeScreen != "achievements") return@fetch
+            if (!response.optBoolean("ok")) {
+                base("الإنجازات", true)
+                caption("تعذر تحديث الشارات والمستوى. لن تُعرض بيانات قديمة بوصفها حديثة.")
+                button("إعادة المحاولة") { loadAchievements() }
+                return@fetch
+            }
             achievements = response.optJSONArray("achievements") ?: JSONArray()
             achievementStats = response.optJSONObject("stats") ?: JSONObject()
             renderAchievements()
@@ -3726,11 +3744,17 @@ class MainActivity : Activity() {
             "practice_exam" -> { stopPracticeTicker(); practiceBuilderScreen() }
             "practice_result" -> attemptHistoryScreen()
             "daily_challenge", "contest", "achievements" -> {
-                val previous = if (competitionHistory.isEmpty()) "home" else competitionHistory.removeLast()
+                val previous = CompetitionRules.backDestination(
+                    if (competitionHistory.isEmpty()) "home" else competitionHistory.removeLast())
                 when (previous) {
                     "daily_challenge" -> loadDailyChallenge()
                     "contest" -> loadContest()
                     "achievements" -> loadAchievements()
+                    "account" -> accountScreen()
+                    "tests" -> testsTabScreen()
+                    "success" -> successTabScreen()
+                    "subjects" -> subjectsScreen()
+                    "topics" -> topicsScreen(topicsSubjectId, topicsSubjectName)
                     else -> showHome(homepage)
                 }
             }
