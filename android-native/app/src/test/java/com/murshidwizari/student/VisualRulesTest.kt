@@ -25,4 +25,18 @@ class VisualRulesTest {
         assertEquals(220, VisualRules.heroHeight)
         assertTrue(VisualRules.minTouchTarget >= 44)
     }
+
+    @Test fun buttonsAndSmallIconBubblesMatchSwiftUiTokens() {
+        assertEquals(50, VisualRules.primaryButtonHeight)
+        assertEquals(48, VisualRules.secondaryButtonHeight)
+        assertEquals(17, VisualRules.primaryButtonRadius)
+        assertEquals(16, VisualRules.secondaryButtonRadius)
+        assertEquals(9, VisualRules.iconBubbleRadius(30))
+        assertEquals(10, VisualRules.iconBubbleRadius(34))
+        assertEquals(11, VisualRules.iconBubbleRadius(36))
+        assertEquals(14, VisualRules.iconBubbleRadius(48))
+        assertEquals(17, VisualRules.iconBubbleGlyphSize(30))
+        assertEquals(18, VisualRules.iconBubbleGlyphSize(36))
+        assertEquals(24, VisualRules.iconBubbleGlyphSize(48))
+    }
 }

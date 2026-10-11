@@ -29,6 +29,45 @@ class IosGlyphView(context: Context, private val symbol: String, private val tin
             canvas.drawPath(p, ink)
         }
         when (symbol) {
+            // Dedicated tab variants track the silhouettes of SwiftUI's
+            // house.fill, checklist.checked, chart.line.uptrend.xyaxis and
+            // person.crop.circle.fill. Other contexts retain outline glyphs.
+            "home-filled" -> {
+                val house = Path().apply {
+                    fillType = Path.FillType.EVEN_ODD
+                    moveTo(2f, 10f); lineTo(12f, 2f); lineTo(22f, 10f)
+                    lineTo(20f, 10f); lineTo(20f, 22f); lineTo(4f, 22f)
+                    lineTo(4f, 10f); close()
+                    addRect(9f, 14f, 15f, 22f, Path.Direction.CW)
+                }
+                ink.style = Paint.Style.FILL
+                canvas.drawPath(house, ink)
+                ink.style = Paint.Style.STROKE
+            }
+            "checklist" -> {
+                path(2f, 6f, 4f, 8f, 8f, 3f)
+                path(11f, 6f, 22f, 6f)
+                path(2f, 14f, 4f, 16f, 8f, 11f)
+                path(11f, 14f, 22f, 14f)
+                path(2f, 21f, 4f, 23f, 8f, 18f)
+                path(11f, 21f, 22f, 21f)
+            }
+            "trend" -> {
+                path(3f, 2f, 3f, 21f, 22f, 21f)
+                path(5f, 17f, 10.5f, 11f, 15f, 14f, 21f, 5f)
+                path(16f, 5f, 21f, 5f, 21f, 10f)
+            }
+            "account-tab" -> {
+                val crop = Path().apply {
+                    fillType = Path.FillType.EVEN_ODD
+                    addCircle(12f, 12f, 10f, Path.Direction.CW)
+                    addCircle(12f, 9f, 3f, Path.Direction.CCW)
+                    addOval(5.5f, 14f, 18.5f, 23f, Path.Direction.CCW)
+                }
+                ink.style = Paint.Style.FILL
+                canvas.drawPath(crop, ink)
+                ink.style = Paint.Style.STROKE
+            }
             "home" -> {
                 path(3f, 10f, 12f, 3f, 21f, 10f, 21f, 21f, 3f, 21f, 3f, 10f)
                 path(9f, 21f, 9f, 14f, 15f, 14f, 15f, 21f)

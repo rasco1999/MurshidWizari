@@ -260,10 +260,10 @@ class MainActivity : Activity() {
         setBackgroundColor(surface)
         elevation = dp(8).toFloat()
         val tabs = listOf(
-            Triple("home", "الرئيسية", "home"),
-            Triple("tests", "الاختبارات", "tests"),
-            Triple("success", "النجاح", "chart"),
-            Triple("account", "حسابي", "person")
+            Triple("home", "الرئيسية", "home-filled"),
+            Triple("tests", "الاختبارات", "checklist"),
+            Triple("success", "النجاح", "trend"),
+            Triple("account", "حسابي", "account-tab")
         )
         for ((name, title, icon) in tabs) {
             val selected = active == name
@@ -376,8 +376,11 @@ class MainActivity : Activity() {
     }
 
     private fun iconBubble(symbol: String, size: Int = 48, color: Int = blue): FrameLayout = FrameLayout(this).apply {
-        background = shape(Color.argb(if (night) 42 else 24, Color.red(color), Color.green(color), Color.blue(color)), dp(14).toFloat())
-        addView(IosGlyphView(this@MainActivity, symbol, color), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
+        background = shape(Color.argb(26, Color.red(color), Color.green(color), Color.blue(color)),
+            dp(VisualRules.iconBubbleRadius(size)).toFloat())
+        val glyphSize = VisualRules.iconBubbleGlyphSize(size)
+        addView(IosGlyphView(this@MainActivity, symbol, color),
+            FrameLayout.LayoutParams(dp(glyphSize), dp(glyphSize), Gravity.CENTER))
         minimumWidth = dp(size)
         minimumHeight = dp(size)
     }
@@ -491,23 +494,44 @@ class MainActivity : Activity() {
         return field
     }
     private fun makeButton(text: String, secondary: Boolean = false, action: () -> Unit): Button =
-        Button(this).apply {
+        object : Button(this) {
+            override fun drawableStateChanged() {
+                super.drawableStateChanged()
+                // SwiftUI ButtonStyles reduce the whole control to 48% opacity when disabled.
+                alpha = if (isEnabled) 1f else 0.48f
+            }
+        }.apply {
             this.text = text; textSize = 15f
             isAllCaps = false
             setSingleLine(false)
             maxLines = 3
-            minHeight = dp(50)
-            setPadding(dp(10), dp(8), dp(10), dp(8))
+            minHeight = dp(if (secondary) VisualRules.secondaryButtonHeight else VisualRules.primaryButtonHeight)
+            setPadding(dp(if (secondary) 14 else 16), dp(8), dp(if (secondary) 14 else 16), dp(8))
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setTextColor(if (secondary) accent else Color.WHITE)
-            val fill = if (secondary) shape(if (night) surface else Color.rgb(227,235,250), dp(17).toFloat())
+            val radius = dp(if (secondary) VisualRules.secondaryButtonRadius else VisualRules.primaryButtonRadius).toFloat()
+            val fill = if (secondary) GradientDrawable().apply {
+                // SwiftUI: blue at 8% opacity, 22%-opacity 1pt blue border.
+                setColor(Color.argb(20, Color.red(blue), Color.green(blue), Color.blue(blue)))
+                cornerRadius = radius
+                setStroke(dp(1).coerceAtLeast(1),
+                    Color.argb(56, Color.red(blue), Color.green(blue), Color.blue(blue)))
+            }
                 else GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(blue, Color.rgb(23,71,173)))
-                    .apply { cornerRadius = dp(17).toFloat() }
-            background = RippleDrawable(ColorStateList.valueOf(Color.argb(60, 120, 160, 230)), fill, shape(Color.WHITE, dp(17).toFloat()))
+                    .apply { cornerRadius = radius }
+            background = RippleDrawable(ColorStateList.valueOf(
+                if (secondary) Color.argb(16, Color.red(blue), Color.green(blue), Color.blue(blue))
+                else Color.argb(60, 120, 160, 230)), fill, shape(Color.WHITE, radius))
             setOnTouchListener { view, event ->
                 when (event.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> if (view.isEnabled) view.animate().scaleX(0.985f).scaleY(0.985f).setDuration(120).start()
-                    MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_UP -> view.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+                    MotionEvent.ACTION_DOWN -> if (view.isEnabled) {
+                        if (!secondary) view.alpha = 0.82f
+                        view.animate().scaleX(0.985f).scaleY(0.985f).setDuration(120).start()
+                    }
+                    MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_UP -> {
+                        view.alpha = if (view.isEnabled) 1f else 0.48f
+                        view.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+                    }
                 }
                 false
             }
