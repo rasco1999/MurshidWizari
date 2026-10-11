@@ -821,6 +821,43 @@ class MainActivity : Activity() {
     }
 
     /** Native stepper with the same ranges and increments as the SwiftUI controls. */
+    private fun segmentedChoices(labels: List<String>, changed: (Int) -> Unit): LinearLayout {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            minimumHeight = dp(48)
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            background = shape(if (night) Color.rgb(37, 38, 42) else Color.rgb(238, 239, 243),
+                dp(14).toFloat())
+        }
+        val options = labels.map { label ->
+            uiText(label, 14f, true).apply {
+                gravity = Gravity.CENTER
+                minimumHeight = dp(40)
+                isClickable = true
+                isFocusable = true
+                contentDescription = label
+            }.also { row.addView(it, LinearLayout.LayoutParams(0, -1, 1f)) }
+        }
+        fun select(index: Int) {
+            options.forEachIndexed { at, text ->
+                val selected = index == at
+                text.background = shape(if (selected) blue else Color.TRANSPARENT, dp(11).toFloat())
+                text.setTextColor(if (selected) Color.WHITE else textColor)
+                text.isSelected = selected
+            }
+        }
+        options.forEachIndexed { index, option ->
+            option.setOnClickListener {
+                select(index)
+                changed(index)
+            }
+        }
+        select(0)
+        return row
+    }
+
+    /** Native stepper with the same ranges and increments as the SwiftUI controls. */
     private fun stepper(label: String, initial: Int, min: Int, max: Int, step: Int,
                         changed: (Int) -> Unit) {
         var value = initial
@@ -1415,13 +1452,31 @@ class MainActivity : Activity() {
     private fun verificationScreen(kind: String, destination: String, note: String) {
         activeScreen = "verification"
         base(if (kind == "phone") "تأكيد رقم الهاتف" else "تأكيد البريد الإلكتروني", true)
+        val intro = uiText("أكمل التحقق لحماية حسابك ومتابعة تقدّمك الدراسي", 15f,
+            tint = mutedText).apply { gravity = Gravity.CENTER }
+        root.addView(intro, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
         line("رمز التحقق", true)
         caption(note.ifBlank { "أدخل الرمز الذي أُرسل إلى $destination" })
         val code = input("رمز التحقق من 6 أرقام").apply {
             inputType = InputType.TYPE_CLASS_NUMBER
             filters = arrayOf(InputFilter.LengthFilter(6))
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
+            textDirection = View.TEXT_DIRECTION_LTR
+            gravity = Gravity.CENTER
+            letterSpacing = 0.17f
+            textSize = 22f
+            contentDescription = "رمز التحقق من ستة أرقام"
         }
         val verify = button("تأكيد الحساب") {}
+        verify.isEnabled = false
+        code.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                verify.isEnabled = !recoveryBusy &&
+                    RecoveryRules.normalizedDigits(s?.toString().orEmpty()).matches(Regex("[0-9]{6}"))
+            }
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
         verify.setOnClickListener {
             val value = RecoveryRules.normalizedDigits(code.text.toString())
             if (!value.matches(Regex("[0-9]{6}"))) { message("أدخل الرمز كاملاً من 6 أرقام."); return@setOnClickListener }
@@ -1431,7 +1486,7 @@ class MainActivity : Activity() {
             recoveryRequest(mayHaveSubmitted = true, action = { api.verifyPending(kind, value) }) { result ->
                 recoveryBusy = false
                 if (activeScreen != "verification") return@recoveryRequest
-                verify.isEnabled = true
+                verify.isEnabled = code.text.length == 6
                 if (result.optBoolean("ok")) {
                     api.setRemember(pendingVerificationRemember)
                     showHome(result)
@@ -1451,7 +1506,21 @@ class MainActivity : Activity() {
                 }
             }
         }
-        button("العودة لتسجيل الدخول", secondary = true) { loginScreen() }
+        val backToLogin = button("العودة لتسجيل الدخول", secondary = true) { loginScreen() }
+        val fields = (0 until root.childCount).map { root.getChildAt(it) }
+            .filter { it !== intro && it !== backToLogin }
+        val form = uiCard()
+        fields.forEach { field ->
+            root.removeView(field)
+            form.addView(field, LinearLayout.LayoutParams(-1, -2).apply {
+                bottomMargin = dp(10)
+            })
+        }
+        root.removeView(backToLogin)
+        addUiCard(form, bottom = 18)
+        root.addView(backToLogin, LinearLayout.LayoutParams(-1, -2).apply {
+            bottomMargin = dp(30)
+        })
     }
 
     private fun boundRecoveryScreen() {
@@ -1693,30 +1762,43 @@ class MainActivity : Activity() {
     private fun registerScreen() {
         activeScreen = "register"
         base("إنشاء حساب جديد", true)
+        val intro = uiText("حساب واحد يحفظ تقدّمك وإجاباتك على جميع أجهزتك", 15f,
+            tint = mutedText).apply { gravity = Gravity.CENTER }
+        root.addView(intro, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
         val name = input("الاسم الثلاثي الكامل")
+        val identifier = input("البريد الإلكتروني")
         caption("طريقة التسجيل")
-        val contact = Spinner(this)
-        contact.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("البريد الإلكتروني", "رقم هاتف عراقي"))
-        root.addView(contact)
-        val identifier = input("البريد الإلكتروني أو 07XXXXXXXXX")
-        contact.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
-            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) = Unit
-            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: View?, position: Int, id: Long) {
+        val contactLabel = root.getChildAt(root.childCount - 1)
+        var contactIndex = 0
+        val contact = segmentedChoices(listOf("البريد", "الهاتف")) { position ->
+            if (contactIndex != position) {
+                contactIndex = position
+                identifier.text.clear()
                 identifier.hint = if (position == 1) "07XXXXXXXXX" else "البريد الإلكتروني"
                 identifier.inputType = if (position == 1) InputType.TYPE_CLASS_PHONE else
                     InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
             }
         }
+        root.addView(contact)
+        identifier.layoutDirection = View.LAYOUT_DIRECTION_LTR
+        identifier.textDirection = View.TEXT_DIRECTION_LTR
+        identifier.gravity = Gravity.LEFT or Gravity.CENTER_VERTICAL
+        identifier.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
         val pass = input("كلمة المرور (8 أحرف على الأقل)", true)
         val confirm = input("تأكيد كلمة المرور", true)
         caption("الصف الدراسي")
+        val gradeLabel = root.getChildAt(root.childCount - 1)
         val grades = ArrayList<Int>()
         val gradeNames = ArrayList<String>()
         val gradeSpinner = Spinner(this)
+        gradeSpinner.background = shape(surface, dp(13).toFloat())
+        gradeSpinner.minimumHeight = dp(48)
+        gradeSpinner.setPadding(dp(12), dp(7), dp(12), dp(7))
         root.addView(gradeSpinner)
         caption("الجنس")
-        val gender = Spinner(this)
-        gender.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf("ذكر", "أنثى"))
+        val genderLabel = root.getChildAt(root.childCount - 1)
+        var genderIndex = 0
+        val gender = segmentedChoices(listOf("ذكر", "أنثى")) { genderIndex = it }
         root.addView(gender)
         fetch("api/grades.php") { result ->
             if (activeScreen != "register") return@fetch
@@ -1734,7 +1816,7 @@ class MainActivity : Activity() {
             val fullName = AccountRules.normalizeName(name.text.toString())
             if (!AccountRules.validFullName(fullName)) { message("أدخل الاسم الثلاثي الكامل بشكل صحيح."); return@setOnClickListener }
             if (gradeSpinner.selectedItemPosition !in grades.indices) { message("اختر صفك الدراسي."); return@setOnClickListener }
-            val contactType = if (contact.selectedItemPosition == 1) "phone" else "email"
+            val contactType = if (contactIndex == 1) "phone" else "email"
             val value = if (contactType == "phone") RecoveryRules.normalizedDigits(identifier.text.toString().trim())
                 else identifier.text.toString().trim()
             if (contactType == "phone" && !AccountRules.validIraqiPhone(value)) {
@@ -1754,7 +1836,7 @@ class MainActivity : Activity() {
                 .put("identifier", value)
                 .put("contact_type", contactType)
                 .put("grade_id", grades[gradeSpinner.selectedItemPosition])
-                .put("gender", if (gender.selectedItemPosition == 0) "male" else "female")
+                .put("gender", if (genderIndex == 0) "male" else "female")
                 .put("password", pass.text.toString())
                 .put("password_confirmation", confirm.text.toString())
                 .put("company_website", "")
@@ -1770,7 +1852,28 @@ class MainActivity : Activity() {
                 } else { create.isEnabled = true; create.text = "إنشاء الحساب" }
             }
         }
-        button("لديك حساب بالفعل؟", secondary = true) { loginScreen() }
+        val backToLogin = button("لديك حساب بالفعل؟", secondary = true) { loginScreen() }
+        // iPhone Build 498 groups registration fields inside one MurshidCard.
+        // Keep native Android controls but match the card, spacing and hierarchy.
+        val fields = (0 until root.childCount).map { root.getChildAt(it) }
+            .filter { it !== intro && it !== backToLogin }
+        val preferred = listOf<View>(name, gradeLabel, gradeSpinner, genderLabel, gender,
+            contactLabel, contact, identifier, pass, confirm)
+        val orderedFields = preferred + fields.filterNot { it in preferred }
+        val form = uiCard()
+        form.addView(uiText("بيانات الطالب", 22f, true),
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(15) })
+        orderedFields.forEach { field ->
+            root.removeView(field)
+            form.addView(field, LinearLayout.LayoutParams(-1, -2).apply {
+                bottomMargin = dp(10)
+            })
+        }
+        root.removeView(backToLogin)
+        addUiCard(form, bottom = 18)
+        root.addView(backToLogin, LinearLayout.LayoutParams(-1, -2).apply {
+            bottomMargin = dp(30)
+        })
     }
 
     private fun applyBootstrap(response: JSONObject) {

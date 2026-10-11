@@ -7,7 +7,8 @@ import anonymous_emulator_qa as ui
 
 USER={'id':900001,'name':'طالب فحص افتراضي','grade':'السادس العلمي','grade_id':1,'email':'student@example.test','can_edit_name':True}
 SUBJECTS=[{'id':1,'name':'الرياضيات'},{'id':2,'name':'اللغة العربية'}]
-STATE={'notes':{},'answers':{},'calls':[],'reject_once':False,'logout_reject_once':False}
+STATE={'notes':{},'answers':{},'calls':[],'reject_once':False,'logout_reject_once':False,
+       'registered':False,'verified':False,'resend_count':0,'invalid_code_count':0}
 BOOT={'ok':True,'csrf':'synthetic-csrf','user':USER,'subscribed':True,'free_remaining':15,'free_limit':15,'subjects':SUBJECTS,'stats':{},'ads':[{'id':1,'school':'مدرسة افتراضية','text':'إعلان محلي للتحقق من عرض الإعلانات','active':True}]}
 QUESTIONS=[{'id':101,'text':'ما حاصل جمع اثنين وثلاثة؟','type':'mcq','options':[{'id':1,'text':'خمسة'},{'id':2,'text':'ستة'}],'correct_answer':'خمسة','explanation':'نجمع اثنين مع ثلاثة فيكون الناتج خمسة.','submitted':False}, {'id':102,'text':'اكتب ناتج أربعة زائد أربعة.','type':'text','correct_answer':'8','explanation':'أربعة مضافاً إليها أربعة تساوي ثمانية.','submitted':False}]
 class Handler(BaseHTTPRequestHandler):
@@ -16,10 +17,36 @@ class Handler(BaseHTTPRequestHandler):
  def do_POST(self): self.respond()
  def respond(self):
   parsed=urlsplit(self.path); path=parsed.path; qs=parse_qs(parsed.query)
-  body=json.loads(self.rfile.read(int(self.headers.get('Content-Length','0'))) or b'{}')
+  payload=self.rfile.read(int(self.headers.get('Content-Length','0')))
+  if 'application/x-www-form-urlencoded' in self.headers.get('Content-Type',''):
+   body={key:values[0] for key,values in parse_qs(payload.decode()).items()}
+  else: body=json.loads(payload or b'{}')
   STATE['calls'].append((self.command,path))
   data={'ok':True}
   if path=='/api/login.php': data={'ok':True} if body.get('password')=='fixture-pass' else {'ok':False,'message':'بيانات الدخول غير صحيحة.'}
+  elif path=='/api/register.php':
+   assert body.get('full_name')=='Test Student Demo',body
+   assert body.get('identifier')=='newstudent@example.test',body
+   assert body.get('contact_type')=='email' and body.get('grade_id')==1,body
+   assert body.get('password')==body.get('password_confirmation')=='fixture-pass',body
+   STATE['registered']=True
+   data={'ok':True,'email_verification_required':True,
+         'masked_email':'n***@example.test','message':'أرسلنا رمز التأكيد إلى بريد الطالب.'}
+  elif path in ('/verify-email.php','/verify-phone.php'):
+   if self.command=='GET':
+    html='<form><input name="csrf" value="synthetic-csrf"></form>'
+   elif body.get('action')=='resend':
+    STATE['resend_count']+=1
+    html='<div class="form-message success">أرسلنا رمز تحقق جديدًا.</div>'
+   elif body.get('action')=='verify' and body.get('code')=='123456':
+    STATE['verified']=True
+    html='<div class="form-message success">تم تأكيد البريد الإلكتروني.</div>'
+   else:
+    STATE['invalid_code_count']+=1
+    html='<div class="form-message error">رمز التحقق غير صحيح.</div>'
+   self.send_response(200);self.send_header('Content-Type','text/html; charset=utf-8')
+   self.send_header('Set-Cookie','fixture_session=synthetic; Path=/')
+   self.end_headers();self.wfile.write(html.encode());return
   elif path=='/mobile/bootstrap.php': data=BOOT
   elif path=='/mobile/homepage.php': data=BOOT
   elif path=='/mobile/account.php': data={**BOOT,'subscription_days_remaining':30,'can_edit_name':True}
@@ -92,6 +119,17 @@ def login_field(index,value):
  hide_keyboard_if_visible()
 def button(text): ui.tap_visible(text,393,852)
 def back(): ui.adb('shell','input','keyevent','KEYCODE_BACK');time.sleep(.6)
+def fill_register_field(hint,value):
+ for attempt in range(12):
+  tree,_=ui.ui_tree()
+  field=next((n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText'
+       and n.attrib.get('text')==hint),None)
+  if field is not None:
+   input_text(field,value)
+   hide_keyboard_if_visible()
+   return
+  ui.adb('shell','input','swipe','196','690','196','290','340');time.sleep(.45)
+ raise AssertionError(f'Cannot find registration field {hint!r}: {ui.visible_texts(tree)!r}')
 def screenshot(out,name):
  tree,raw=ui.ui_tree();out.joinpath(name+'.xml').write_bytes(raw);out.joinpath(name+'.png').write_bytes(ui.adb('exec-out','screencap','-p'));print('PASS',name,flush=True)
 def main():
@@ -187,7 +225,35 @@ def main():
  button('تسجيل الخروج');ui.wait_for('مساحة تعلّمك')
  assert sum(1 for m,p in STATE['calls'] if p=='/mobile/logout.php')==2,'Confirmed logout must not repeat the request'
  screenshot(args.output,'student-logged-out')
- args.output.joinpath('fixture-results.json').write_text(json.dumps({'passed':True,'grading_requests':3,'rejected_then_retryable':True,'summary_without_footer':True,'note_roundtrip':True,'welcome_replays_on_resume':True,'config_loaded':True,'logout_reject_then_accept':True,'synthetic_only':True},indent=2))
- print('PASS synthetic authenticated UI and grading semantics',flush=True)
+ # New: iPhone Build 498 registration -> pending six-digit email verification.
+ # Exercise the native Android controls against the local fixture only.
+ ui.enter_login(393,852)
+ button('إنشاء حساب طالب جديد')
+ ui.wait_for('إنشاء حساب جديد');screenshot(args.output,'student-register')
+ ui.wait_for('السادس العلمي')
+ fill_register_field('الاسم الثلاثي الكامل','Test%sStudent%sDemo')
+ fill_register_field('البريد الإلكتروني','newstudent@example.test')
+ fill_register_field('كلمة المرور (8 أحرف على الأقل)','fixture-pass')
+ fill_register_field('تأكيد كلمة المرور','fixture-pass')
+ button('إنشاء الحساب')
+ ui.wait_for('رمز التحقق');screenshot(args.output,'student-verification')
+ assert STATE['registered'],'Registration POST must be accepted by synthetic server'
+ # Resend is separate from attempting an invalid code and must retain session.
+ button('إعادة إرسال الرمز');time.sleep(.8)
+ assert STATE['resend_count']==1,'Resend must hit the verification endpoint'
+ fill_register_field('رمز التحقق من 6 أرقام','000000')
+ button('تأكيد الحساب');ui.wait_for('رمز التحقق')
+ assert STATE['invalid_code_count']==1 and not STATE['verified'],'Wrong OTP cannot activate'
+ tree,_=ui.ui_tree()
+ otp=next(n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText')
+ ui.tap_node(otp)
+ ui.adb('shell','input','keyevent','KEYCODE_MOVE_END')
+ for _ in range(6):ui.adb('shell','input','keyevent','KEYCODE_DEL')
+ ui.adb('shell','input','text','123456');hide_keyboard_if_visible()
+ button('تأكيد الحساب');ui.wait_for('حسابي')
+ assert STATE['verified'],'Correct OTP must activate the same pending account'
+ screenshot(args.output,'student-verified-account')
+ args.output.joinpath('fixture-results.json').write_text(json.dumps({'passed':True,'grading_requests':3,'rejected_then_retryable':True,'summary_without_footer':True,'note_roundtrip':True,'welcome_replays_on_resume':True,'config_loaded':True,'logout_reject_then_accept':True,'register_and_verify':True,'resend_count':STATE['resend_count'],'invalid_code_count':STATE['invalid_code_count'],'synthetic_only':True},indent=2))
+ print('PASS synthetic login, registration, email verification and grading semantics',flush=True)
  server.shutdown()
 if __name__=='__main__': main()
