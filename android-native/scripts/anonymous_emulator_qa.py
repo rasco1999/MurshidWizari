@@ -25,9 +25,22 @@ def adb(*args: str) -> bytes:
 
 
 def ui_tree() -> tuple[ET.Element, bytes]:
-    adb("shell", "uiautomator", "dump", DEVICE_XML)
-    raw = adb("exec-out", "cat", DEVICE_XML)
-    return ET.fromstring(raw), raw
+    for attempt in range(2):
+        adb("shell", "uiautomator", "dump", DEVICE_XML)
+        raw = adb("exec-out", "cat", DEVICE_XML)
+        root = ET.fromstring(raw)
+        # On a fresh emulator the OS sometimes displays its one-time immersive
+        # navigation tutorial *after* our Activity has already become visible.
+        # Dismiss only that known Android overlay, never an app-owned dialog.
+        hint = find(root, "Viewing full screen")
+        dismiss = find(root, "Got it")
+        if attempt == 0 and hint is not None and dismiss is not None:
+            tap_node(dismiss)
+            print("RECOVER dismissed Android immersive-screen tutorial", flush=True)
+            time.sleep(0.4)
+            continue
+        return root, raw
+    raise AssertionError("Could not read Android UI hierarchy")
 
 
 def find(root: ET.Element, target: str):
