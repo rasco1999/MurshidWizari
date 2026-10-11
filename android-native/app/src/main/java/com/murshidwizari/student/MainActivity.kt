@@ -86,6 +86,10 @@ class MainActivity : Activity() {
     private var dailyScore = 0
     private var dailyTotal = 0
     private var dailyReward = 0
+    private var dailyGivenAnswer = ""
+    private var dailyCorrectAnswer = ""
+    private var dailyExplanation = ""
+    private var dailyNextResetAt = ""
     private var dailyStatusMessage = ""
     private var contest = JSONObject()
     private var season = JSONObject()
@@ -4580,7 +4584,10 @@ class MainActivity : Activity() {
         val saved = try { JSONObject(prefs.getString(dailyDraftKey(), "").orEmpty()) }
             catch (_: Exception) { null }
         if (saved?.optString("signature") != signature) {
-            clearDailyDraft()
+            // A new day or question must not erase evidence of an uncertain POST.
+            // A previously accepted answer may be in flight even after midnight.
+            if (saved?.optBoolean("pending_receipt") == true) dailyUncertain = true
+            else clearDailyDraft()
             return
         }
         val answers = saved?.optJSONObject("answers") ?: JSONObject()
@@ -4612,6 +4619,10 @@ class MainActivity : Activity() {
             dailyScore = response.optInt("score")
             dailyTotal = response.optInt("total")
             dailyReward = response.optInt("reward")
+            dailyGivenAnswer = response.optString("given_answer")
+            dailyCorrectAnswer = response.optString("correct_answer")
+            dailyExplanation = response.optString("explanation")
+            dailyNextResetAt = response.optString("next_reset_at")
             dailyQuestions = parseDailyQuestions(response.optJSONArray("questions") ?: JSONArray())
             restoreDailyDraft()
             dailyStatusMessage = ""
@@ -4622,8 +4633,8 @@ class MainActivity : Activity() {
     private fun renderDailyChallenge() {
         activeScreen = "daily_challenge"
         base("تحدي اليوم", true)
-        line(if (dailyDone) "أكملت تحدي اليوم!" else "خمس دقائق تصنع فرقاً", true)
-        caption("أجب عن جميع أسئلة صفك ثم سلّم التحدي مرة واحدة. الخادم يحسب النتيجة والنقاط.")
+        line(if (dailyDone) "أكملت تحدي اليوم!" else "سؤال واحد يصنع فرقاً", true)
+        caption("سؤال صعب واحد كل 24 ساعة، لا يستهلك رصيد الأسئلة المجانية ولا يُضاف إلى نقاط المسابقة.")
         if (!dailyAvailable) {
             line("لا يوجد تحدٍ متاح الآن.")
             button("تحديث التحدي", secondary = true) { loadDailyChallenge() }
@@ -4632,14 +4643,27 @@ class MainActivity : Activity() {
         if (dailyDone) {
             line("نتيجتك: $dailyScore / $dailyTotal", true)
             if (dailyReward > 0) line("المكافأة الممنوحة: +$dailyReward XP")
-            caption("تظهر مكافأتك وإنجازاتك بعد تحديث البيانات من الخادم.")
+            if (dailyGivenAnswer.isNotBlank()) caption("إجابتك: $dailyGivenAnswer")
+            if (dailyCorrectAnswer.isNotBlank()) caption("الإجابة الصحيحة: $dailyCorrectAnswer")
+            if (dailyExplanation.isNotBlank()) addUiCard(uiCard().apply {
+                addView(uiText("التوضيح", 15f, true, blue))
+                addView(uiText(dailyExplanation, 15f),
+                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            })
+            val nextTime = try {
+                java.time.OffsetDateTime.parse(dailyNextResetAt)
+                    .atZoneSameInstant(java.time.ZoneId.of("Asia/Baghdad"))
+                    .format(java.time.format.DateTimeFormatter.ofPattern("d/M/yyyy · h:mm a", java.util.Locale("ar", "IQ")))
+            } catch (_: Exception) { "" }
+            caption(if (nextTime.isNotBlank()) "التحدي القادم: $nextTime بتوقيت بغداد"
+                else "يتاح التحدي التالي بعد مرور 24 ساعة على محاولتك.")
             button("عرض ترتيبي في تحدي المليون") { openCompetition("contest") }
             button("متابعة إنجازاتي") { openCompetition("achievements") }
             button("تحديث النتيجة", secondary = true) { loadDailyChallenge() }
             return
         }
         if (dailyQuotaBlocked) {
-            line("انتهى رصيدك المجاني للتحدي. لن يُعاد إرسال أي إجابة قبل تفعيل الاشتراك.")
+            line("الخادم منع التحدي بسبب حالة الرصيد أو الاشتراك. لن نعيد إرسال إجابة تلقائياً.")
             button("تفعيل رمز اشتراك") { redeemScreen() }
             button("إعادة التحقق من الرصيد", secondary = true) { loadDailyChallenge() }
             return
@@ -4728,10 +4752,10 @@ class MainActivity : Activity() {
         val submit = button(if (dailyBusy) "جارٍ التصحيح…" else "إنهاء تحدي اليوم") {
             if (!CompetitionRules.canSubmit(dailyQuestions, dailyAnswers, dailyAvailable, dailyDone,
                     dailyBusy, dailyUncertain)) {
-                message("أكمل كل أسئلة التحدي قبل التسليم.")
+                message("أجب عن السؤال قبل التسليم.")
             } else {
                 AlertDialog.Builder(this).setTitle("تسليم تحدي اليوم")
-                    .setMessage("سيتم إرسال إجابات جميع الأسئلة دفعة واحدة للتصحيح. هل أنت مستعد؟")
+                    .setMessage("سيتم إرسال الإجابة للتصحيح مرة واحدة، ولن يتاح تحدٍ جديد قبل مرور 24 ساعة. هل أنت مستعد؟")
                     .setPositiveButton("إرسال وتصحيح") { _, _ -> submitDailyChallenge() }
                     .setNegativeButton("إلغاء", null).show()
             }
@@ -4782,6 +4806,10 @@ class MainActivity : Activity() {
             dailyScore = response.optInt("score", dailyScore)
             dailyTotal = response.optInt("total", dailyTotal)
             dailyReward = response.optInt("reward", dailyReward)
+            dailyGivenAnswer = response.optString("given_answer", dailyGivenAnswer)
+            dailyCorrectAnswer = response.optString("correct_answer", dailyCorrectAnswer)
+            dailyExplanation = response.optString("explanation", dailyExplanation)
+            dailyNextResetAt = response.optString("next_reset_at", dailyNextResetAt)
             if (!dailyDone) {
                 // An accepted POST without a completion receipt must be reconciled.
                 dailyUncertain = true
@@ -4796,6 +4824,10 @@ class MainActivity : Activity() {
                         dailyScore = latest.optInt("score", dailyScore)
                         dailyTotal = latest.optInt("total", dailyTotal)
                         dailyReward = latest.optInt("reward", dailyReward)
+                        dailyGivenAnswer = latest.optString("given_answer", dailyGivenAnswer)
+                        dailyCorrectAnswer = latest.optString("correct_answer", dailyCorrectAnswer)
+                        dailyExplanation = latest.optString("explanation", dailyExplanation)
+                        dailyNextResetAt = latest.optString("next_reset_at", dailyNextResetAt)
                         if (activeScreen == "daily_challenge") renderDailyChallenge()
                     }
                 }
