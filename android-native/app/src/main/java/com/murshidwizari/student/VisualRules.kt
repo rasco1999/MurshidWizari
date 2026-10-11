@@ -1,0 +1,23 @@
+package com.murshidwizari.student
+
+/** Geometry shared with the iOS v3.1 SwiftUI reference. Values are logical dp/pt. */
+object VisualRules {
+    const val contentInset = 16
+    const val cardCornerRadius = 22
+    const val cardInset = 16
+    const val sectionSpacing = 16
+    const val gridSpacing = 12
+    const val heroHeight = 220
+    const val minTouchTarget = 44
+
+    // The SwiftUI Home/Tests use two .flexible GridItems at phone and tablet widths.
+    fun homeColumns(): Int = 2
+
+    // Larger Android tablets keep the reading column centered, like a compact iPad layout.
+    fun contentWidthDp(widthDp: Int): Int? = if (widthDp >= 740) 700 else null
+
+    fun tileWidthDp(widthDp: Int): Int {
+        val total = contentWidthDp(widthDp) ?: widthDp
+        return ((total - contentInset * 2 - gridSpacing) / homeColumns()).coerceAtLeast(0)
+    }
+}

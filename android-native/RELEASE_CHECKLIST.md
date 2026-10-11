@@ -43,6 +43,8 @@ Use a dedicated **non-production student test account** and an administrator-app
 
 ## Device, connection and visual tests
 
+Code-level visual alignment update (2026-10-11): the Android main navigation now mirrors the iOS four tabs, with a native 220dp four-slide home carousel (swipe/tap/auto-advance), iOS-style 16dp/22dp grouped cards, the V31 home section order, two-column phone/tablet metrics and tools, searchable tests and a server-backed success tab. The account screen uses profile, subscription, services, security and management groups. Dynamic tablet centering, RTL and native 44dp+ navigation targets are explicit. These are **implementation changes awaiting CI and device screenshot inspection**, not verified parity. Android's Arabic system font and custom line icons are still not identical to SF Arabic/SF Symbols.
+
 - [ ] Screenshot-compare fonts, icons, colors, sizes, spacing, RTL and motion against the iOS IPA with a defined acceptable tolerance. Current Android UI is **not** declared pixel-perfect.
 - [ ] Check 360×640 and 393×852 phone layouts at 1.0×/1.3× font scales, light and dark mode, with keyboard visible.
 - [ ] Check a 600dp-width small tablet, an 800dp-width tablet and landscape screens: centered content, two-column home actions, no clipping or text truncation.
