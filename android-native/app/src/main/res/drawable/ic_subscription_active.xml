@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Active-subscription seal from the iOS account row, drawn natively. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="50dp"
+    android:height="50dp"
+    android:viewportWidth="50"
+    android:viewportHeight="50">
+    <path
+        android:fillColor="#30D158"
+        android:pathData="M25,4 L31,7 L38,7 L42,13 L46,19 L44,25 L46,31 L42,37 L38,43 L31,43 L25,46 L19,43 L12,43 L8,37 L4,31 L6,25 L4,19 L8,13 L12,7 L19,7 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#143650"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M16,24 L23,31 L35,19" />
+</vector>
