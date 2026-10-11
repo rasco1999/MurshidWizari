@@ -148,8 +148,18 @@ def check_controls(directory: Path, name: str, width: int, height: int) -> None:
 
     tap_visible("إنشاء حساب طالب جديد", width, height)
     wait_for("إنشاء حساب جديد")
+    capture(directory, name + "-register-top", "إنشاء حساب جديد")
+    # The iOS-matched AuthHeader adds 82dp of real content above the card.
+    # The contact selector is below the first viewport on 360px phones;
+    # scroll to it rather than assuming it must appear without interaction.
+    tap_visible("طريقة التسجيل", width, height)
     wait_for("طريقة التسجيل")
     capture(directory, name + "-register", "إنشاء حساب جديد")
+    for original, changed in (("إظهار تأكيد كلمة المرور", "إخفاء تأكيد كلمة المرور"),
+                              ("إخفاء تأكيد كلمة المرور", "إظهار تأكيد كلمة المرور")):
+        tap_visible(original, width, height)
+        wait_for(changed, seconds=8)
+    print("PASS registration confirmation-password visibility toggle", flush=True)
     adb("shell", "input", "keyevent", "KEYCODE_BACK")
     wait_for("إظهار كلمة المرور")
     print("PASS registration screen and Android back", flush=True)
