@@ -3512,11 +3512,15 @@ class MainActivity : Activity() {
     private fun restoreDailyDraft() {
         dailyAnswers.clear()
         dailyUncertain = false
-        if (dailyDone || !dailyAvailable) { clearDailyDraft(); return }
+        if (dailyDone) { clearDailyDraft(); return }
+        // A transiently unavailable or malformed GET is not proof that an earlier
+        // POST was rejected. Keep its persisted receipt marker until a valid GET.
+        if (!DailyDraftRules.mayReconcileDraft(dailyAvailable, dailyQuestions)) return
         val signature = dailyDraftSignature()
+        if (signature.isBlank()) return
         val saved = try { JSONObject(prefs.getString(dailyDraftKey(), "").orEmpty()) }
             catch (_: Exception) { null }
-        if (signature.isBlank() || saved?.optString("signature") != signature) {
+        if (saved?.optString("signature") != signature) {
             clearDailyDraft()
             return
         }

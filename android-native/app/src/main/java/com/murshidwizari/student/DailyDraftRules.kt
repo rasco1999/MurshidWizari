@@ -5,6 +5,10 @@ import java.security.MessageDigest
 
 /** Identifies a single server-provided daily challenge for one account and local day. */
 internal object DailyDraftRules {
+    /** Only authoritative completion or a *valid, comparable* new challenge may retire a draft. */
+    fun mayReconcileDraft(available: Boolean, questions: List<CompetitionRules.Question>): Boolean =
+        available && CompetitionRules.issue(questions) == null
+
     fun signature(accountId: Int, day: String, questions: List<CompetitionRules.Question>): String {
         if (accountId <= 0 || day.isBlank() || CompetitionRules.issue(questions) != null) return ""
         val canonical = buildString {

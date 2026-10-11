@@ -33,4 +33,13 @@ class DailyDraftRulesTest {
         assertEquals(mapOf(11 to "نص"), DailyDraftRules.validAnswers(questions,
             mapOf(10 to "خيار محذوف", 11 to "نص", 99 to "قديم")))
     }
+
+    @Test fun incompleteServerGetCannotRetireAnUnconfirmedSubmission() {
+        assertTrue(DailyDraftRules.mayReconcileDraft(true, questions))
+        assertFalse(DailyDraftRules.mayReconcileDraft(false, questions))
+        assertFalse(DailyDraftRules.mayReconcileDraft(true, emptyList()))
+        assertFalse(DailyDraftRules.mayReconcileDraft(true, questions + questions.first()))
+        assertFalse(DailyDraftRules.mayReconcileDraft(true,
+            listOf(CompetitionRules.Question(0, "mcq", "", emptyList()))))
+    }
 }
