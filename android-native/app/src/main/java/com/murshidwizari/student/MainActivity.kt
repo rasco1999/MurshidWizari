@@ -52,6 +52,9 @@ class MainActivity : Activity() {
     private var topicsSubjectName = ""
     private var chapterId = 0
     private var chapterName = ""
+    private var examFromSearch = false
+    private var lastSearchQuery = ""
+    private var lastSearchResults = JSONArray()
     private var examQuestions = JSONArray()
     private val examIssues = HashMap<Int, String>()
     private var questionIndex = 0
@@ -969,7 +972,8 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun loadExam(id: Int, name: String) {
+    private fun loadExam(id: Int, name: String, fromSearch: Boolean = false) {
+        examFromSearch = fromSearch
         chapterId = id; chapterName = name
         fetch("mobile/exam.php?chapter_id=" + id) { result ->
             if (!result.optBoolean("ok") || chapterId != id) return@fetch
@@ -1074,7 +1078,7 @@ class MainActivity : Activity() {
             if (submitted < total) caption("بعض الأسئلة لم تُحلّ بعد. راجعها قبل إنهاء الموضوع.")
             button("مراجعة جميع الأسئلة") { questionIndex = 0; renderQuestion() }
             button("طلب أسئلة جديدة") { questionRequest() }
-            button("عودة إلى المواضيع") { topicsScreen(topicsSubjectId, topicsSubjectName) }
+            button(if (examFromSearch) "العودة إلى نتائج البحث" else "عودة إلى المواضيع") { leaveExam() }
             return
         }
         val question = examQuestions.optJSONObject(questionIndex)
@@ -1155,7 +1159,12 @@ class MainActivity : Activity() {
             }
         }
         button("الإبلاغ عن مشكلة في السؤال", secondary = true) { reportQuestion(id) }
-        button("العودة للمواضيع", secondary = true) { topicsScreen(topicsSubjectId, topicsSubjectName) }
+        button(if (examFromSearch) "العودة إلى نتائج البحث" else "العودة للمواضيع", secondary = true) { leaveExam() }
+    }
+
+    private fun leaveExam() {
+        if (examFromSearch) renderQuestionSearchResults(lastSearchQuery, lastSearchResults)
+        else topicsScreen(topicsSubjectId, topicsSubjectName)
     }
 
     private fun sendAnswer(question: JSONObject, answer: String, optionId: Int) {
@@ -1838,7 +1847,8 @@ class MainActivity : Activity() {
             fetch(path) { response ->
                 if (activeScreen != "question_search") return@fetch
                 search.isEnabled = true
-                if (!response.optBoolean("ok")) return@fetch
+                if (!SearchRules.accepts(response.has("ok"), response.optBoolean("ok"),
+                        response.optJSONArray("results") != null)) return@fetch
                 // Replace only earlier search results, keeping the query field editable.
                 val results = response.optJSONArray("results") ?: JSONArray()
                 val savedQuery = query.text.toString()
@@ -1848,6 +1858,8 @@ class MainActivity : Activity() {
     }
 
     private fun renderQuestionSearchResults(queryText: String, results: JSONArray) {
+        lastSearchQuery = queryText
+        lastSearchResults = results
         activeScreen = "question_search"
         base("البحث في الأسئلة", true)
         val query = input("ابحث في الأسئلة والمواضيع").apply { setText(queryText) }
@@ -1856,7 +1868,9 @@ class MainActivity : Activity() {
             if (next.length < 2) { message("اكتب حرفين على الأقل."); return@button }
             val path = "api/search.php?q=" + URLEncoder.encode(next, "UTF-8")
             fetch(path) { response ->
-                if (activeScreen == "question_search" && response.optBoolean("ok"))
+                if (activeScreen == "question_search" && SearchRules.accepts(
+                        response.has("ok"), response.optBoolean("ok"),
+                        response.optJSONArray("results") != null))
                     renderQuestionSearchResults(next, response.optJSONArray("results") ?: JSONArray())
             }
         }
@@ -1865,7 +1879,11 @@ class MainActivity : Activity() {
         for (i in 0 until results.length()) {
             val result = results.optJSONObject(i) ?: continue
             caption(result.optString("type"))
-            line(result.optString("title"), true)
+            val title = result.optString("title").ifBlank { "نتيجة بحث" }
+            val resultChapterId = SearchRules.chapterId(result.optString("url"))
+            if (resultChapterId == null) line(title, true) else button(title, secondary = true) {
+                loadExam(resultChapterId, result.optString("meta").ifBlank { title }, fromSearch = true)
+            }
             if (result.optString("meta").isNotBlank()) caption(result.optString("meta"))
         }
     }
