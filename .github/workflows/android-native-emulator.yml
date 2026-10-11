@@ -34,7 +34,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Launch without logging in and capture phone/tablet layouts
+      - name: Exercise anonymous native login controls, recovery and register, and capture layouts
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -44,36 +44,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
-            mkdir -p "$RUNNER_TEMP/murshid-anonymous-qa"
-            adb install -r android-native/app/build/outputs/apk/debug/app-debug.apk
-            adb shell settings put system font_scale 1.0
-            adb shell wm density 160
-            adb shell wm size 360x640
-            adb shell am start -n com.murshidwizari.student/.MainActivity
-            sleep 5
-            adb shell pidof com.murshidwizari.student
-            adb shell screencap -p /sdcard/murshid-phone.png
-            adb pull /sdcard/murshid-phone.png "$RUNNER_TEMP/murshid-anonymous-qa/login-phone-360x640.png"
-            adb shell uiautomator dump /sdcard/murshid-phone.xml
-            adb pull /sdcard/murshid-phone.xml "$RUNNER_TEMP/murshid-anonymous-qa/login-phone.xml"
-            echo 'Anonymous phone UI tree (first 8000 chars):'
-            sed -n '1p' "$RUNNER_TEMP/murshid-anonymous-qa/login-phone.xml" | cut -c1-8000
-            echo 'Foreground activity:'
-            adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' || true
-            grep -q 'منصة المرشد الوزاري' "$RUNNER_TEMP/murshid-anonymous-qa/login-phone.xml"
-            adb shell settings put system font_scale 1.3
-            adb shell wm size 800x1280
-            adb shell am force-stop com.murshidwizari.student
-            adb shell am start -n com.murshidwizari.student/.MainActivity
-            sleep 5
-            adb shell pidof com.murshidwizari.student
-            adb shell screencap -p /sdcard/murshid-tablet.png
-            adb pull /sdcard/murshid-tablet.png "$RUNNER_TEMP/murshid-anonymous-qa/login-tablet-800x1280-font1.3.png"
-            adb shell uiautomator dump /sdcard/murshid-tablet.xml
-            adb pull /sdcard/murshid-tablet.xml "$RUNNER_TEMP/murshid-anonymous-qa/login-tablet.xml"
-            echo 'Anonymous tablet UI tree (first 8000 chars):'
-            sed -n '1p' "$RUNNER_TEMP/murshid-anonymous-qa/login-tablet.xml" | cut -c1-8000
-            grep -q 'منصة المرشد الوزاري' "$RUNNER_TEMP/murshid-anonymous-qa/login-tablet.xml"
+            python3 android-native/scripts/anonymous_emulator_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa"
       - name: Upload anonymous layout screenshots and accessibility hierarchy
         if: always()
         uses: actions/upload-artifact@v4
