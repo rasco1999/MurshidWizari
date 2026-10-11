@@ -3375,7 +3375,7 @@ class MainActivity : Activity() {
         }
         val avatar = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            setImageResource(R.drawable.ic_ios_v4818)
+            setImageResource(R.drawable.ic_account_placeholder)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Color.WHITE)
