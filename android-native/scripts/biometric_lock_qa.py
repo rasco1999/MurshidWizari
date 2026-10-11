@@ -20,7 +20,7 @@ def assert_shield():
     tree, _ = ui.ui_tree()
     texts = {node.attrib.get('text') for node in tree.iter('node')}
     assert 'حسابي' not in texts and fixture.USER['name'] not in texts, \
-        'Underlying account must not be accessible through the lock'
+        f'Underlying account must not be accessible through the lock; visible={sorted(str(x) for x in texts if x)}'
 
 
 def main():
