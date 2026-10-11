@@ -3624,6 +3624,7 @@ class MainActivity : Activity() {
                         textSize = 16f
                         setTextColor(textColor)
                         isChecked = dailyAnswers[question.id] == choice
+                        isEnabled = !dailyBusy
                         buttonTintList = ColorStateList.valueOf(blue)
                         setPadding(dp(9), dp(7), dp(9), dp(7))
                         background = shape(if (night) Color.rgb(49,49,52)
@@ -3633,6 +3634,7 @@ class MainActivity : Activity() {
                     group.addView(radio, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
                 }
                 group.setOnCheckedChangeListener { _, selected ->
+                    if (dailyBusy) return@setOnCheckedChangeListener
                     ids[selected]?.let { dailyAnswers[question.id] = it; saveDailyDraft() }
                 }
                 questionCard.addView(group)
@@ -3645,6 +3647,7 @@ class MainActivity : Activity() {
                     inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
                     minLines = 2
                     maxLines = 5
+                    isEnabled = !dailyBusy
                     setPadding(dp(12), dp(10), dp(12), dp(10))
                     background = shape(if (night) Color.rgb(49,49,52)
                         else Color.rgb(242,242,247), dp(12).toFloat())
@@ -3653,6 +3656,7 @@ class MainActivity : Activity() {
                 field.addTextChangedListener(object : TextWatcher {
                     override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
                     override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                        if (dailyBusy) return
                         dailyAnswers[question.id] = s?.toString().orEmpty()
                         saveDailyDraft()
                     }
