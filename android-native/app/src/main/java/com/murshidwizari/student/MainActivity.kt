@@ -1998,6 +1998,11 @@ class MainActivity : Activity() {
         heading.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
         heading.addView(uiText("${draft.step} من 3", 13f, true, blue).apply {
             setPadding(dp(10), dp(6), dp(10), dp(6))
+            background = shape(if (night) Color.rgb(25, 38, 59) else Color.rgb(235, 242, 253),
+                dp(18).toFloat())
+        })
+        add(heading, 18)
+
         if (draft.generalError.isNotBlank()) add(registrationNotice(draft.generalError, true))
 
         if (draft.step == 1) {
