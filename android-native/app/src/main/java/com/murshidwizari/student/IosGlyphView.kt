@@ -68,6 +68,82 @@ class IosGlyphView(context: Context, private val symbol: String, private val tin
                 canvas.drawPath(crop, ink)
                 ink.style = Paint.Style.STROKE
             }
+            "brain" -> {
+                val left = Path().apply {
+                    moveTo(12f, 4f); cubicTo(8f, 1f, 4f, 4f, 4f, 7f)
+                    cubicTo(1f, 9f, 2f, 13f, 4f, 15f)
+                    cubicTo(3f, 20f, 8f, 22f, 12f, 20f)
+                }
+                val right = Path().apply {
+                    moveTo(12f, 4f); cubicTo(16f, 1f, 20f, 4f, 20f, 7f)
+                    cubicTo(23f, 9f, 22f, 13f, 20f, 15f)
+                    cubicTo(21f, 20f, 16f, 22f, 12f, 20f)
+                }
+                canvas.drawPath(left, ink); canvas.drawPath(right, ink)
+                path(12f, 4f, 12f, 20f)
+                path(6f, 9f, 9f, 10f, 9f, 13f)
+                path(18f, 9f, 15f, 10f, 15f, 13f)
+            }
+            "sliders" -> {
+                path(3f, 6f, 7f, 6f); path(11f, 6f, 21f, 6f)
+                path(3f, 12f, 15f, 12f); path(19f, 12f, 21f, 12f)
+                path(3f, 18f, 9f, 18f); path(13f, 18f, 21f, 18f)
+                canvas.drawCircle(9f, 6f, 2f, ink)
+                canvas.drawCircle(17f, 12f, 2f, ink)
+                canvas.drawCircle(11f, 18f, 2f, ink)
+            }
+            "flame" -> {
+                val p = Path().apply {
+                    moveTo(13f, 2f)
+                    cubicTo(13f, 7f, 20f, 9f, 20f, 15f)
+                    cubicTo(20f, 20f, 16f, 23f, 12f, 23f)
+                    cubicTo(7f, 23f, 4f, 20f, 4f, 15f)
+                    cubicTo(4f, 11f, 8f, 8f, 8f, 4f)
+                    cubicTo(11f, 8f, 11f, 10f, 13f, 2f)
+                    close()
+                }
+                ink.style = Paint.Style.FILL
+                canvas.drawPath(p, ink)
+                ink.style = Paint.Style.STROKE
+            }
+            "plus-bubble" -> {
+                val p = Path().apply {
+                    moveTo(5f, 5f); lineTo(19f, 5f)
+                    quadTo(22f, 5f, 22f, 8f); lineTo(22f, 16f)
+                    quadTo(22f, 19f, 19f, 19f); lineTo(10f, 19f)
+                    lineTo(5f, 23f); lineTo(5f, 19f)
+                    quadTo(2f, 18f, 2f, 15f); lineTo(2f, 8f)
+                    quadTo(2f, 5f, 5f, 5f); close()
+                }
+                canvas.drawPath(p, ink)
+                path(12f, 8f, 12f, 16f); path(8f, 12f, 16f, 12f)
+            }
+            "tray" -> {
+                path(3f, 4f, 21f, 4f, 21f, 16f, 17f, 20f, 7f, 20f, 3f, 16f, 3f, 4f)
+                path(3f, 13f, 8f, 13f, 9f, 16f, 15f, 16f, 16f, 13f, 21f, 13f)
+            }
+            "history" -> {
+                canvas.drawArc(3f, 3f, 21f, 21f, -85f, 305f, false, ink)
+                path(3f, 5f, 3f, 11f, 9f, 11f)
+                path(12f, 7f, 12f, 12f, 16f, 14f)
+            }
+            "medal" -> {
+                path(5f, 3f, 9f, 3f, 12f, 10f, 15f, 3f, 19f, 3f, 16f, 12f)
+                canvas.drawCircle(12f, 16f, 6f, ink)
+                path(12f, 12f, 13.2f, 15f, 16f, 15f, 14f, 17f, 15f, 20f, 12f, 18.5f,
+                    9f, 20f, 10f, 17f, 8f, 15f, 10.8f, 15f, 12f, 12f)
+            }
+            "timer" -> {
+                canvas.drawCircle(12f, 14f, 8f, ink)
+                path(12f, 9f, 12f, 14f, 16f, 16f)
+                path(9f, 2f, 15f, 2f); path(12f, 2f, 12f, 5f)
+                path(19f, 6f, 21f, 4f)
+            }
+            "sparkles" -> {
+                path(12f, 2f, 14f, 10f, 22f, 12f, 14f, 14f, 12f, 22f, 10f, 14f, 2f, 12f, 10f, 10f, 12f, 2f)
+                path(4f, 2f, 4.7f, 4.3f, 7f, 5f, 4.7f, 5.7f, 4f, 8f, 3.3f, 5.7f, 1f, 5f, 3.3f, 4.3f, 4f, 2f)
+                path(20f, 18f, 20.5f, 19.5f, 22f, 20f, 20.5f, 20.5f, 20f, 22f, 19.5f, 20.5f, 18f, 20f, 19.5f, 19.5f, 20f, 18f)
+            }
             "home" -> {
                 path(3f, 10f, 12f, 3f, 21f, 10f, 21f, 21f, 3f, 21f, 3f, 10f)
                 path(9f, 21f, 9f, 14f, 15f, 14f, 15f, 21f)

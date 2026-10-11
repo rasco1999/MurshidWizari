@@ -1131,18 +1131,18 @@ class MainActivity : Activity() {
 
         sectionHeader("أدواتك السريعة", "اختبارات ومراجعة وبحث ومساهمات", "sparkle")
         val tiles = listOf(
-            uiTile("راجع أخطاءك", "مراجعة ذكية", "check") { reviewScreen() },
-            uiTile("اختبار مخصص", "عدد · نوع · مؤقت", "tests") { practiceBuilderScreen() },
-            uiTile("تحدي اليوم", "خمسة أسئلة سريعة", "trophy") { openCompetition("daily_challenge") },
+            uiTile("راجع أخطاءك", "مراجعة ذكية", "brain") { reviewScreen() },
+            uiTile("اختبار مخصص", "عدد · نوع · مؤقت", "sliders") { practiceBuilderScreen() },
+            uiTile("تحدي اليوم", "خمسة أسئلة سريعة", "flame") { openCompetition("daily_challenge") },
             uiTile("ابحث عن سؤال", "في بنك الأسئلة", "search") { questionSearchScreen() },
-            uiTile("اقترح سؤالًا", "ساهم في البنك", "book") { proposeQuestionScreen() },
-            uiTile("طلباتك", "تابع المراجعة", "list") { myQuestionSubmissionsScreen() },
-            uiTile("سجل الاختبارات", "نتائجك السابقة", "calendar") { attemptHistoryScreen() },
+            uiTile("اقترح سؤالًا", "ساهم في البنك", "plus-bubble") { proposeQuestionScreen() },
+            uiTile("طلباتك", "تابع المراجعة", "tray") { myQuestionSubmissionsScreen() },
+            uiTile("سجل الاختبارات", "نتائجك السابقة", "history") { attemptHistoryScreen() },
             uiTile("خطة الدراسة", "هدف يومي", "calendar") { studyPlanScreen() },
-            uiTile("الإنجازات", "XP والمستوى", "trophy") { openCompetition("achievements") },
-            uiTile("جلسة تركيز", "25 · 45 · 60 دقيقة", "chart") { focusScreen() },
+            uiTile("الإنجازات", "XP والمستوى", "medal") { openCompetition("achievements") },
+            uiTile("جلسة تركيز", "25 · 45 · 60 دقيقة", "timer") { focusScreen() },
             uiTile("تحدي المليون", "ترتيب ونقاط", "trophy") { openCompetition("contest") },
-            uiTile("غيّر جو", "استراحة قصيرة", "sparkle") { storiesScreen() },
+            uiTile("غيّر جو", "استراحة قصيرة", "sparkles") { storiesScreen() },
             uiTile("المفضلة", "الأسئلة المحفوظة", "heart") { favoritesScreen() },
             uiTile("الدعم", "محادثة مع الإدارة", "person") { supportScreen() },
             uiTile("المرشحات", "للمشتركين", "book") {
