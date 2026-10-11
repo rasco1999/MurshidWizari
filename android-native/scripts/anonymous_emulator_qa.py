@@ -42,20 +42,24 @@ def visible_texts(root: ET.Element) -> list[str]:
             if node.attrib.get("text")][:24]
 
 
-def wait_for(text: str, seconds: float = 28):
+def wait_for(text: str, seconds: float = 28, checked: str | None = None):
     deadline = time.monotonic() + seconds
     last = None
+    last_checked = None
     while time.monotonic() < deadline:
         try:
             root, raw = ui_tree()
             last = visible_texts(root)
             node = find(root, text)
             if node is not None:
+                last_checked = node.attrib.get("checked")
+            if node is not None and (checked is None or last_checked == checked):
                 return node, raw
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ET.ParseError):
             pass
         time.sleep(1.2)
-    raise AssertionError(f"Timed out waiting for {text!r}; visible={last!r}")
+    raise AssertionError(f"Timed out waiting for {text!r}, checked={checked!r}; "
+                         f"last_checked={last_checked!r}, visible={last!r}")
 
 
 def tap_node(node: ET.Element) -> None:
@@ -102,13 +106,9 @@ def check_controls(directory: Path, name: str, width: int, height: int) -> None:
     label = "إظهار كلمة المرور"
     # A selected checkbox must really change its state, not just look clickable.
     tap_visible(label, width, height)
-    checked, _ = wait_for(label)
-    if checked.attrib.get("checked") != "true":
-        raise AssertionError("Show-password checkbox did not become checked")
-    tap_node(checked)
-    unchecked, _ = wait_for(label)
-    if unchecked.attrib.get("checked") != "false":
-        raise AssertionError("Show-password checkbox did not reset")
+    checked_node, _ = wait_for(label, checked="true")
+    tap_node(checked_node)
+    wait_for(label, checked="false")
     print("PASS password visibility toggle", flush=True)
 
     tap_visible("نسيت كلمة المرور؟", width, height)
