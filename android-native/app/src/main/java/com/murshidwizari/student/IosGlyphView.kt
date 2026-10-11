@@ -255,6 +255,47 @@ class IosGlyphView(context: Context, private val symbol: String, private val tin
                 canvas.drawCircle(12f, 8f, 4f, ink)
                 canvas.drawArc(3f, 12f, 21f, 25f, 195f, 150f, false, ink)
             }
+            "id-card" -> {
+                canvas.drawRoundRect(2f, 4f, 22f, 20f, 2.5f, 2.5f, ink)
+                canvas.drawCircle(8f, 10f, 2.3f, ink)
+                canvas.drawArc(4f, 11f, 12f, 18f, 185f, 170f, false, ink)
+                path(14f, 9f, 19f, 9f)
+                path(14f, 14f, 19f, 14f)
+            }
+            "books" -> {
+                canvas.drawRoundRect(3f, 4f, 8f, 21f, 1f, 1f, ink)
+                canvas.drawRoundRect(10f, 4f, 15f, 21f, 1f, 1f, ink)
+                path(18f, 5f, 21f, 4f, 23f, 20f, 20f, 21f, 18f, 5f)
+                path(3f, 17f, 8f, 17f)
+                path(10f, 17f, 15f, 17f)
+            }
+            "users" -> {
+                canvas.drawCircle(9f, 8f, 3.3f, ink)
+                canvas.drawArc(2f, 12f, 16f, 24f, 193f, 154f, false, ink)
+                canvas.drawArc(15f, 5f, 21f, 12f, 200f, 300f, false, ink)
+                canvas.drawArc(15f, 13f, 24f, 21f, 265f, 125f, false, ink)
+            }
+            "at" -> {
+                canvas.drawArc(2f, 2f, 22f, 22f, 52f, 314f, false, ink)
+                canvas.drawCircle(11f, 12f, 4f, ink)
+                path(15f, 8f, 15f, 14f)
+            }
+            "envelope" -> {
+                canvas.drawRoundRect(2f, 5f, 22f, 19f, 2.5f, 2.5f, ink)
+                path(3f, 7f, 12f, 14f, 21f, 7f)
+            }
+            "phone" -> {
+                val handset = Path().apply {
+                    moveTo(7f, 2.8f); quadTo(5f, 2f, 3.7f, 4.2f)
+                    cubicTo(1.5f, 8.1f, 7f, 17.6f, 14.9f, 21f)
+                    quadTo(19.4f, 23f, 21f, 19f)
+                    lineTo(19f, 16f); quadTo(18f, 14.7f, 16.7f, 15.6f)
+                    lineTo(14f, 17f); quadTo(9f, 14f, 7f, 9f)
+                    lineTo(8.4f, 6f); quadTo(9f, 4.5f, 7f, 2.8f)
+                    close()
+                }
+                canvas.drawPath(handset, ink)
+            }
             "bell" -> {
                 path(5f, 18f, 7f, 16f, 7f, 10f)
                 canvas.drawArc(7f, 4f, 17f, 14f, 180f, 180f, false, ink)
@@ -281,9 +322,20 @@ class IosGlyphView(context: Context, private val symbol: String, private val tin
                 }
             }
             "graduation" -> {
-                path(2f, 9f, 12f, 4f, 22f, 9f, 12f, 14f, 2f, 9f)
-                path(6f, 11f, 6f, 17f, 12f, 20f, 18f, 17f, 18f, 11f)
-                path(22f, 9f, 22f, 17f)
+                ink.style = Paint.Style.FILL
+                val cap = Path().apply {
+                    moveTo(1.2f, 8.8f); lineTo(12f, 3.2f)
+                    lineTo(22.8f, 8.8f); lineTo(12f, 14.5f); close()
+                }
+                canvas.drawPath(cap, ink)
+                val base = Path().apply {
+                    moveTo(5.4f, 12.3f); lineTo(12f, 15.7f)
+                    lineTo(18.6f, 12.3f); lineTo(18.6f, 17.8f)
+                    quadTo(12f, 22.8f, 5.4f, 17.8f); close()
+                }
+                canvas.drawPath(base, ink)
+                ink.style = Paint.Style.STROKE
+                path(22f, 9.3f, 22f, 17.5f)
             }
             "gift" -> {
                 canvas.drawRoundRect(3f, 10f, 21f, 22f, 1.5f, 1.5f, ink)

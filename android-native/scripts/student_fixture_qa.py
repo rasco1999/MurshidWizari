@@ -227,16 +227,21 @@ def main():
  button('تسجيل الخروج');ui.wait_for('مساحة تعلّمك')
  assert sum(1 for m,p in STATE['calls'] if p=='/mobile/logout.php')==2,'Confirmed logout must not repeat the request'
  screenshot(args.output,'student-logged-out')
- # New: iPhone Build 498 registration -> pending six-digit email verification.
- # Exercise the native Android controls against the local fixture only.
+ # The active iOS RegisterV3View is a true three-step wizard, not the older
+ # single-page RegisterView. Check each stage before email verification.
  ui.enter_login(393,852)
  button('إنشاء حساب طالب جديد')
- ui.wait_for('إنشاء حساب جديد');screenshot(args.output,'student-register')
+ ui.wait_for('بيانات الطالب');screenshot(args.output,'student-register-step1')
  ui.wait_for('السادس العلمي')
- fill_register_field('الاسم الثلاثي الكامل','Test%sStudent%sDemo')
- fill_register_field('البريد الإلكتروني','newstudent@example.test')
- fill_register_field('كلمة المرور (8 أحرف على الأقل)','fixture-pass')
- fill_register_field('تأكيد كلمة المرور','fixture-pass')
+ fill_register_field('مثال: يونس محمد عباس','Test%sStudent%sDemo')
+ button('التالي');ui.wait_for('طريقة التسجيل')
+ screenshot(args.output,'student-register-step2')
+ fill_register_field('example@email.com','newstudent@example.test')
+ button('التالي');ui.wait_for('حماية الحساب')
+ screenshot(args.output,'student-register-step3')
+ fill_register_field('8 أحرف على الأقل','fixture-pass')
+ fill_register_field('أعد كتابة كلمة المرور','fixture-pass')
+ ui.wait_for('كلمتا المرور متطابقتان')
  button('إنشاء الحساب')
  ui.wait_for('رمز التحقق');screenshot(args.output,'student-verification')
  assert STATE['registered'],'Registration POST must be accepted by synthetic server'

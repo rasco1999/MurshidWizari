@@ -821,7 +821,7 @@ class MainActivity : Activity() {
         return b
     }
 
-    /** Native stepper with the same ranges and increments as the SwiftUI controls. */
+    /** Native equivalent of the iPhone's segmented registration pickers. */
     private fun segmentedChoices(labels: List<String>, changed: (Int) -> Unit): LinearLayout {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1240,11 +1240,11 @@ class MainActivity : Activity() {
     }
 
     /** Shared SwiftUI AuthHeader: graduation mark, product name and subtitle. */
-    private fun authHeader(subtitle: String) {
+    private fun authHeader(subtitle: String, topPadding: Int = 16) {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(dp(12), dp(16), dp(12), dp(14))
+            setPadding(dp(12), dp(topPadding), dp(12), dp(14))
         }
         val mark = FrameLayout(this).apply {
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(blue, navy))
@@ -1259,6 +1259,34 @@ class MainActivity : Activity() {
         header.addView(uiText(subtitle, 15f, tint = mutedText).apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         root.addView(header, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+    }
+
+    /** An RTL label with its SF-Symbol counterpart on the trailing/right edge. */
+    private fun authFieldLabel(label: String, symbol: String): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        layoutDirection = View.LAYOUT_DIRECTION_RTL
+        gravity = Gravity.CENTER_VERTICAL
+        addView(IosGlyphView(this@MainActivity, symbol, textColor),
+            LinearLayout.LayoutParams(dp(19), dp(19)).apply { marginEnd = dp(7) })
+        addView(uiText(label, 15f, true))
+    }
+
+    private fun authV3Field(hint: String, initial: String = "", inputKind: Int = InputType.TYPE_CLASS_TEXT,
+                            forceLTR: Boolean = false, secure: Boolean = false): EditText = EditText(this).apply {
+        this.hint = hint
+        textSize = 16f
+        setTextColor(textColor)
+        setHintTextColor(mutedText)
+        setSingleLine(true)
+        minHeight = dp(54)
+        setPadding(dp(14), dp(9), dp(14), dp(9))
+        inputType = if (secure) InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD else inputKind
+        if (secure) transformationMethod = PasswordTransformationMethod.getInstance()
+        layoutDirection = if (forceLTR) View.LAYOUT_DIRECTION_LTR else View.LAYOUT_DIRECTION_RTL
+        textDirection = if (forceLTR) View.TEXT_DIRECTION_LTR else View.TEXT_DIRECTION_RTL
+        gravity = (if (forceLTR) Gravity.LEFT else Gravity.RIGHT) or Gravity.CENTER_VERTICAL
+        background = shape(if (night) Color.rgb(48, 48, 51) else Color.rgb(235, 235, 239), dp(15).toFloat())
+        setText(initial)
     }
 
     private fun registrationPasswordReveal(field: EditText, description: String): FrameLayout {
@@ -1289,33 +1317,8 @@ class MainActivity : Activity() {
 
     private fun loginScreen() {
         activeScreen = "login"
-        window.statusBarColor = if (night) Color.BLACK else navy
-        window.navigationBarColor = appColor
-        setupRoot(horizontalPadding = 18, topPadding = 8)
-        backHeader("تسجيل الدخول")
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(dp(12), dp(16), dp(12), dp(14))
-        }
-        val mark = FrameLayout(this).apply {
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(blue, navy))
-                .apply { cornerRadius = dp(24).toFloat() }
-            elevation = dp(6).toFloat()
-            contentDescription = "المرشد الوزاري"
-        }
-        mark.addView(IosGlyphView(this, "graduation", Color.WHITE),
-            FrameLayout.LayoutParams(dp(38), dp(38), Gravity.CENTER))
-        header.addView(mark, LinearLayout.LayoutParams(dp(82), dp(82)).apply { bottomMargin = dp(14) })
-        header.addView(uiText("المرشد الوزاري", 30f, true).apply {
-            gravity = Gravity.CENTER
-        })
-        header.addView(uiText("سجّل الدخول وواصل دراستك من حيث توقفت", 15f,
-            tint = mutedText).apply { gravity = Gravity.CENTER },
-            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
-        root.addView(header, LinearLayout.LayoutParams(-1, -2).apply {
-            bottomMargin = dp(12)
-        })
+        base("تسجيل الدخول", true)
+        authHeader("سجّل الدخول وواصل دراستك من حيث توقفت", topPadding = 28)
         val form = uiCard()
         form.addView(uiText("تسجيل الدخول", 22f, true),
             LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(17) })
@@ -1326,18 +1329,18 @@ class MainActivity : Activity() {
             setTextColor(textColor)
             setHintTextColor(mutedText)
             setPadding(dp(14), dp(10), dp(14), dp(10))
-            minHeight = dp(48)
+            minHeight = dp(52)
             background = GradientDrawable().apply {
-                setColor(if (night) Color.rgb(38, 38, 40) else Color.rgb(249, 249, 251))
-                cornerRadius = dp(13).toFloat()
-                setStroke(dp(1), if (night) Color.rgb(69, 69, 72) else Color.rgb(224, 224, 230))
+                setColor(surface)
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(1), if (night) Color.rgb(65, 65, 69) else Color.rgb(222, 222, 228))
             }
             if (passwordField) {
                 inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
                 transformationMethod = PasswordTransformationMethod.getInstance()
             } else inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
         }
-        form.addView(uiText("البريد الإلكتروني أو رقم الهاتف", 15f, true),
+        form.addView(authFieldLabel("البريد الإلكتروني أو رقم الهاتف", "person"),
             LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
         val identifier = field("example@email.com أو 07XXXXXXXXX").apply {
             // The SwiftUI source explicitly forces this mixed Arabic/Latin field LTR.
@@ -1346,7 +1349,7 @@ class MainActivity : Activity() {
             gravity = Gravity.LEFT or Gravity.CENTER_VERTICAL
         }
         form.addView(identifier, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(17) })
-        form.addView(uiText("كلمة المرور", 15f, true),
+        form.addView(authFieldLabel("كلمة المرور", "lock"),
             LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
         val passwordWrap = FrameLayout(this)
         val password = field("أدخل كلمة المرور", passwordField = true).apply {
@@ -1387,12 +1390,24 @@ class MainActivity : Activity() {
         form.addView(remember, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(15) })
         val submit = makeButton("دخول") {}
         form.addView(submit, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
-        val forgot = makeButton("نسيت كلمة المرور؟", secondary = true) { recoverScreen() }
+        val forgot = uiText("نسيت كلمة المرور؟", 15f, true, blue).apply {
+            gravity = Gravity.CENTER
+            minHeight = dp(44)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { recoverScreen() }
+        }
         form.addView(forgot)
         addUiCard(form, bottom = 17)
-        val register = makeButton("إنشاء حساب طالب جديد", secondary = true) {
-            registerReturnScreen = "login"
-            registerScreen()
+        val register = uiText("إنشاء حساب طالب جديد", 17f, true, blue).apply {
+            gravity = Gravity.CENTER
+            minHeight = dp(44)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                registerReturnScreen = "login"
+                registerScreen()
+            }
         }
         root.addView(register, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(32) })
         fun updateSubmit() { submit.isEnabled = identifier.text.toString().trim().isNotEmpty() && password.text.isNotEmpty() }
@@ -1807,124 +1822,392 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun registerScreen() {
-        activeScreen = "register"
-        base("إنشاء حساب جديد", true)
-        authHeader("حساب واحد يحفظ تقدمك وإجاباتك على جميع أجهزتك")
-        val intro = root.getChildAt(root.childCount - 1)
-        val name = input("الاسم الثلاثي الكامل")
-        val identifier = input("البريد الإلكتروني")
-        caption("طريقة التسجيل")
-        val contactLabel = root.getChildAt(root.childCount - 1)
-        var contactIndex = 0
-        val contact = segmentedChoices(listOf("البريد", "الهاتف")) { position ->
-            if (contactIndex != position) {
-                contactIndex = position
-                identifier.text.clear()
-                identifier.hint = if (position == 1) "07XXXXXXXXX" else "البريد الإلكتروني"
-                identifier.inputType = if (position == 1) InputType.TYPE_CLASS_PHONE else
-                    InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
-            }
-        }
-        root.addView(contact)
-        identifier.layoutDirection = View.LAYOUT_DIRECTION_LTR
-        identifier.textDirection = View.TEXT_DIRECTION_LTR
-        identifier.gravity = Gravity.LEFT or Gravity.CENTER_VERTICAL
-        identifier.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
-        val pass = input("كلمة المرور (8 أحرف على الأقل)", true)
-        val confirm = input("تأكيد كلمة المرور", true)
-        val passWrap = registrationPasswordReveal(pass, "كلمة المرور")
-        val confirmWrap = registrationPasswordReveal(confirm, "تأكيد كلمة المرور")
-        root.addView(passWrap)
-        root.addView(confirmWrap)
-        caption("الصف الدراسي")
-        val gradeLabel = root.getChildAt(root.childCount - 1)
-        val grades = ArrayList<Int>()
+    /** Exactly the three-step RegisterV3View shipped by the iPhone Build 498. */
+    private class RegistrationDraft {
+        var step = 1
+        var fullName = ""
+        val gradeIds = ArrayList<Int>()
         val gradeNames = ArrayList<String>()
-        val gradeSpinner = Spinner(this)
-        gradeSpinner.background = shape(surface, dp(13).toFloat())
-        gradeSpinner.minimumHeight = dp(48)
-        gradeSpinner.setPadding(dp(12), dp(7), dp(12), dp(7))
-        root.addView(gradeSpinner)
-        caption("الجنس")
-        val genderLabel = root.getChildAt(root.childCount - 1)
+        var gradeId = 0
+        var gradesLoading = true
         var genderIndex = 0
-        val gender = segmentedChoices(listOf("ذكر", "أنثى")) { genderIndex = it }
-        root.addView(gender)
-        fetch("api/grades.php") { result ->
-            if (activeScreen != "register") return@fetch
-            val array = result.optJSONArray("grades") ?: JSONArray()
-            for (i in 0 until array.length()) {
-                val item = array.optJSONObject(i) ?: continue
-                grades.add(item.optInt("id"))
-                gradeNames.add(item.optString("name"))
-            }
-            gradeSpinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, gradeNames)
+        var contactIndex = 0
+        var identifier = ""
+        var password = ""
+        var confirmation = ""
+        var loading = false
+        var fieldError = ""
+        var generalError = ""
+    }
+
+    private var registrationDraft: RegistrationDraft? = null
+
+    private fun registrationSegments(labels: List<String>, selected: Int, onSelect: (Int) -> Unit): LinearLayout {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(3), dp(3), dp(3), dp(3))
+            background = shape(if (night) Color.rgb(48, 48, 51) else Color.rgb(231, 231, 236),
+                dp(11).toFloat())
         }
-        gap()
-        val create = button("إنشاء الحساب") {}
-        create.setOnClickListener {
-            val fullName = AccountRules.normalizeName(name.text.toString())
-            if (!AccountRules.validFullName(fullName)) { message("أدخل الاسم الثلاثي الكامل بشكل صحيح."); return@setOnClickListener }
-            if (gradeSpinner.selectedItemPosition !in grades.indices) { message("اختر صفك الدراسي."); return@setOnClickListener }
-            val contactType = if (contactIndex == 1) "phone" else "email"
-            val value = if (contactType == "phone") RecoveryRules.normalizedDigits(identifier.text.toString().trim())
-                else identifier.text.toString().trim()
-            if (contactType == "phone" && !AccountRules.validIraqiPhone(value)) {
-                message("أدخل رقم هاتف عراقي صحيحاً من 11 رقماً يبدأ بـ 07.")
+        labels.forEachIndexed { index, label ->
+            row.addView(uiText(label, 14f, tint = if (night) Color.WHITE else textColor).apply {
+                gravity = Gravity.CENTER
+                minHeight = dp(32)
+                background = if (index == selected)
+                    shape(if (night) Color.rgb(105, 105, 110) else Color.WHITE, dp(9).toFloat())
+                else shape(Color.TRANSPARENT, dp(9).toFloat())
+                isSelected = index == selected
+                isClickable = true
+                isFocusable = true
+                contentDescription = label
+                setOnClickListener { onSelect(index) }
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        return row
+    }
+
+    private fun registrationNotice(value: String, warning: Boolean): TextView =
+        uiText(value, 13f, tint = if (warning) Color.rgb(220, 139, 43) else blue).apply {
+            setPadding(dp(12), dp(11), dp(12), dp(11))
+            background = shape(
+                if (warning) (if (night) Color.rgb(59, 44, 25) else Color.rgb(255, 246, 224))
+                else (if (night) Color.rgb(25, 42, 69) else Color.rgb(234, 241, 253)),
+                dp(12).toFloat())
+        }
+
+    private fun registrationWatch(field: EditText, onChange: (String) -> Unit) {
+        field.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                onChange(s?.toString().orEmpty())
+            }
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
+    }
+
+    private fun validateRegistrationStep(draft: RegistrationDraft): Boolean {
+        draft.fieldError = ""
+        draft.generalError = ""
+        when (draft.step) {
+            1 -> {
+                draft.fullName = AccountRules.normalizeName(draft.fullName)
+                if (draft.fullName.split(' ').count { it.isNotBlank() } < 3) {
+                    draft.fieldError = "اكتب الاسم الثلاثي على الأقل، مثل: يونس محمد عباس."
+                } else if (draft.gradeId <= 0) draft.fieldError = "اختر الصف الدراسي."
+            }
+            2 -> {
+                draft.identifier = if (draft.contactIndex == 1)
+                    RecoveryRules.normalizedDigits(draft.identifier.trim()) else draft.identifier.trim()
+                if (draft.contactIndex == 0 &&
+                    !android.util.Patterns.EMAIL_ADDRESS.matcher(draft.identifier).matches())
+                    draft.fieldError = "أدخل بريدًا إلكترونيًا صحيحًا."
+                else if (draft.contactIndex == 1 && !AccountRules.validIraqiPhone(draft.identifier))
+                    draft.fieldError = "أدخل رقمًا عراقيًا صحيحًا يبدأ بـ 07 ويتكون من 11 رقمًا."
+            }
+            else -> {
+                if (draft.password.length < 8)
+                    draft.fieldError = "كلمة المرور يجب أن تكون 8 أحرف على الأقل."
+                else if (draft.confirmation.isBlank() || draft.password != draft.confirmation)
+                    draft.fieldError = "تأكد من تطابق كلمتي المرور."
+            }
+        }
+        return draft.fieldError.isEmpty()
+    }
+
+    private fun registerScreen() {
+        val draft = RegistrationDraft()
+        registrationDraft = draft
+        renderRegistration(draft)
+        fetch("api/grades.php") { result ->
+            if (activeScreen != "register" || registrationDraft !== draft) return@fetch
+            val array = result.optJSONArray("grades") ?: JSONArray()
+            for (index in 0 until array.length()) {
+                val grade = array.optJSONObject(index) ?: continue
+                val id = grade.optInt("id")
+                if (id <= 0) continue
+                draft.gradeIds.add(id)
+                draft.gradeNames.add(grade.optString("name"))
+            }
+            draft.gradeId = draft.gradeIds.firstOrNull() ?: 0
+            draft.gradesLoading = false
+            if (draft.gradeId == 0) draft.generalError =
+                result.optString("message", "تعذر تحميل الصفوف الدراسية. ارجع وحاول من جديد.")
+            renderRegistration(draft)
+        }
+    }
+
+    private fun renderRegistration(draft: RegistrationDraft) {
+        if (registrationDraft !== draft) return
+        activeScreen = "register"
+        base("إنشاء حساب", true)
+        authHeader("أنشئ حسابك بخطوات قصيرة وواضحة", topPadding = 12)
+
+        val progress = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(8), dp(6), dp(8), dp(8))
+            contentDescription = "الخطوة ${draft.step} من 3"
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        }
+        for (index in 1..3) {
+            val completed = index < draft.step
+            val active = index <= draft.step
+            progress.addView(uiText(if (completed) "✓" else "$index", 13f, true,
+                if (active) Color.WHITE else mutedText).apply {
+                gravity = Gravity.CENTER
+                background = shape(if (active) blue
+                    else if (night) Color.rgb(30, 30, 32) else Color.rgb(225, 225, 230),
+                    dp(30).toFloat())
+            }, LinearLayout.LayoutParams(dp(30), dp(30)))
+            if (index < 3) {
+                progress.addView(View(this).apply {
+                    background = shape(if (index < draft.step) blue
+                        else if (night) Color.rgb(32, 32, 34) else Color.rgb(225, 225, 230),
+                        dp(2).toFloat())
+                }, LinearLayout.LayoutParams(0, dp(4), 1f).apply {
+                    marginStart = dp(7); marginEnd = dp(7)
+                })
+            }
+        }
+        root.addView(progress, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(17) })
+
+        val form = uiCard()
+        fun add(view: View, below: Int = 15) {
+            form.addView(view, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(below) })
+        }
+        val heading = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val titles = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        titles.addView(uiText(when (draft.step) {
+            1 -> "بيانات الطالب"; 2 -> "طريقة التسجيل"; else -> "حماية الحساب"
+        }, 22f, true))
+        titles.addView(uiText(when (draft.step) {
+            1 -> "الاسم والصف والجنس"; 2 -> "البريد أو رقم الهاتف"; else -> "اختر كلمة مرور قوية"
+        }, 13f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+        heading.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
+        heading.addView(uiText("${draft.step} من 3", 13f, true, blue).apply {
+            setPadding(dp(10), dp(6), dp(10), dp(6))
+            background = shape(if (night) Color.rgb(25, 38, 59) else Color.rgb(235, 242, 253),
+                dp(18).toFloat())
+        })
+        add(heading, 18)
+
+        if (draft.generalError.isNotBlank()) add(registrationNotice(draft.generalError, true))
+
+        if (draft.step == 1) {
+            add(authFieldLabel("الاسم الثلاثي", "id-card"), 8)
+            val name = authV3Field("مثال: يونس محمد عباس", draft.fullName)
+            registrationWatch(name) { draft.fullName = it }
+            add(name, 10)
+            add(uiText("اكتب اسمك الثلاثي كما هو في بياناتك الرسمية. نتعامل تلقائيًا مع المسافات والرموز المخفية في لوحة المفاتيح.",
+                13f, tint = mutedText), 16)
+
+            add(authFieldLabel("الصف الدراسي", "books"), 8)
+            val gradeBox = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(14), dp(4), dp(14), dp(4))
+                minHeight = dp(54)
+                background = shape(if (night) Color.rgb(48, 48, 51) else Color.rgb(235, 235, 239),
+                    dp(15).toFloat())
+                isClickable = true
+                isFocusable = true
+            }
+            val selectedGrade = draft.gradeNames.getOrNull(draft.gradeIds.indexOf(draft.gradeId))
+                ?: if (draft.gradesLoading) "جاري تحميل الصفوف…" else "اختر الصف الدراسي"
+            val gradeLabel = uiText(selectedGrade, 16f)
+            gradeBox.addView(gradeLabel, LinearLayout.LayoutParams(0, -2, 1f))
+            gradeBox.addView(uiText("⌃\n⌄", 12f, tint = mutedText).apply {
+                gravity = Gravity.CENTER
+            }, LinearLayout.LayoutParams(dp(23), -2))
+            gradeBox.setOnClickListener {
+                if (draft.gradeNames.isEmpty()) return@setOnClickListener
+                val menu = android.widget.PopupMenu(this, gradeBox)
+                draft.gradeNames.forEachIndexed { index, text ->
+                    menu.menu.add(text).setOnMenuItemClickListener {
+                        draft.gradeId = draft.gradeIds[index]
+                        draft.fieldError = ""
+                        gradeLabel.text = text
+                        true
+                    }
+                }
+                menu.show()
+            }
+            add(gradeBox, 16)
+            add(authFieldLabel("الجنس", "users"), 8)
+            add(registrationSegments(listOf("ذكر", "أنثى"), draft.genderIndex) {
+                draft.genderIndex = it
+                draft.fieldError = ""
+                renderRegistration(draft)
+            }, 16)
+        } else if (draft.step == 2) {
+            add(authFieldLabel("طريقة التسجيل", "at"), 8)
+            add(registrationSegments(listOf("البريد الإلكتروني", "رقم الهاتف"), draft.contactIndex) {
+                if (draft.contactIndex != it) {
+                    draft.contactIndex = it
+                    draft.identifier = ""
+                    draft.fieldError = ""
+                    renderRegistration(draft)
+                }
+            }, 16)
+            add(authFieldLabel(if (draft.contactIndex == 0) "البريد الإلكتروني" else "رقم الهاتف العراقي",
+                if (draft.contactIndex == 0) "envelope" else "phone"), 8)
+            val identifier = authV3Field(if (draft.contactIndex == 0) "example@email.com" else "07XXXXXXXXX",
+                draft.identifier, if (draft.contactIndex == 0)
+                    InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+                else InputType.TYPE_CLASS_PHONE, forceLTR = true)
+            registrationWatch(identifier) { draft.identifier = it }
+            add(identifier, 16)
+            add(registrationNotice(if (draft.contactIndex == 0)
+                "سيصل رمز/رابط التأكيد إلى هذا البريد، لذلك استخدم بريدًا يمكنك فتحه."
+                else "استخدم رقمك العراقي الفعلي حتى تتمكن من استعادة الحساب لاحقًا.", false), 16)
+        } else {
+            add(authFieldLabel("كلمة المرور", "lock"), 8)
+            val password = authV3Field("8 أحرف على الأقل", draft.password,
+                forceLTR = true, secure = true)
+            add(registrationPasswordReveal(password, "كلمة المرور"), 13)
+
+            val strengthTitle = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            strengthTitle.addView(uiText("قوة كلمة المرور", 13f, tint = mutedText),
+                LinearLayout.LayoutParams(0, -2, 1f))
+            val strengthText = uiText("ضعيفة", 13f, true, Color.rgb(232, 145, 48))
+            strengthTitle.addView(strengthText)
+            add(strengthTitle, 6)
+            val strengthBar = LinearLayout(this).apply {
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                orientation = LinearLayout.HORIZONTAL
+            }
+            val strengths = (0 until 4).map { index ->
+                View(this).also { strengthBar.addView(it, LinearLayout.LayoutParams(0, dp(5), 1f).apply {
+                    if (index > 0) marginStart = dp(5)
+                }) }
+            }
+            fun updateStrength() {
+                val value = draft.password
+                val raw = listOf(value.length >= 8, value.any { it.isDigit() },
+                    value.any { it.isLetter() }, value.length >= 12 || value.any { !it.isLetterOrDigit() })
+                    .count { it }
+                val level = raw.coerceAtLeast(1)
+                val color = when (level) {
+                    1 -> Color.rgb(232, 145, 48)
+                    2 -> Color.rgb(211, 172, 49)
+                    3 -> blue
+                    else -> Color.rgb(41, 167, 92)
+                }
+                strengthText.text = when (level) { 1 -> "ضعيفة"; 2 -> "مقبولة"; 3 -> "جيدة"; else -> "قوية" }
+                strengthText.setTextColor(color)
+                strengths.forEachIndexed { index, view ->
+                    view.background = shape(if (index < level) color
+                        else if (night) Color.rgb(47, 47, 50) else Color.rgb(226, 226, 231), dp(3).toFloat())
+                }
+            }
+            registrationWatch(password) { draft.password = it; updateStrength() }
+            updateStrength()
+            add(strengthBar, 17)
+
+            add(authFieldLabel("تأكيد كلمة المرور", "lock"), 8)
+            val confirm = authV3Field("أعد كتابة كلمة المرور", draft.confirmation,
+                forceLTR = true, secure = true)
+            add(registrationPasswordReveal(confirm, "تأكيد كلمة المرور"), 10)
+            val match = uiText("", 13f, true)
+            fun updateMatch() {
+                val same = draft.password == draft.confirmation
+                match.text = if (same) "✓ كلمتا المرور متطابقتان" else "× كلمتا المرور غير متطابقتين"
+                match.contentDescription = if (same) "كلمتا المرور متطابقتان" else "كلمتا المرور غير متطابقتين"
+                match.setTextColor(if (same) Color.rgb(41, 167, 92) else Color.rgb(220, 139, 43))
+                match.visibility = if (draft.confirmation.isEmpty()) View.GONE else View.VISIBLE
+            }
+            registrationWatch(password) { draft.password = it; updateMatch() }
+            registrationWatch(confirm) { draft.confirmation = it; updateMatch() }
+            updateMatch()
+            add(match, 15)
+            add(registrationNotice("لا تشارك كلمة المرور مع أي شخص. يمكن استعادة الحساب لاحقًا من داخل التطبيق.",
+                false), 15)
+        }
+
+        if (draft.fieldError.isNotBlank()) add(registrationNotice(draft.fieldError, true), 14)
+        val next = makeButton(if (draft.step < 3) "التالي  ←" else if (draft.loading)
+            "جاري إنشاء الحساب…" else "إنشاء الحساب") {}
+        next.contentDescription = if (draft.step < 3) "التالي" else "إنشاء الحساب"
+        next.isEnabled = !draft.loading && (!draft.gradesLoading || draft.step > 1)
+        next.setOnClickListener {
+            if (draft.loading) return@setOnClickListener
+            if (!validateRegistrationStep(draft)) {
+                renderRegistration(draft)
                 return@setOnClickListener
             }
-            if (contactType == "email" && !android.util.Patterns.EMAIL_ADDRESS.matcher(value).matches()) {
-                message("أدخل بريداً إلكترونياً صحيحاً.")
+            if (draft.step < 3) {
+                draft.step++
+                renderRegistration(draft)
                 return@setOnClickListener
             }
-            if (pass.text.toString().length < 8) { message("كلمة المرور يجب أن تكون 8 أحرف على الأقل."); return@setOnClickListener }
-            if (pass.text.toString() != confirm.text.toString()) { message("كلمتا المرور غير متطابقتين."); return@setOnClickListener }
-            create.isEnabled = false
-            create.text = "جارٍ إنشاء الحساب…"
+            draft.loading = true
+            val fullName = AccountRules.normalizeName(draft.fullName)
             val data = JSONObject()
                 .put("full_name", fullName).put("name", fullName).put("fullName", fullName)
-                .put("identifier", value)
-                .put("contact_type", contactType)
-                .put("grade_id", grades[gradeSpinner.selectedItemPosition])
-                .put("gender", if (genderIndex == 0) "male" else "female")
-                .put("password", pass.text.toString())
-                .put("password_confirmation", confirm.text.toString())
+                .put("identifier", draft.identifier)
+                .put("contact_type", if (draft.contactIndex == 0) "email" else "phone")
+                .put("grade_id", draft.gradeId)
+                .put("gender", if (draft.genderIndex == 0) "male" else "female")
+                .put("password", draft.password)
+                .put("password_confirmation", draft.confirmation)
                 .put("company_website", "")
+            renderRegistration(draft)
             fetch("api/register.php", data) { result ->
-                if (activeScreen != "register") return@fetch
+                if (activeScreen != "register" || registrationDraft !== draft) return@fetch
+                draft.loading = false
                 if (result.optBoolean("ok")) {
-                    message(result.optString("message", "تم إنشاء الحساب."))
                     pendingVerificationRemember = false
                     verifyPrompt(result)
                 } else if (needsMutationReconciliation(result)) {
-                    create.text = "حالة التسجيل غير مؤكدة"
-                    message("قد يكون الحساب أُنشئ. حاول تسجيل الدخول أو استعادة كلمة المرور قبل إعادة التسجيل.")
-                } else { create.isEnabled = true; create.text = "إنشاء الحساب" }
+                    draft.generalError = "قد يكون الحساب أُنشئ. حاول تسجيل الدخول أو استعادة كلمة المرور قبل إعادة التسجيل."
+                    renderRegistration(draft)
+                } else {
+                    draft.generalError = result.optString("message", "تعذر إنشاء الحساب. راجع البيانات وحاول مجددًا.")
+                    renderRegistration(draft)
+                }
             }
         }
-        val backToLogin = button("لديك حساب بالفعل؟", secondary = true) { loginScreen() }
-        // iPhone Build 498 groups registration fields inside one MurshidCard.
-        // Keep native Android controls but match the card, spacing and hierarchy.
-        val fields = (0 until root.childCount).map { root.getChildAt(it) }
-            .filter { it !== intro && it !== backToLogin }
-        val preferred = listOf<View>(name, gradeLabel, gradeSpinner, genderLabel, gender,
-            contactLabel, contact, identifier, passWrap, confirmWrap)
-        val orderedFields = preferred + fields.filterNot { it in preferred }
-        val form = uiCard()
-        form.addView(uiText("بيانات الطالب", 22f, true),
-            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(15) })
-        orderedFields.forEach { field ->
-            root.removeView(field)
-            form.addView(field, LinearLayout.LayoutParams(-1, -2).apply {
-                bottomMargin = dp(10)
-            })
+        add(next, 10)
+        if (draft.step > 1 && !draft.loading) {
+            val previous = uiText("رجوع للخطوة السابقة  →", 14f, true, mutedText).apply {
+                gravity = Gravity.CENTER
+                minHeight = dp(42)
+                contentDescription = "رجوع للخطوة السابقة"
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    draft.fieldError = ""
+                    draft.generalError = ""
+                    draft.step--
+                    renderRegistration(draft)
+                }
+            }
+            add(previous, 0)
         }
-        root.removeView(backToLogin)
+        form.addView(uiText("نسخة iPhone 4.8.18 • Build 498", 11f,
+            tint = if (night) Color.rgb(78, 78, 82) else Color.rgb(154, 154, 160)).apply {
+            gravity = Gravity.CENTER
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(13) })
         addUiCard(form, bottom = 18)
-        root.addView(backToLogin, LinearLayout.LayoutParams(-1, -2).apply {
-            bottomMargin = dp(30)
-        })
+        root.addView(uiText("لدي حساب بالفعل", 17f, true, blue).apply {
+            gravity = Gravity.CENTER
+            minHeight = dp(44)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { loginScreen() }
+        }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(32) })
     }
 
     private fun applyBootstrap(response: JSONObject) {
