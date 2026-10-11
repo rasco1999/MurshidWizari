@@ -415,6 +415,14 @@ class IosGlyphView(context: Context, private val symbol: String, private val tin
                 canvas.drawRoundRect(5f, 11f, 19f, 22f, 2f, 2f, ink)
                 canvas.drawArc(8f, 2f, 16f, 16f, 180f, 180f, false, ink)
             }
+            "key" -> {
+                canvas.drawCircle(8f, 8f, 5f, ink)
+                path(11.5f, 11.5f, 22f, 22f, 22f, 17f)
+                path(17.5f, 17.5f, 15f, 20f)
+                ink.style = Paint.Style.FILL
+                canvas.drawCircle(8f, 8f, 1.5f, ink)
+                ink.style = Paint.Style.STROKE
+            }
             else -> {
                 canvas.drawCircle(12f, 12f, 9f, ink)
                 path(12f, 7f, 12f, 13f, 15f, 15f)

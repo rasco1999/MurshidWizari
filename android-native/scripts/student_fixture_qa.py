@@ -85,7 +85,7 @@ class Handler(BaseHTTPRequestHandler):
   self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Set-Cookie','fixture_session=synthetic; Path=/');self.end_headers();self.wfile.write(raw)
 
 def input_text(node,value):
- ui.tap_node(node);ui.adb('shell','input','text',value)
+ ui.tap_node(node);time.sleep(.35);ui.adb('shell','input','text',value)
 def hide_keyboard_if_visible():
  # KEYCODE_BACK can navigate to the *guest* screen on API 26 when a virtual
  # keyboard was never shown. Only send it when Android reports a visible IME.
@@ -112,11 +112,28 @@ def visible_login_fields():
   time.sleep(1)
  raise AssertionError(f'Expected native login fields after waiting, found {last!r}')
 def login_field(index,value):
- # Hide the keyboard between inputs: opening it scrolls/resizes the native
- # form, so coordinates cached before typing the first field become stale.
- fields=visible_login_fields()
- input_text(fields[index],value)
- hide_keyboard_if_visible()
+ # A cold API-26 emulator can drop the first adb text event while its IME is
+ # opening. Confirm that the native EditText actually changed before moving
+ # on; a successful adb shell exit alone does not prove text was delivered.
+ for attempt in range(4):
+  fields=visible_login_fields()
+  seen=fields[index].attrib.get('text','')
+  hint=('example@email.com أو 07XXXXXXXXX' if index==0 else 'أدخل كلمة المرور')
+  if seen==value or (index==1 and seen not in ('',hint)):
+   hide_keyboard_if_visible()
+   return
+  ui.tap_node(fields[index]);time.sleep(.5)
+  if seen not in ('',hint):
+   ui.adb('shell','input','keyevent','KEYCODE_MOVE_END')
+   for _ in range(len(seen)+2):ui.adb('shell','input','keyevent','KEYCODE_DEL')
+  ui.adb('shell','input','text',value);time.sleep(.45)
+  fields=visible_login_fields()
+  seen=fields[index].attrib.get('text','')
+  if seen==value or (index==1 and seen not in ('',hint)):
+   hide_keyboard_if_visible()
+   return
+  print(f'RETRY input for login field {index} on emulator (attempt {attempt+1})',flush=True)
+ raise AssertionError(f'Native login field {index} failed to retain typed value')
 def button(text): ui.tap_visible(text,393,852)
 def back(): ui.adb('shell','input','keyevent','KEYCODE_BACK');time.sleep(.6)
 def fill_register_field(hint,value):

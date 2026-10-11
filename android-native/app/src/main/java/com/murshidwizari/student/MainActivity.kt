@@ -1390,13 +1390,18 @@ class MainActivity : Activity() {
         form.addView(remember, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(15) })
         val submit = makeButton("دخول") {}
         form.addView(submit, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
-        val forgot = uiText("نسيت كلمة المرور؟", 15f, true, blue).apply {
+        val forgot = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
             gravity = Gravity.CENTER
-            minHeight = dp(44)
+            minimumHeight = dp(44)
             isClickable = true
             isFocusable = true
             setOnClickListener { recoverScreen() }
         }
+        forgot.addView(IosGlyphView(this, "key", blue),
+            LinearLayout.LayoutParams(dp(17), dp(17)).apply { marginEnd = dp(7) })
+        forgot.addView(uiText("نسيت كلمة المرور؟", 15f, true, blue))
         form.addView(forgot)
         addUiCard(form, bottom = 17)
         val register = uiText("إنشاء حساب طالب جديد", 17f, true, blue).apply {
@@ -1993,11 +1998,6 @@ class MainActivity : Activity() {
         heading.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
         heading.addView(uiText("${draft.step} من 3", 13f, true, blue).apply {
             setPadding(dp(10), dp(6), dp(10), dp(6))
-            background = shape(if (night) Color.rgb(25, 38, 59) else Color.rgb(235, 242, 253),
-                dp(18).toFloat())
-        })
-        add(heading, 18)
-
         if (draft.generalError.isNotBlank()) add(registrationNotice(draft.generalError, true))
 
         if (draft.step == 1) {
