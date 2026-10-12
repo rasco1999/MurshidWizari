@@ -51,6 +51,7 @@ struct V31HomeView: View {
                 welcomeHeader
                 if !device.isOnline { offlineBanner }
                 subscriptionStrip
+                V50FreeMonthOfferCard()
                 V31WebsiteHeroSlider()
                 releaseUpdateStrip
                 performanceStrip
