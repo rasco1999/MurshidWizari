@@ -9,6 +9,39 @@ struct APIError: LocalizedError {
 
 enum PasswordResetChannel: Sendable { case email, phone }
 
+// Apply a final client-side guard to the subject list. The server remains the
+// source of truth for grade eligibility and the subject/question relationships.
+enum MurshidSubjectCatalog {
+    private static func normalized(_ name: String) -> String {
+        name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "ar"))
+            .replacingOccurrences(of: "أ", with: "ا")
+            .replacingOccurrences(of: "إ", with: "ا")
+            .replacingOccurrences(of: "آ", with: "ا")
+            .replacingOccurrences(of: "ة", with: "ه")
+            .replacingOccurrences(of: "ى", with: "ي")
+    }
+
+    static func isFrenchSubject(_ name: String) -> Bool {
+        let normalizedName = normalized(name)
+        return normalizedName.contains("فرنس") || normalizedName.contains("french") || normalizedName.contains("franc")
+    }
+
+    static func visibleSubjects(_ subjects: [Subject]) -> [Subject] {
+        var visible = subjects.filter { !isFrenchSubject($0.name) }
+        guard let arabic = visible.firstIndex(where: {
+            let name = normalized($0.name)
+            return (name.contains("عربي") || name.contains("عربى")) && !name.contains("ادب")
+        }), let literature = visible.firstIndex(where: {
+            let name = normalized($0.name)
+            return name.contains("ادب") && name.contains("نصوص")
+        }) else { return visible }
+        let literatureSubject = visible.remove(at: literature)
+        let arabicIndex = literature < arabic ? arabic - 1 : arabic
+        visible.insert(literatureSubject, at: arabicIndex + 1)
+        return visible
+    }
+}
+
 struct PasswordResetStart: Sendable {
     let channel: PasswordResetChannel
     let phoneToken: String?
@@ -21,10 +54,14 @@ final class AppSession: ObservableObject {
     @Published var authenticated = false
     @Published var v3Authenticated = false
     @Published var bootstrapping = true
+    @Published var bootstrapNetworkFailed = false
     @Published var user: UserSummary?
+    @Published var avatarURL = ""
+    @Published var avatarRevision = ""
     @Published var subjects: [Subject] = []
     @Published var plans: [SubscriptionPlan] = []
     @Published var subscribed = false
+    @Published var subscriptionDaysRemaining: Int? = nil
     @Published var freeLimit = 15
     @Published var freeUsed = 0
     @Published var freeRemaining: Int?
@@ -45,12 +82,19 @@ final class AppSession: ObservableObject {
     }
 
     func reset(expired: Bool = false) {
+        // Review cards are tied to the last authenticated student and must not
+        // survive an explicit logout or a server-confirmed expired session.
+        V49StudyStore.shared.eraseOnLogout(userID: user?.id)
         authenticated = false
         v3Authenticated = false
+        bootstrapNetworkFailed = false
         user = nil
+        avatarURL = ""
+        avatarRevision = ""
         subjects = []
         plans = []
         subscribed = false
+        subscriptionDaysRemaining = nil
         freeUsed = 0
         freeRemaining = nil
         csrf = ""
@@ -64,14 +108,19 @@ final class AppSession: ObservableObject {
     func applyBootstrap(_ json: JSON) {
         let u = json["user"] as? JSON ?? [:]
         user = UserSummary(id: jInt(u["id"]), name: jString(u["name"]), grade: jString(u["grade"]), gradeID: jInt(u["grade_id"]))
-        subjects = jArray(json["subjects"]).map(Subject.init)
+        if let user { V49StudyStore.shared.bind(to: user) }
+        avatarURL = jString(u["avatar_url"])
+        avatarRevision = jString(u["avatar_revision"])
+        subjects = MurshidSubjectCatalog.visibleSubjects(jArray(json["subjects"]).map(Subject.init))
         plans = jArray(json["plans"]).map(SubscriptionPlan.init)
         subscribed = jBool(json["subscribed"])
+        subscriptionDaysRemaining = subscribed ? jInt(json["subscription_days_remaining"]) : nil
         freeLimit = jInt(json["free_limit"], default: 15)
         freeUsed = jInt(json["free_used"])
         freeRemaining = (json["free_remaining"] is NSNull || json["free_remaining"] == nil) ? nil : jInt(json["free_remaining"])
         csrf = jString(json["csrf"])
         stats = json["stats"] as? JSON ?? [:]
+        bootstrapNetworkFailed = false
         // Keep the legacy RootView on AuthFlowView; AuthFlowView owns the complete v3 shell.
         authenticated = false
         v3Authenticated = true
@@ -84,6 +133,11 @@ final class AppSession: ObservableObject {
         releaseInfo = json["release"] as? JSON ?? [:]
     }
 
+    func applyAvatar(_ json: JSON) {
+        avatarURL = jString(json["avatar_url"])
+        avatarRevision = jString(json["avatar_revision"])
+    }
+
     func featureEnabled(_ key: String, default defaultValue: Bool = true) -> Bool {
         guard let row = featureFlags[key] as? JSON else { return defaultValue }
         return jBool(row["enabled"], default: defaultValue)
@@ -94,15 +148,23 @@ final class AppSession: ObservableObject {
 final class APIClient {
     static let shared = APIClient()
     let baseURL = URL(string: "https://www.mur-iq.com")!
-    private let session: URLSession
+    let session: URLSession
 
     private init() {
         let config = URLSessionConfiguration.default
         config.httpCookieStorage = .shared
         config.httpShouldSetCookies = true
-        config.waitsForConnectivity = false
-        config.timeoutIntervalForRequest = 12
-        config.timeoutIntervalForResource = 25
+        // API requests work on Wi-Fi, 4G, 5G and Low Data Mode. Optional
+        // media downloads are throttled separately by the presentation layer.
+        config.allowsCellularAccess = true
+        config.allowsExpensiveNetworkAccess = true
+        config.allowsConstrainedNetworkAccess = true
+        // Allow an in-flight request to survive a Wi-Fi -> 4G/5G handover.
+        config.waitsForConnectivity = true
+        config.httpMaximumConnectionsPerHost = 4
+        // Bound stalled DNS/connectivity requests; two safe read attempts remain enabled.
+        config.timeoutIntervalForRequest = 18
+        config.timeoutIntervalForResource = 38
         config.requestCachePolicy = .useProtocolCachePolicy
         config.urlCache = URLCache(memoryCapacity: 24 * 1024 * 1024, diskCapacity: 96 * 1024 * 1024, diskPath: "MurshidHTTP")
         config.httpAdditionalHeaders = [
@@ -120,21 +182,18 @@ final class APIClient {
         if !query.isEmpty { components.queryItems = query }
         guard let url = components.url else { throw APIError(message: "عنوان الطلب غير صالح.", status: 0, paymentRequired: false) }
 
-        if method == "GET",
-           let cacheKey,
-           !DeviceServices.shared.isOnline,
-           let cached = ResponseCache.shared.load(key: cacheKey) {
-            return cached
-        }
-
         var req = URLRequest(url: url)
         req.httpMethod = method
+        // A metered/Low Data Mode connection must never disable essential API calls.
+        req.allowsCellularAccess = true
+        req.allowsExpensiveNetworkAccess = true
+        req.allowsConstrainedNetworkAccess = true
         req.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         if let body { req.httpBody = try JSONSerialization.data(withJSONObject: body, options: []) }
 
         do {
-            let (data, response) = try await session.data(for: req)
+            let (data, response) = try await dataWithTransientRetry(for: req, idempotent: method == "GET")
             guard let http = response as? HTTPURLResponse else { throw APIError(message: "استجابة الخادم غير صالحة.", status: 0, paymentRequired: false) }
             guard let object = try? JSONSerialization.jsonObject(with: data), let json = object as? JSON else {
                 let raw = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -142,7 +201,13 @@ final class APIClient {
                 let looksLikeHTML = contentType.contains("text/html") || raw.lowercased().contains("<html") || raw.hasPrefix("<")
                 let message: String
                 if looksLikeHTML {
-                    message = "تعذر إكمال الطلب الآن. تحقق من الاتصال وحاول مجددًا."
+                    if http.statusCode == 404 {
+                        message = "هذه الخدمة غير موجودة على خادم المنصة حالياً. يرجى التواصل مع الإدارة لتفعيلها."
+                    } else if http.statusCode >= 500 {
+                        message = "حدث خلل مؤقت في خادم المنصة. حاول لاحقاً أو تواصل مع الدعم."
+                    } else {
+                        message = "تعذر إكمال الطلب من الخادم الآن. حاول مجددًا."
+                    }
                 } else if raw.isEmpty {
                     message = "تعذر قراءة استجابة الخادم. حاول مجددًا."
                 } else {
@@ -150,7 +215,7 @@ final class APIClient {
                 }
                 throw APIError(message: message, status: http.statusCode, paymentRequired: false)
             }
-            if http.statusCode == 401 {
+            if http.statusCode == 401 && path != "api/login.php" {
                 AppSession.shared.reset(expired: true)
                 throw APIError(message: "انتهت الجلسة. سجّل الدخول مجددًا.", status: 401, paymentRequired: false)
             }
@@ -172,11 +237,40 @@ final class APIClient {
             let message: String
             if ns.domain == NSURLErrorDomain && ns.code == NSURLErrorTimedOut {
                 message = "الاتصال بطيء الآن. حاول مرة أخرى."
+            } else if ns.domain == NSURLErrorDomain && [NSURLErrorCannotFindHost, NSURLErrorCannotConnectToHost, NSURLErrorDNSLookupFailed].contains(ns.code) {
+                message = "تعذر الوصول إلى خادم المنصة عبر هذه الشبكة. تحقق من اتصال البيانات وحاول مجددًا."
             } else {
                 message = "تعذر الاتصال بالإنترنت. تحقق من الشبكة وحاول مجددًا."
             }
             throw APIError(message: message, status: 0, paymentRequired: false)
         }
+    }
+
+    /// Retry *only* safe reads after a transient connection failure. Never
+    /// replay login, exam submissions, payments or other POST requests.
+    private func dataWithTransientRetry(for request: URLRequest, idempotent: Bool) async throws -> (Data, URLResponse) {
+        let retryable: Set<Int> = [
+            URLError.Code.timedOut.rawValue,
+            URLError.Code.networkConnectionLost.rawValue,
+            URLError.Code.notConnectedToInternet.rawValue,
+            URLError.Code.cannotConnectToHost.rawValue,
+            URLError.Code.cannotFindHost.rawValue,
+            URLError.Code.dnsLookupFailed.rawValue
+        ]
+        let attempts = idempotent ? 2 : 1
+        for attempt in 0..<attempts {
+            do {
+                return try await session.data(for: request)
+            } catch {
+                let nsError = error as NSError
+                guard !Task.isCancelled,
+                      attempt + 1 < attempts,
+                      nsError.domain == NSURLErrorDomain,
+                      retryable.contains(nsError.code) else { throw error }
+                try await Task.sleep(nanoseconds: 650_000_000)
+            }
+        }
+        throw URLError(.unknown)
     }
 
     func formRequest(_ path: String, fields: [String: String]) async throws -> (Data, HTTPURLResponse) {
@@ -213,7 +307,9 @@ final class APIClient {
 
     func htmlCSRF(_ path: String, query: [URLQueryItem] = []) async throws -> String {
         let url = try makeURL(path: path, query: query)
-        let (data, response) = try await session.data(from: url)
+        var req = URLRequest(url: url)
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        let (data, response) = try await dataWithTransientRetry(for: req, idempotent: true)
         guard let http = response as? HTTPURLResponse, (200...399).contains(http.statusCode), let html = String(data: data, encoding: .utf8) else {
             throw APIError(message: "تعذر تهيئة التحقق.", status: 419, paymentRequired: false)
         }
