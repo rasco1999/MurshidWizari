@@ -323,16 +323,22 @@ final class V49QuestionSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDe
         deactivateAudio()
     }
 
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        finishIfCurrent(utterance)
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        let finishedID = ObjectIdentifier(utterance)
+        Task { @MainActor [weak self] in
+            self?.finishIfCurrent(finishedID)
+        }
     }
 
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        finishIfCurrent(utterance)
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        let cancelledID = ObjectIdentifier(utterance)
+        Task { @MainActor [weak self] in
+            self?.finishIfCurrent(cancelledID)
+        }
     }
 
-    private func finishIfCurrent(_ utterance: AVSpeechUtterance) {
-        guard currentUtterance === utterance else { return }
+    private func finishIfCurrent(_ utteranceID: ObjectIdentifier) {
+        guard let currentUtterance, ObjectIdentifier(currentUtterance) == utteranceID else { return }
         currentUtterance = nil
         currentText = ""
         isSpeaking = false
