@@ -38,6 +38,7 @@ final class V498QAURLProtocol: URLProtocol, @unchecked Sendable {
 struct V498QATools: ViewModifier {
     @State private var showAudio = false
     @State private var showSocial = false
+    @State private var showNarratorSettings = false
     func body(content: Content) -> some View {
         content
             .safeAreaInset(edge: .top) {
@@ -50,6 +51,8 @@ struct V498QATools: ViewModifier {
                     }.accessibilityIdentifier("V498_QA_AUDIO")
                     Button("QA روابط") { showSocial = true }
                         .accessibilityIdentifier("V498_QA_SOCIAL")
+                    Button("QA المعلّمة") { showNarratorSettings = true }
+                        .accessibilityIdentifier("V498_QA_NARRATOR_SETTINGS")
                 }.font(.caption).padding(5).background(.thinMaterial)
             }
             .sheet(isPresented: $showAudio) {
@@ -63,6 +66,10 @@ struct V498QATools: ViewModifier {
                         Spacer()
                     }.padding(20).navigationTitle("التواصل الاجتماعي")
                 }.environment(\.layoutDirection, .rightToLeft)
+            }
+            .sheet(isPresented: $showNarratorSettings) {
+                NavigationStack { V498NarrationSettingsView() }
+                    .environment(\.layoutDirection, .rightToLeft)
             }
     }
     private func seedReview() {

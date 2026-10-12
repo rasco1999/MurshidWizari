@@ -25,6 +25,9 @@ checks = [
     (speech, "result.pitchMultiplier = 1.0", "Natural timbre without artificial pitch shifting"),
     (speech, "result.prefersAssistiveTechnologySettings = false", "Apply app narration speed consistently"),
     (speech, "V499ArabicNarration.unavailableMessage", "Explain missing female voice without male fallback"),
+    (speech, "struct V498NarrationSettingsView", "Student-controlled Arabic female narrator settings"),
+    (speech, "availableFemaleVoices()", "Show only eligible installed voices"),
+    (speech, "normalizedSpeed(savedSpeed)", "Bounded and persisted narration speed"),
     (ads, "15_000_000_000", "Foreground ad polling"),
     (ads, "generation == expectedGeneration", "Account-switch response guard"),
     (ads, 'request("mobile/bootstrap.php", fresh: true)', "Uncached canonical active ads"),
@@ -34,6 +37,7 @@ checks = [
     (auth, "if selection == index && !keyboardVisible { bottomBar }", "Only selected pane exposes tab controls"),
     (home, "V498SocialLinksFooter()", "Compact branded student footer"),
     (home, "StudentPalette.allCases", "Build506 color themes preserved"),
+    (home, "V498NarrationSettingsView()", "Accessible narrator controls in student account"),
     (workflow, "V498Final.xcresult", "Simulator QA gates the IPA"),
     (workflow, "Match simulator launch metadata", "QA uses production fullscreen layout"),
 ]

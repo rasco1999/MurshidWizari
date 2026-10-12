@@ -17,6 +17,21 @@ final class V498FinalTests: XCTestCase {
         XCTAssertEqual(V499ArabicNarration.preferredIdentifier(in: voices), "premium")
         XCTAssertEqual(V499ArabicNarration.preferredIdentifier(in: Array(voices.reversed())), "premium")
     }
+    func testStudentCanSelectOnlyAnInstalledFemaleArabicVoice() {
+        let voices = [voice("male", gender: .male, quality: .premium),
+                      voice("compact"), voice("enhanced", quality: .enhanced),
+                      voice("english", language: "en-US")]
+        XCTAssertEqual(V499ArabicNarration.preferredIdentifier(in: voices, preferred: "compact"), "compact")
+        XCTAssertEqual(V499ArabicNarration.preferredIdentifier(in: voices, preferred: "male"), "enhanced")
+        XCTAssertEqual(V499ArabicNarration.preferredIdentifier(in: voices, preferred: "english"), "enhanced")
+        XCTAssertEqual(V499ArabicNarration.preferredIdentifier(in: voices, excluding: "compact", preferred: "compact"), "enhanced")
+        XCTAssertEqual(V499ArabicNarration.preferredIdentifier(in: voices, preferred: "removed"), "enhanced")
+    }
+    func testNarrationSpeedIsLimitedToAnIntelligibleRange() {
+        XCTAssertEqual(V499ArabicNarration.normalizedSpeed(0.30), 0.75, accuracy: 0.001)
+        XCTAssertEqual(V499ArabicNarration.normalizedSpeed(0.88), 0.88, accuracy: 0.001)
+        XCTAssertEqual(V499ArabicNarration.normalizedSpeed(1.90), 1.10, accuracy: 0.001)
+    }
     func testNeverFallsBackToMaleEnglishUnknownOrNoveltyVoice() {
         let unsupported = [voice("male", gender: .male), voice("unknown", gender: .unspecified),
                            voice("english", language: "en-US"), voice("dialect", language: "ar-EG"),

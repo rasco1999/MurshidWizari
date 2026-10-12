@@ -80,6 +80,29 @@ final class V498FinalUITests: XCTestCase {
         screenshot("04-compact-social-icons")
     }
 
+    @MainActor
+    func testNarratorSettingsAndPreviewAreAccessible() {
+        let app = XCUIApplication()
+        app.launch()
+        let control = app.buttons["V498_QA_NARRATOR_SETTINGS"]
+        XCTAssertTrue(control.waitForExistence(timeout: 20))
+        control.tap()
+        XCTAssertTrue(app.staticTexts["صوت الشرح"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.sliders["narration-speed-slider"].exists)
+        let preview = app.buttons["narration-preview-button"]
+        XCTAssertTrue(preview.exists)
+        screenshot("05-narrator-voice-settings")
+        if preview.isEnabled {
+            XCTAssertTrue(app.buttons["narration-female-voice-picker"].exists)
+            preview.tap()
+            let stop = app.buttons["narration-preview-button"]
+            XCTAssertTrue(stop.exists)
+            stop.tap()
+        } else {
+            XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "لا يوجد صوت عربي أنثوي")).firstMatch.exists)
+        }
+    }
+
     @MainActor private func screenshot(_ name: String) {
         let image = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         image.name = name

@@ -60,6 +60,9 @@ struct V499VoiceCandidate {
 }
 
 enum V499ArabicNarration {
+    static let preferredVoiceKey = "murshid_female_arabic_voice_id"
+    static let speedKey = "murshid_female_arabic_voice_speed"
+    static let defaultSpeed = 0.88
     static let unavailableMessage = "لا يوجد صوت عربي أنثوي متاح للتطبيق على هذا الجهاز. افتح الإعدادات ← تسهيلات الاستخدام ← القراءة والنطق (أو المحتوى المنطوق) ← الأصوات ← العربية، واختر صوتًا أنثويًا ونزّل جودته المحسّنة إن توفرت، ثم عُد واضغط الاستماع."
 
     static func localeRank(_ language: String) -> Int? {
@@ -72,9 +75,14 @@ enum V499ArabicNarration {
     }
 
     static func preferredIdentifier(in candidates: [V499VoiceCandidate], preferCompact: Bool = false,
-                                    excluding identifier: String? = nil) -> String? {
+                                    excluding identifier: String? = nil, preferred preferredID: String? = nil) -> String? {
         let eligible = candidates.filter {
             $0.gender == .female && !$0.restricted && localeRank($0.language) != nil && $0.identifier != identifier
+        }
+        // An explicitly selected female Arabic voice wins; after a playback
+        // failure the excluded voice cannot be reselected as the fallback.
+        if let preferredID, eligible.contains(where: { $0.identifier == preferredID }) {
+            return preferredID
         }
         return eligible.sorted { a, b in
             if preferCompact, (a.quality == .default) != (b.quality == .default) {
@@ -95,10 +103,15 @@ enum V499ArabicNarration {
         return 0.04
     }
 
+    static func normalizedSpeed(_ requested: Double) -> Float {
+        Float(min(1.10, max(0.75, requested)))
+    }
+
     static func utterance(_ text: String, voice: AVSpeechSynthesisVoice, first: Bool) -> AVSpeechUtterance {
         let result = AVSpeechUtterance(string: text)
         result.voice = voice
-        result.rate = AVSpeechUtteranceDefaultSpeechRate * 0.88
+        let savedSpeed = UserDefaults.standard.object(forKey: speedKey) as? Double ?? defaultSpeed
+        result.rate = AVSpeechUtteranceDefaultSpeechRate * normalizedSpeed(savedSpeed)
         result.pitchMultiplier = 1.0 // Preserve the female voice's natural timbre.
         result.volume = 1
         result.prefersAssistiveTechnologySettings = false
@@ -211,9 +224,26 @@ final class V49QuestionSpeech: NSObject, ObservableObject, @preconcurrency AVSpe
             }
             return candidate
         }
+        let preferred = UserDefaults.standard.string(forKey: V499ArabicNarration.preferredVoiceKey)
         guard let selected = V499ArabicNarration.preferredIdentifier(in: candidates, preferCompact: preferCompact,
-                                                                   excluding: identifier) else { return nil }
+                                                                   excluding: identifier, preferred: preferred) else { return nil }
         return voices.first(where: { $0.identifier == selected })
+    }
+
+    static func availableFemaleVoices() -> [AVSpeechSynthesisVoice] {
+        AVSpeechSynthesisVoice.speechVoices().filter { voice in
+            guard voice.gender == .female, V499ArabicNarration.localeRank(voice.language) != nil else { return false }
+            if #available(iOS 17.0, *) {
+                return !voice.voiceTraits.contains(.isNoveltyVoice) && !voice.voiceTraits.contains(.isPersonalVoice)
+            }
+            return true
+        }.sorted { a, b in
+            if a.quality != b.quality { return a.quality.rawValue > b.quality.rawValue }
+            if a.language != b.language {
+                return V499ArabicNarration.localeRank(a.language)! < V499ArabicNarration.localeRank(b.language)!
+            }
+            return a.name.localizedStandardCompare(b.name) == .orderedAscending
+        }
     }
 
     private func speakNextChunk() {
@@ -364,6 +394,77 @@ struct V498SpeechButton: View {
             }
         }
         .onDisappear { speech.stop(ifOwnedBy: speechID) }
+    }
+}
+
+// All settings are local to the device. Never suggest that an arbitrary audio
+// clip can be imported as an iOS TTS voice: Apple exposes installed voices only.
+struct V498NarrationSettingsView: View {
+    @AppStorage(V499ArabicNarration.preferredVoiceKey) private var preferredVoiceID = ""
+    @AppStorage(V499ArabicNarration.speedKey) private var speechSpeed = V499ArabicNarration.defaultSpeed
+    @ObservedObject private var speech = V49QuestionSpeech.shared
+    @State private var voices: [AVSpeechSynthesisVoice] = []
+
+    private let previewID = "narration-settings-preview"
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                MurshidCard {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Label("صوت الشرح", systemImage: "waveform")
+                            .font(.headline).foregroundStyle(Color.murshidBlue)
+                        Text("اختر صوتًا أنثويًا عربيًا مثبتًا على جهازك. الاختيار لا يغيّر الأسئلة أو بيانات الطالب.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                        if voices.isEmpty {
+                            Text(V499ArabicNarration.unavailableMessage)
+                                .font(.footnote).foregroundStyle(.secondary)
+                        } else {
+                            Picker("المعلّمة الصوتية", selection: $preferredVoiceID) {
+                                Text("الأفضل تلقائيًا").tag("")
+                                ForEach(voices, id: \.identifier) { voice in
+                                    Text("\(voice.name) — \(voice.quality == .premium ? "ممتاز" : voice.quality == .enhanced ? "محسّن" : "أساسي")")
+                                        .tag(voice.identifier)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .accessibilityIdentifier("narration-female-voice-picker")
+                        }
+                        Divider()
+                        HStack {
+                            Label("سرعة القراءة", systemImage: "speedometer")
+                            Spacer()
+                            Text("\(Int((speechSpeed * 100).rounded()))٪")
+                                .monospacedDigit().foregroundStyle(.secondary)
+                        }.font(.subheadline)
+                        Slider(value: $speechSpeed, in: 0.75...1.10, step: 0.05)
+                            .accessibilityIdentifier("narration-speed-slider")
+                        Button {
+                            speech.toggle("مَرْحَبًا بِكَ فِي مِنَصَّةِ الْمُرْشِدِ الْوِزَارِيِّ. سَنَفْهَمُ السُّؤَالَ خُطْوَةً خُطْوَةً، ثُمَّ نُوَضِّحُ الْإِجَابَةَ بِأُسْلُوبٍ سَهْلٍ وَدَقِيقٍ.", id: previewID)
+                        } label: {
+                            Label(speech.activeID == previewID ? "إيقاف التجربة" : "جرّب صوت المعلّمة", systemImage: speech.activeID == previewID ? "stop.circle.fill" : "play.circle.fill")
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(voices.isEmpty)
+                        .accessibilityIdentifier("narration-preview-button")
+                        if speech.messageID == previewID, let message = speech.message {
+                            Text(message).font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Text("لإضافة صوت بجودة محسّنة، نزّله أولًا من إعدادات iPhone ← تسهيلات الاستخدام ← المحتوى المنطوق ← الأصوات ← العربية، ثم ارجع لهذه الصفحة. لا يمكن تحويل تسجيل صوتي عادي إلى صوت قارئ داخل التطبيق مباشرة.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }.padding(16)
+        }
+        .background(Color.murshidBackground.ignoresSafeArea())
+        .navigationTitle("صوت المعلّمة")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear { voices = V49QuestionSpeech.availableFemaleVoices() }
+        .onChange(of: preferredVoiceID) { _ in speech.stop(ifOwnedBy: previewID) }
+        .onChange(of: speechSpeed) { _ in speech.stop(ifOwnedBy: previewID) }
+        .onDisappear { speech.stop(ifOwnedBy: previewID) }
     }
 }
 
