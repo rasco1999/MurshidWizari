@@ -427,20 +427,53 @@ struct V40CustomExamBuilderView: View {
     @State private var type = "all"
     @State private var state = "all"
     @State private var minutes = 0
+    @State private var mode = "custom"
     @State private var loading = false
     @State private var error = ""
     @State private var sessionID = 0
     @State private var goExam = false
 
+    init(initialSubjectID: Int = 0, mistakesOnly: Bool = false, initialMode: String = "custom") {
+        _subjectID = State(initialValue: initialSubjectID)
+        _state = State(initialValue: mistakesOnly ? "wrong" : "all")
+        if initialMode == "mock" {
+            _mode = State(initialValue: "mock")
+            _count = State(initialValue: 30)
+            _minutes = State(initialValue: 45)
+        }
+    }
+
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
                 V3IntroCard(
-                    eyebrow: "اختبارك",
-                    title: "أنشئ اختبارًا مخصصًا",
-                    text: "حدد المادة والمواضيع وعدد الأسئلة، ويمكنك إضافة مؤقت. التصحيح يظهر في النهاية.",
-                    icon: "slider.horizontal.3"
+                    eyebrow: "اختبر استعدادك",
+                    title: mode == "mock" ? "محاكاة وزارية تدريبية" : "أنشئ اختبارًا مخصصًا",
+                    text: mode == "mock"
+                        ? "اختبار مؤقت من بنك أسئلة صفّك. لا يظهر التصحيح إلا عند النهاية، وهو تدريب لا ورقة امتحان رسمية."
+                        : "حدد المادة والمواضيع وعدد الأسئلة، ويمكنك إضافة مؤقت. التصحيح يظهر في النهاية.",
+                    icon: mode == "mock" ? "clock.badge.checkmark" : "slider.horizontal.3"
                 )
+
+                Picker("نمط الاختبار", selection: $mode) {
+                    Text("اختبار مخصص").tag("custom")
+                    Text("محاكاة وزارية").tag("mock")
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: mode) { selected in
+                    if selected == "mock" {
+                        count = 30
+                        minutes = 45
+                        type = "all"
+                        state = "all"
+                        selectedTopics.removeAll()
+                    }
+                    selectionHaptic()
+                }
+
+                if mode == "mock" {
+                    V3InlineMessage(text: "محاكاة: 30 سؤالًا أو المتاح حسب رصيدك، 45 دقيقة، وأسئلة متنوعة من كامل المادة. السنة والدور يظهران فقط عندما يكونان موثّقين في بيانات السؤال.", icon: "info.circle.fill", tone: .info)
+                }
 
                 MurshidCard {
                     VStack(alignment: .leading, spacing: 14) {
@@ -450,7 +483,7 @@ struct V40CustomExamBuilderView: View {
                         }
                         .onChange(of: subjectID) { _ in Task { await loadTopics() } }
 
-                        if !topics.isEmpty {
+                        if mode != "mock" && !topics.isEmpty {
                             Text("المواضيع — اتركها بدون تحديد لاستخدام كل المادة")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -471,9 +504,10 @@ struct V40CustomExamBuilderView: View {
                             }
                         }
 
-                        Stepper("عدد الأسئلة: \(count)", value: $count, in: 5...50, step: 5)
+                        if mode != "mock" {
+                            Stepper("عدد الأسئلة: \(count)", value: $count, in: 5...50, step: 5)
 
-                        Picker("نوع السؤال", selection: $type) {
+                            Picker("نوع السؤال", selection: $type) {
                             Text("الكل").tag("all")
                             Text("اختيارات").tag("mcq")
                             Text("صح / خطأ").tag("true_false")
@@ -482,7 +516,7 @@ struct V40CustomExamBuilderView: View {
                             Text("معاني").tag("meaning")
                         }
 
-                        Picker("حالة السؤال", selection: $state) {
+                            Picker("حالة السؤال", selection: $state) {
                             Text("الكل").tag("all")
                             Text("لم أجب").tag("unanswered")
                             Text("أخطأت سابقًا").tag("wrong")
@@ -490,14 +524,19 @@ struct V40CustomExamBuilderView: View {
                             Text("المفضلة").tag("favorite")
                         }
 
-                        Picker("المؤقت", selection: $minutes) {
+                            Picker("المؤقت", selection: $minutes) {
                             Text("بدون مؤقت").tag(0)
                             Text("15 د").tag(15)
                             Text("30 د").tag(30)
                             Text("45 د").tag(45)
                             Text("60 د").tag(60)
                         }
-                        .pickerStyle(.segmented)
+                            .pickerStyle(.segmented)
+                        } else {
+                            Label("45 دقيقة • حتى 30 سؤالًا • التصحيح بعد التسليم", systemImage: "timer")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(Color.murshidBlue)
+                        }
                     }
                 }
 
@@ -521,16 +560,14 @@ struct V40CustomExamBuilderView: View {
             .padding(.bottom, 28)
         }
         .background(Color.murshidBackground.ignoresSafeArea())
-        .navigationTitle("اختبار مخصص")
+        .navigationTitle(mode == "mock" ? "محاكاة الوزاري" : "اختبار مخصص")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            if subjectID == 0, let first = app.subjects.first {
-                subjectID = first.id
-                Task { await loadTopics() }
-            }
+            if subjectID == 0, let first = app.subjects.first { subjectID = first.id }
+            if subjectID > 0 { Task { await loadTopics() } }
         }
         .navigationDestination(isPresented: $goExam) {
-            V40CustomExamSessionView(sessionID: sessionID).environmentObject(app)
+            V40CustomExamSessionView(sessionID: sessionID, displayMode: mode).environmentObject(app)
         }
     }
 
@@ -558,11 +595,12 @@ struct V40CustomExamBuilderView: View {
                     "csrf": app.csrf,
                     "action": "create",
                     "subject_id": subjectID,
-                    "chapter_ids": Array(selectedTopics),
-                    "count": count,
-                    "type": type,
-                    "state": state,
-                    "minutes": minutes
+                    "chapter_ids": mode == "mock" ? [] : Array(selectedTopics),
+                    "count": mode == "mock" ? 30 : count,
+                    "type": mode == "mock" ? "all" : type,
+                    "state": mode == "mock" ? "all" : state,
+                    "minutes": mode == "mock" ? 45 : minutes,
+                    "mode": mode
                 ]
             )
             await MainActor.run {
@@ -600,6 +638,7 @@ private struct V40PracticeQuestion: Identifiable {
 struct V40CustomExamSessionView: View {
     @EnvironmentObject var app: AppSession
     let sessionID: Int
+    let displayMode: String
     @State private var title = "اختبار مخصص"
     @State private var questions: [V40PracticeQuestion] = []
     @State private var current = 0
@@ -610,7 +649,9 @@ struct V40CustomExamSessionView: View {
     @State private var result: JSON?
     @State private var remaining = 0
     @State private var timerEnabled = false
+    @State private var deadline: Date?
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    private var deadlineKey: String { "murshid-practice-deadline-\(app.user?.id ?? 0)-\(sessionID)" }
 
     var body: some View {
         Group {
@@ -630,9 +671,10 @@ struct V40CustomExamSessionView: View {
         .toolbar(.hidden, for: .tabBar)
         .task { await load() }
         .onReceive(timer) { _ in
-            guard timerEnabled, result == nil, !loading, remaining > 0 else { return }
-            remaining -= 1
-            if remaining == 0 { Task { await finish() } }
+            guard timerEnabled, result == nil, !loading, !submitting, let deadline else { return }
+            let seconds = max(0, Int(ceil(deadline.timeIntervalSinceNow)))
+            if seconds != remaining { remaining = seconds }
+            if seconds == 0, error.isEmpty { Task { await finish() } }
         }
     }
 
@@ -675,6 +717,10 @@ struct V40CustomExamSessionView: View {
 
                     if !error.isEmpty {
                         V3InlineMessage(text: error, icon: "exclamationmark.triangle.fill", tone: .warning)
+                        if timerEnabled && remaining == 0 {
+                            Button("إعادة محاولة تسليم الإجابات") { Task { await finish() } }
+                                .buttonStyle(PrimaryButtonStyle())
+                        }
                     }
                 }
                 .padding(16)
@@ -783,11 +829,16 @@ struct V40CustomExamSessionView: View {
             let session = d["session"] as? JSON ?? [:]
             let loaded = jArray(d["questions"]).map(V40PracticeQuestion.init)
             let duration = jInt(session["duration_seconds"])
+            let restoredDeadline = duration > 0
+                ? ((UserDefaults.standard.object(forKey: deadlineKey) as? Date) ?? Date().addingTimeInterval(TimeInterval(duration)))
+                : nil
+            if let restoredDeadline { UserDefaults.standard.set(restoredDeadline, forKey: deadlineKey) }
             await MainActor.run {
-                title = jString(session["title"], default: "اختبار مخصص")
+                title = displayMode == "mock" ? "محاكاة وزارية تدريبية" : jString(session["title"], default: "اختبار مخصص")
                 questions = loaded
-                remaining = duration
+                remaining = restoredDeadline.map { max(0, Int(ceil($0.timeIntervalSinceNow))) } ?? 0
                 timerEnabled = duration > 0
+                deadline = restoredDeadline
                 loading = false
                 error = ""
             }
@@ -815,6 +866,7 @@ struct V40CustomExamSessionView: View {
             await MainActor.run {
                 result = d
                 submitting = false
+                UserDefaults.standard.removeObject(forKey: deadlineKey)
                 app.freeUsed += jInt(d["answered"])
                 haptic(jDouble(d["score"]) >= 70 ? .success : .warning)
             }
@@ -937,22 +989,40 @@ struct V40AttemptHistoryView: View {
 }
 
 struct V40WhatsNewView: View {
+    @EnvironmentObject var app: AppSession
+
+    private var installedVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "4.3.0"
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
                 V3IntroCard(
-                    eyebrow: "الإصدار 4.2",
+                    eyebrow: "الإصدار \(installedVersion)",
                     title: "ما الجديد؟",
-                    text: "تحديث شامل لتجربة الطالب، بنك الأسئلة، والملف الشخصي.",
+                    text: "تحسينات واجهة الطالب، الاشتراك، الصورة الشخصية، والقصص.",
                     icon: "sparkles"
                 )
-                feature("line.3.horizontal.decrease.circle.fill", "مرشحات متقدمة", "فلترة حسب النوع والسنة والدور والصعوبة وحالتك السابقة.")
-                feature("slider.horizontal.3", "اختبار مخصص", "حدد المادة والمواضيع وعدد الأسئلة والمؤقت.")
-                feature("plus.bubble.fill", "اقترح سؤالًا", "أرسل سؤالًا مع الإجابة والمصدر وتابع حالته.")
-                feature("note.text", "ملاحظات خاصة", "احفظ ملاحظة خاصة على أي سؤال.")
-                feature("shield.checkered", "سلامة أعلى", "فحص نوع السؤال وخياراته وإجابته ومساره قبل عرضه.")
-                feature("person.crop.circle.badge.checkmark", "صورة الحساب فورًا", "تتغير الصورة مباشرة بدون انتظار موافقة يدوية أو خدمة فحص خارجية.")
-                feature("magnifyingglass", "بحث في الأسئلة", "ابحث داخل بنك الأسئلة والمواضيع بسرعة.")
+                feature("crown.fill", "زر اشتراك واضح", "يظهر الاشتراك في واجهة الطالب، وفي الاختبار عند انتهاء الأسئلة المجانية.")
+                feature("person.crop.circle.badge.checkmark", "تحسين صورة الحساب", "عرض الصورة مباشرة بعد رفعها والاحتفاظ بها أثناء تحديث رابط الخادم.")
+                feature("book.closed.fill", "غيّر جو", "عناوين القصص تظهر أولاً؛ افتح أي عنوان لقراءة القصة كاملة.")
+                feature("arrow.down.app.fill", "تنبيهات التحديث", "مقارنة نسخة تطبيقك الحالية بآخر إصدار منشور على الخادم.")
+                feature("line.3.horizontal.decrease.circle.fill", "مرشحات الاختبارات", "فلترة حسب النوع والسنة والدور والصعوبة وحالة السؤال.")
+                feature("slider.horizontal.3", "اختبار مخصص", "حدد المادة والموضوع وعدد الأسئلة.")
+                feature("plus.bubble.fill", "اقترح سؤالًا", "أرسل سؤالًا مع الإجابة والمصدر.")
+                let liveNotes = jString(app.releaseInfo["notes"])
+                let remoteVersion = jString(app.releaseInfo["version"])
+                if !liveNotes.isEmpty && !remoteVersion.isEmpty {
+                    MurshidCard {
+                        VStack(alignment: .leading, spacing: 7) {
+                            Label("ملاحظات الإصدار \(remoteVersion)", systemImage: "newspaper.fill")
+                                .font(.headline)
+                            Text(liveNotes).font(.subheadline).foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
             }
             .padding(16)
         }
@@ -964,10 +1034,8 @@ struct V40WhatsNewView: View {
     private func feature(_ icon: String, _ title: String, _ text: String) -> some View {
         MurshidCard {
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: icon)
-                    .font(.title2)
-                    .foregroundStyle(Color.murshidBlue)
-                    .frame(width: 40)
+                Image(systemName: icon).font(.title2)
+                    .foregroundStyle(Color.murshidBlue).frame(width: 40)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).font(.headline)
                     Text(text).font(.subheadline).foregroundStyle(.secondary)
@@ -978,8 +1046,8 @@ struct V40WhatsNewView: View {
     }
 }
 
-
 struct V40QuestionSearchView: View {
+    @EnvironmentObject var app: AppSession
     @State private var query = ""
     @State private var results: [JSON] = []
     @State private var loading = false
@@ -1042,7 +1110,15 @@ struct V40QuestionSearchView: View {
         await MainActor.run { loading = true; message = "" }
         do {
             let d = try await APIClient.shared.request("api/search.php", query: [URLQueryItem(name: "q", value: q)])
-            await MainActor.run { results = jArray(d["results"]); loading = false }
+            await MainActor.run {
+                let allowedSubjects = Set(app.subjects.map(\.id))
+                results = jArray(d["results"]).filter { row in
+                    let subjectID = jInt(row["subject_id"])
+                    return !MurshidSubjectCatalog.isFrenchSubject(jString(row["subject_name"])) &&
+                        (subjectID <= 0 || allowedSubjects.contains(subjectID))
+                }
+                loading = false
+            }
         } catch {
             await MainActor.run { loading = false; message = error.localizedDescription }
         }
@@ -1338,14 +1414,17 @@ struct V40DailyChallengeView: View {
     @State private var total = 0
     @State private var reward = 0
     @State private var message = ""
+    @State private var correctAnswer = ""
+    @State private var givenAnswer = ""
+    @State private var answerExplanation = ""
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 14) {
                 V3IntroCard(
                     eyebrow: "تحدي اليوم",
-                    title: done ? "أكملت تحدي اليوم" : "خمس دقائق تصنع فرقًا",
-                    text: done ? "عد غدًا لتحدٍ جديد." : "مجموعة قصيرة من أسئلة صفك. النتيجة تظهر بعد الإرسال مرة واحدة.",
+                    title: done ? "تم تسليم إجابتك" : "سؤال اليوم",
+                    text: done ? "تم تصحيح إجابتك. يعود التحدي بعد 24 ساعة." : "اكتب إجابتك ثم اضغط تسليم الإجابة لرؤية التصحيح فوراً.",
                     icon: "flame.fill"
                 )
 
@@ -1359,14 +1438,27 @@ struct V40DailyChallengeView: View {
                         VStack(spacing: 12) {
                             Image(systemName: "trophy.fill").font(.system(size: 42)).foregroundStyle(Color.murshidGold)
                             Text("\(score) / \(total)").font(.largeTitle.bold().monospacedDigit())
-                            if reward > 0 { Text("+\(reward) XP").font(.headline).foregroundStyle(.green) }
+                            Text(score > 0 ? "إجابة صحيحة!" : "اكتمل تحدي اليوم").font(.headline)
+                            if !correctAnswer.isEmpty {
+                                Divider()
+                                Text("الجواب الصحيح").font(.subheadline.bold()).foregroundStyle(.secondary)
+                                Text(correctAnswer).font(.title3.bold()).foregroundStyle(.green)
+                                    .multilineTextAlignment(.center)
+                            }
+                            if !givenAnswer.isEmpty {
+                                Text("إجابتك: \(givenAnswer)").font(.subheadline).foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.center)
+                            }
+                            if !answerExplanation.isEmpty {
+                                Text(answerExplanation).font(.subheadline).multilineTextAlignment(.center)
+                            }
                         }.frame(maxWidth: .infinity)
                     }
                 } else {
                     ForEach(Array(questions.enumerated()), id: \.element.id) { index, q in
                         MurshidCard {
                             VStack(alignment: .leading, spacing: 12) {
-                                Text("سؤال \(index + 1)").font(.caption.bold()).foregroundStyle(Color.murshidBlue)
+                                Text("سؤال اليوم").font(.caption.bold()).foregroundStyle(Color.murshidBlue)
                                 Text(murshidQuestionDisplayText(q.text)).font(.headline).fixedSize(horizontal: false, vertical: true)
                                 if q.type == "true_false" && q.options.isEmpty {
                                     choices(q, ["صح", "خطأ"])
@@ -1384,18 +1476,6 @@ struct V40DailyChallengeView: View {
                             }
                         }
                     }
-                    Button {
-                        Task { await submit() }
-                    } label: {
-                        HStack {
-                            if busy { ProgressView().tint(.white) }
-                            Image(systemName: "checkmark.seal.fill")
-                            Text(busy ? "جاري التصحيح…" : "إنهاء تحدي اليوم")
-                        }
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
-                    .disabled(busy || !allAnswered)
-                    .opacity(allAnswered ? 1 : 0.55)
                 }
 
                 if !message.isEmpty {
@@ -1404,6 +1484,24 @@ struct V40DailyChallengeView: View {
             }
             .padding(16)
             .padding(.bottom, 26)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !loading && available && !done {
+                Button { Task { await submit() } } label: {
+                    HStack(spacing: 9) {
+                        if busy { ProgressView().tint(.white) }
+                        Image(systemName: "checkmark.seal.fill")
+                        Text(busy ? "جاري تصحيح الإجابة…" : "تسليم الإجابة")
+                    }
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(busy || !allAnswered)
+                .opacity(allAnswered ? 1 : 0.55)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity)
+                .background(.regularMaterial)
+            }
         }
         .background(Color.murshidBackground.ignoresSafeArea())
         .navigationTitle("تحدي اليوم")
@@ -1448,6 +1546,9 @@ struct V40DailyChallengeView: View {
                 score = jInt(d["score"])
                 total = jInt(d["total"])
                 reward = jInt(d["reward"])
+                correctAnswer = jString(d["correct_answer"])
+                givenAnswer = jString(d["given_answer"])
+                answerExplanation = jString(d["explanation"])
                 questions = jArray(d["questions"]).map(V40DailyQuestion.init)
                 loading = false
                 message = ""
@@ -1472,7 +1573,10 @@ struct V40DailyChallengeView: View {
                 done = jBool(d["done"])
                 score = jInt(d["score"])
                 total = jInt(d["total"])
-                if jBool(d["quota_blocked"]) { message = "انتهى الرصيد المجاني أثناء التحدي." }
+                correctAnswer = jString(d["correct_answer"])
+                givenAnswer = jString(d["given_answer"])
+                answerExplanation = jString(d["explanation"])
+                if jBool(d["quota_blocked"]) { message = "تعذّر تسجيل الإجابة؛ جرّب مجدداً." }
                 haptic(.success)
             }
         } catch {
