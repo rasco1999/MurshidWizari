@@ -6,6 +6,7 @@ struct MurshidWizariApp: App {
     @StateObject private var app = AppSession.shared
     @StateObject private var device = DeviceServices.shared
     @AppStorage("appearance") private var appearance = "system"
+    @AppStorage("student_palette") private var studentPaletteID = "royal"
     @State private var showAcademicWelcome = true
     // A native iOS app often resumes instead of relaunching when its icon is tapped.
     // Remember genuine background visits so the greeting is visible on both paths.
@@ -46,6 +47,7 @@ struct MurshidWizariApp: App {
                         .zIndex(30)
                 }
             }
+            .tint(StudentPalette(rawValue: studentPaletteID)?.primary ?? .murshidBlue)
             .task {
                 // Cold start: show the branded transition long enough to be noticed,
                 // while restoring authentication in parallel.
