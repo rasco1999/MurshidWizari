@@ -3,7 +3,7 @@ name: Build Murshid iPhone v4.9.3 Free 100 Preview IPAs
 on:
   workflow_dispatch:
   push:
-    branches: [ ios-admin-v494-subscription-sources ]
+    branches: [ ios-admin-v495-no-idle ]
     paths:
       - '.github/workflows/build-ios.yml'
       - 'patches/**'
@@ -521,7 +521,7 @@ jobs:
           retention-days: 14
 
   admin_build:
-    name: Build v4.9.4 Build 503 unsigned iPhone admin IPA
+    name: Build v4.9.5 Build 504 unsigned iPhone admin IPA
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -560,8 +560,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \
-            MARKETING_VERSION='4.9.4' \
-            CURRENT_PROJECT_VERSION='503' \
+            MARKETING_VERSION='4.9.5' \
+            CURRENT_PROJECT_VERSION='504' \
             clean build
 
       - name: Validate and package admin IPA
@@ -574,17 +574,19 @@ jobs:
           test -f "$APP/MurshidAdmin"
           test -f "$APP/Assets.car"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid.admin'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.9.4'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '503'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.9.5'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '504'
           grep -Fq 'FreeMonthCampaignScreen' App/MurshidAdminApp.swift
           grep -Fq 'promo_save' App/MurshidAdminApp.swift
           grep -Fq 'SubscriptionSourcesHome' App/MurshidAdminApp.swift
           grep -Fq 'subscription_sources' App/MurshidAdminApp.swift
+          grep -Fq 'isIdleTimerDisabled' App/MurshidAdminApp.swift
+          grep -Fq '90_000_000_000' App/MurshidAdminApp.swift
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.ipa Payload
-          test -s Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.ipa
-          shasum -a 256 Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.ipa | tee Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.sha256
+          /usr/bin/zip -qry Murshid_Admin_iOS_v4_9_5_BUILD504_unsigned.ipa Payload
+          test -s Murshid_Admin_iOS_v4_9_5_BUILD504_unsigned.ipa
+          shasum -a 256 Murshid_Admin_iOS_v4_9_5_BUILD504_unsigned.ipa | tee Murshid_Admin_iOS_v4_9_5_BUILD504_unsigned.sha256
 
       - name: Publish admin IPA preview
         env:
@@ -592,21 +594,21 @@ jobs:
         run: |
           set -euo pipefail
           cd admin_ios
-          TAG='v4.9.4-build503-free100-admin-preview'
-          NOTES='Unsigned native iPhone admin IPA. Native iPhone admin: three separate subscription source lists (codes, free month, confirmed payments) with student profile and subscription details. Requires updating admin/native-api.php on the hosting.'
+          TAG='v4.9.5-build504-free100-admin-preview'
+          NOTES='Unsigned native iPhone admin IPA. Native iPhone admin: prevent iOS idle-lock while app active, refresh server-admin session every 90 seconds, and clarify missing server API deployment. Also includes three subscriber-source lists. Update admin/native-api.php on the hosting to enable the lists.'
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.ipa Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.sha256 --clobber
+            gh release upload "$TAG" Murshid_Admin_iOS_v4_9_5_BUILD504_unsigned.ipa Murshid_Admin_iOS_v4_9_5_BUILD504_unsigned.sha256 --clobber
           else
-            gh release create "$TAG" Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.ipa Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.sha256 --target "$GITHUB_SHA" --prerelease --title 'Murshid Admin iPhone v4.9.4 Build 503' --notes "$NOTES"
+            gh release create "$TAG" Murshid_Admin_iOS_v4_9_5_BUILD504_unsigned.ipa Murshid_Admin_iOS_v4_9_5_BUILD504_unsigned.sha256 --target "$GITHUB_SHA" --prerelease --title 'Murshid Admin iPhone v4.9.5 Build 504' --notes "$NOTES"
           fi
 
       - name: Upload admin IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Admin-iPhone-v4.9.4-Build503-Unsigned
+          name: Murshid-Admin-iPhone-v4.9.5-Build504-Unsigned
           path: |
-            admin_ios/Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.ipa
-            admin_ios/Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.sha256
+            admin_ios/Murshid_Admin_iOS_v4_9_5_BUILD504_unsigned.ipa
+            admin_ios/Murshid_Admin_iOS_v4_9_5_BUILD504_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
 
@@ -649,8 +651,8 @@ jobs:
         run: |
           set -u
           mkdir -p .build-status
-          STATUS_FILE=".build-status/v4.9.4-build503-status.txt"
-          LOG_FILE=".build-status/v4.9.4-build503-failed.log"
+          STATUS_FILE=".build-status/v4.9.5-build504-status.txt"
+          LOG_FILE=".build-status/v4.9.5-build504-failed.log"
           {
             echo "run_id=$GITHUB_RUN_ID"
             echo "run_attempt=$GITHUB_RUN_ATTEMPT"
