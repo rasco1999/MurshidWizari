@@ -195,7 +195,6 @@ private func murshidQuotedTerm(_ text: String) -> String? {
 }
 
 func murshidExplanationText(question rawQuestion: String, correctAnswer rawAnswer: String, raw rawExplanation: String) -> String {
-    let question = murshidQuestionDisplayText(rawQuestion)
     let answer = rawAnswer.trimmingCharacters(in: .whitespacesAndNewlines)
     let explanation = murshidUsefulExplanation(rawExplanation)
     let eKey = murshidAnswerKey(explanation)
@@ -207,44 +206,9 @@ func murshidExplanationText(question rawQuestion: String, correctAnswer rawAnswe
         || (!aKey.isEmpty && eKey == murshidAnswerKey("الجواب الصحيح هو " + answer))
 
     if !trivial { return explanation }
-
-    let qKey = murshidAnswerKey(question)
-    let term = murshidQuotedTerm(question)
-
-    if qKey.contains("الميزانالصرفي") || qKey.contains("وزنكلمه") || qKey.contains("وزنكلمة") {
-        if let term, !answer.isEmpty {
-            return "في الميزان الصرفي نقابل الحروف الأصلية بفاء وعين ولام، ونُبقي الحروف الزائدة في مواضعها؛ لذلك وزن «\(term)» هو «\(answer)»."
-        }
-        if !answer.isEmpty {
-            return "في الميزان الصرفي نقابل الحروف الأصلية بفاء وعين ولام مع إبقاء الحروف الزائدة في مواضعها؛ لذلك تكون النتيجة «\(answer)»."
-        }
-    }
-    if qKey.contains("اسمفاعل") && !answer.isEmpty {
-        return "نطبّق قاعدة اسم الفاعل على الفعل المذكور في السؤال؛ ومن ثم تكون الصيغة الصحيحة «\(answer)»."
-    }
-    if qKey.contains("اسممفعول") && !answer.isEmpty {
-        return "نطبّق قاعدة اسم المفعول على الفعل المذكور في السؤال؛ ومن ثم تكون الصيغة الصحيحة «\(answer)»."
-    }
-    if (qKey.contains("معني") || qKey.contains("معنى") || qKey.contains("مرادف")) && !answer.isEmpty {
-        if let term { return "المعنى المقصود لكلمة «\(term)» في هذا السياق هو «\(answer)»." }
-        return "المعنى المعتمد في سياق السؤال هو «\(answer)»."
-    }
-    if qKey.contains("ضد") && !answer.isEmpty {
-        return "المطلوب هو الكلمة المقابلة في المعنى؛ لذلك يكون الضد الصحيح «\(answer)»."
-    }
-    if qKey.contains("جمع") && !answer.isEmpty {
-        return "نحدّد صيغة الجمع المناسبة للكلمة وفق القاعدة الواردة في الدرس؛ لذلك تكون الإجابة «\(answer)»."
-    }
-    if qKey.contains("مفرد") && !answer.isEmpty {
-        return "نردّ صيغة الجمع إلى مفردها الصحيح وفق الاستعمال اللغوي؛ لذلك تكون الإجابة «\(answer)»."
-    }
-    if (qKey.contains("ناتج") || question.contains("=") || question.contains("+") || question.contains("×") || question.contains("÷")) && !answer.isEmpty {
-        return "نطبّق العملية المطلوبة على المعطيات بالترتيب، فنحصل على الناتج «\(answer)»."
-    }
-    if !answer.isEmpty {
-        return "نطبّق القاعدة المطلوبة في نص السؤال على المعطى مباشرة؛ لذلك تكون الإجابة الصحيحة «\(answer)»."
-    }
-    return "تم تصحيح الإجابة وفق النموذج المعتمد لهذا السؤال."
+    // Never synthesize a subject-specific rationale from the answer alone:
+    // doing so can sound convincing while teaching an incorrect rule.
+    return "الجواب الصحيح ظاهر أعلاه. لم يضف فريق المحتوى شرحًا تفصيليًا موثّقًا لهذا السؤال بعد؛ يمكنك الإبلاغ عن نقص الشرح من زر البلاغ."
 }
 
 import Combine
@@ -990,7 +954,7 @@ struct RegisterView: View {
                         .disabled(loading || gradesLoading)
                         .opacity((loading || gradesLoading) ? 0.62 : 1)
 
-                        Text("نسخة iPhone 4.2 • Build 420")
+                        Text("نسخة iPhone \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—") • Build \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—")")
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.tertiary)
                             .frame(maxWidth: .infinity, alignment: .center)
@@ -1703,6 +1667,49 @@ struct SafariSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
 
+// One avatar renderer for Account's tab button and both contest rankings.
+// The account's local cache is never used for another student's row.
+struct V49StudentAvatar: View {
+    let raw: String
+    var revision = ""
+    var cachedUserID = 0
+    var size: CGFloat = 40
+
+    var body: some View {
+        ZStack {
+            Circle().fill(Color.murshidBlue.opacity(0.13))
+            if let url = V43AvatarCache.url(raw, revision: revision) {
+                AsyncImage(url: url) { phase in
+                    if case let .success(image) = phase {
+                        image.resizable().scaledToFill()
+                    } else if let cached = V43AvatarCache.image(userID: cachedUserID) {
+                        Image(uiImage: cached).resizable().scaledToFill()
+                    } else {
+                        placeholder
+                    }
+                }
+                .id(url.absoluteString)
+            } else if let cached = V43AvatarCache.image(userID: cachedUserID) {
+                Image(uiImage: cached).resizable().scaledToFill()
+            } else {
+                placeholder
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(Color.murshidBlue.opacity(0.35), lineWidth: size < 30 ? 1 : 1.5))
+        .accessibilityHidden(true)
+    }
+
+    private var placeholder: some View {
+        Image(systemName: "person.crop.circle.fill")
+            .resizable()
+            .scaledToFit()
+            .foregroundStyle(Color.murshidBlue)
+            .padding(size * 0.08)
+    }
+}
+
 // MARK: - Complete Native iOS v3 Experience
 
 // MARK: - V3 Main Navigation
@@ -1710,39 +1717,113 @@ struct SafariSheet: UIViewControllerRepresentable {
 struct MainV3TabView: View {
     @EnvironmentObject var app: AppSession
     @State private var selection = 0
+    @State private var visited: Set<Int> = [0]
+    @State private var keyboardVisible = false
+
+    // Five destinations fit in one native bottom bar without a Study tab.
+    private let tabs: [(title: String, symbol: String)] = [
+        ("الرئيسية", "house.fill"),
+        ("الاختبارات", "checklist.checked"),
+        ("المرشحات", "scope"),
+        ("الإعلانات", "megaphone.fill"),
+        ("حسابي", "person.crop.circle.fill")
+    ]
 
     var body: some View {
-        TabView(selection: $selection) {
-            NavigationStack { V3HomeView() }
-                .tabItem { Label("الرئيسية", systemImage: "house.fill") }
-                .tag(0)
-
-            NavigationStack { V3TestsView() }
-                .tabItem { Label("الاختبارات", systemImage: "checklist.checked") }
-                .tag(1)
-
-            NavigationStack { V3SuccessView() }
-                .tabItem { Label("النجاح", systemImage: "chart.line.uptrend.xyaxis") }
-                .tag(2)
-
-            NavigationStack { V3AccountView() }
-                .tabItem { Label("حسابي", systemImage: "person.crop.circle.fill") }
-                .tag(3)
+        ZStack {
+            Color.murshidBackground.ignoresSafeArea()
+            if visited.contains(0) {
+                tabPane(0) { NavigationStack { tabRoot { V31HomeView() } } }
+            }
+            if visited.contains(1) {
+                tabPane(1) { NavigationStack { tabRoot { V3TestsView() } } }
+            }
+            if visited.contains(2) {
+                tabPane(2) {
+                    NavigationStack {
+                        tabRoot {
+                            if app.subscribed { V44PredictionsView() }
+                            else { V31PredictionsLockedView() }
+                        }
+                    }
+                }
+            }
+            if visited.contains(3) {
+                tabPane(3) { NavigationStack { tabRoot { V31SchoolAdsView() } } }
+            }
+            if visited.contains(4) {
+                tabPane(4) { NavigationStack { tabRoot { V31AccountView() } } }
+            }
         }
         .tint(.murshidBlue)
-        .toolbarBackground(.visible, for: .tabBar)
         .environment(\.layoutDirection, .rightToLeft)
-        .onChange(of: selection) { _ in selectionHaptic() }
+        .onChange(of: selection) { value in
+            visited.insert(value)
+            selectionHaptic()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardVisible = true }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardVisible = false }
         .task { await keepSessionAlive() }
         .onOpenURL { url in
             switch (url.host ?? url.path.replacingOccurrences(of: "/", with: "")).lowercased() {
             case "tests", "exam", "subjects": selection = 1
-            case "success", "progress": selection = 2
-            case "account", "subscription": selection = 3
+            case "predictions", "filters": selection = 2
+            case "ads", "advertisements": selection = 3
+            case "account", "subscription": selection = 4
             default: selection = 0
             }
-            selectionHaptic()
         }
+    }
+
+    private func tabPane<Content: View>(_ index: Int, @ViewBuilder content: () -> Content) -> some View {
+        content()
+            .opacity(selection == index ? 1 : 0)
+            .allowsHitTesting(selection == index)
+            .accessibilityHidden(selection != index)
+    }
+
+    // Keep the five-tab bar on top-level screens only. A pushed question/detail
+    // screen may have its own pinned answer/next buttons; a bar applied outside
+    // NavigationStack would cover those controls and the last scroll content.
+    private func tabRoot<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !keyboardVisible { bottomBar }
+            }
+    }
+
+    private var bottomBar: some View {
+        HStack(spacing: 0) {
+            ForEach(tabs.indices, id: \.self) { index in
+                Button {
+                    selection = index
+                } label: {
+                    VStack(spacing: 4) {
+                        if index == 4 {
+                            V49StudentAvatar(raw: app.avatarURL, revision: app.avatarRevision,
+                                             cachedUserID: app.user?.id ?? 0, size: 23)
+                        } else {
+                            Image(systemName: tabs[index].symbol)
+                                .font(.system(size: 19, weight: selection == index ? .bold : .medium))
+                        }
+                        Text(tabs[index].title)
+                            .font(.system(size: 10, weight: selection == index ? .bold : .medium))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                    }
+                    .foregroundStyle(selection == index ? Color.murshidBlue : Color.secondary)
+                    .frame(minWidth: 0, maxWidth: .infinity, minHeight: 49)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(tabs[index].title)
+            }
+        }
+        .padding(.horizontal, 5)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+        .background(.regularMaterial)
+        .overlay(alignment: .top) { Divider() }
     }
 
     private func keepSessionAlive() async {
@@ -1850,7 +1931,7 @@ struct V3HomeView: View {
 
                 HStack(spacing: 9) {
                     V3HeroMetric(title: "الدقة", value: "\(app.accuracy)%")
-                    V3HeroMetric(title: "XP", value: "\(jInt(app.stats["xp"]))")
+                    V3HeroMetric(title: "النقاط", value: "\(jInt(app.stats["xp"]))")
                     V3HeroMetric(title: "السلسلة", value: "\(jInt(app.stats["streak"])) يوم")
                 }
             }
@@ -1980,7 +2061,7 @@ struct V3HomeView: View {
                 NavigationLink(destination: V3ContestView()) {
                     V3ToolCard(title: "تحدي المليون", subtitle: "ترتيب ونقاط", icon: "trophy.fill")
                 }
-                NavigationLink(destination: StoriesView()) {
+                NavigationLink(destination: V43StoriesView()) {
                     V3ToolCard(title: "غيّر جو", subtitle: "استراحة قصيرة", icon: "sparkles")
                 }
             }
@@ -2342,7 +2423,7 @@ struct V3SuccessView: View {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 NavigationLink(destination: ReviewView()) { V3ToolCard(title: "المراجعة الذكية", subtitle: "آخر الأخطاء", icon: "brain.head.profile") }
                 NavigationLink(destination: StudyPlanView()) { V3ToolCard(title: "خطة الدراسة", subtitle: "هدف يومي", icon: "calendar") }
-                NavigationLink(destination: AchievementsView()) { V3ToolCard(title: "الإنجازات", subtitle: "XP والمستوى", icon: "medal.fill") }
+                NavigationLink(destination: AchievementsView()) { V3ToolCard(title: "الإنجازات", subtitle: "النقاط والمستوى", icon: "medal.fill") }
                 NavigationLink(destination: V3ContestView()) { V3ToolCard(title: "تحدي المليون", subtitle: "المتصدرون", icon: "trophy.fill") }
             }
             .buttonStyle(.plain)
@@ -2489,6 +2570,7 @@ struct V3FocusView: View {
 // MARK: - Contest & seasonal ranking
 
 struct V3ContestView: View {
+    @EnvironmentObject var app: AppSession
     @State private var contest: JSON = [:]
     @State private var season: JSON = [:]
     @State private var loading = true
@@ -2502,6 +2584,7 @@ struct V3ContestView: View {
                 ScrollView {
                     LazyVStack(spacing: 16) {
                         V3IntroCard(eyebrow: "تحدي المليون", title: "تقدمك بين الطلاب", text: "الترتيب يعتمد على نقاط المنصة والإجابات الصحيحة ضمن فترة التحدي.", icon: "trophy.fill")
+                        V45ContestInstructionsLink()
                         myRankCard
                         leaderboard(title: "متصدرو تحدي المليون", rows: jArray(contest["leaderboard"]), rankKey: "rank", xpKey: "xp")
                         leaderboard(title: "ترتيب الموسم", rows: jArray(season["leaderboard"]), rankKey: "rank", xpKey: "xp")
@@ -2521,14 +2604,24 @@ struct V3ContestView: View {
     private var myRankCard: some View {
         MurshidCard {
             HStack(spacing: 14) {
-                Image(systemName: "person.crop.circle.badge.checkmark").font(.largeTitle).foregroundStyle(Color.murshidBlue)
+                V49StudentAvatar(
+                    raw: jString((contest["mine"] as? JSON)?["avatar_url"], default: app.avatarURL),
+                    revision: app.avatarRevision,
+                    cachedUserID: app.user?.id ?? 0,
+                    size: 54
+                )
                 VStack(alignment: .leading, spacing: 5) {
                     Text("مركزك الحالي").font(.subheadline).foregroundStyle(.secondary)
                     if let mine = contest["mine"] as? JSON {
                         Text("#\(jInt(mine["rank"]))").font(.largeTitle.bold()).foregroundStyle(Color.murshidBlue)
-                        Text("\(jInt(mine["xp"])) XP · \(jInt(mine["correct"])) إجابة صحيحة").font(.caption).foregroundStyle(.secondary)
+                        Text("\(jInt(mine["xp"])) نقطة · \(jInt(mine["correct"])) إجابة صحيحة").font(.caption).foregroundStyle(.secondary)
                     } else {
                         Text("ابدأ الإجابة لتدخل الترتيب").font(.headline)
+                    }
+                    let endAt = jString((contest["config"] as? JSON)?["end_at"])
+                    if !endAt.isEmpty {
+                        Label("الإغلاق: \(endAt) بتوقيت بغداد", systemImage: "calendar")
+                            .font(.caption2).foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
@@ -2549,12 +2642,13 @@ struct V3ContestView: View {
                     MurshidCard {
                         HStack(spacing: 12) {
                             Text("#\(jInt(row[rankKey]))").font(.headline.monospacedDigit()).foregroundStyle(Color.murshidBlue).frame(width: 42)
+                            V49StudentAvatar(raw: jString(row["avatar_url"]), size: 38)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(jString(row["name"])).font(.headline)
                                 if !jString(row["grade"]).isEmpty { Text(jString(row["grade"])).font(.caption).foregroundStyle(.secondary) }
                             }
                             Spacer()
-                            Text("\(jInt(row[xpKey])) XP").font(.subheadline.bold()).foregroundStyle(.secondary)
+                            Text("\(jInt(row[xpKey])) نقطة").font(.subheadline.bold()).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -2657,7 +2751,7 @@ struct V3SubjectRow: View {
         if name.contains("فيزياء") { return "atom" }
         if name.contains("كيمي") { return "flask.fill" }
         if name.contains("أحياء") { return "leaf.fill" }
-        if name.contains("إنك") || name.contains("انك") || name.contains("فرنسي") { return "globe" }
+        if name.contains("إنك") || name.contains("انك") { return "globe" }
         if name.contains("إسلام") || name.contains("اسلام") { return "book.closed.fill" }
         if name.contains("تاريخ") || name.contains("اجتماع") || name.contains("جغراف") { return "map.fill" }
         return "book.closed.fill"
@@ -2847,11 +2941,25 @@ struct V3ExamView: View {
             } else if !error.isEmpty && questions.isEmpty {
                 ErrorStateView(message: error, retry: { Task { await load() } })
             } else if questions.isEmpty {
-                EmptyStateView(
-                    systemImage: "doc.questionmark",
-                    title: "لا توجد أسئلة متاحة",
-                    message: app.subscribed ? "لا توجد أسئلة منشورة في هذا الموضوع حاليًا." : "قد تكون استهلكت رصيدك المجاني. يمكنك الاشتراك لفتح بقية الأسئلة."
-                )
+                VStack(spacing: 14) {
+                    EmptyStateView(
+                        systemImage: "doc.questionmark",
+                        title: app.freeRemaining == 0 && !app.subscribed ? "انتهت الأسئلة المجانية" : "لا توجد أسئلة متاحة",
+                        message: app.freeRemaining == 0 && !app.subscribed
+                            ? "لقد استخدمت \(app.freeLimit) سؤالاً مجانياً. اختر اشتراكاً لتكمل اختباراتك."
+                            : "لا توجد أسئلة منشورة في هذا الموضوع حاليًا."
+                    )
+                    if !app.subscribed {
+                        Button { showSubscription = true } label: {
+                            Label("اشتراك", systemImage: "crown.fill")
+                                .font(.title3.bold())
+                                .frame(maxWidth: .infinity).frame(height: 54)
+                                .foregroundStyle(Color.murshidNavy)
+                                .background(Color.murshidGold, in: RoundedRectangle(cornerRadius: 14))
+                        }
+                        .padding(.horizontal, 22)
+                    }
+                }
             } else if showResult {
                 V3ExamResultView(
                     topic: topic,
@@ -3009,7 +3117,8 @@ struct V3ExamView: View {
                     Spacer()
                     if !app.subscribed {
                         Button { showSubscription = true } label: {
-                            Label("متبقي \(app.freeRemaining ?? 0)", systemImage: "gift.fill")
+                            Label(app.freeRemaining == 0 ? "اشتراك" : "اشتراك · متبقي \(app.freeRemaining ?? 0)", systemImage: "crown.fill")
+                                .fontWeight(.bold)
                         }
                         .foregroundStyle(Color.murshidGold)
                     } else {
@@ -3199,6 +3308,10 @@ struct V3ExamView: View {
                         .foregroundStyle(.secondary)
                         .lineSpacing(5)
                         .fixedSize(horizontal: false, vertical: true)
+                    Button { V49QuestionSpeech.shared.speak(serverCorrectAnswer + ". " + serverExplanation) } label: {
+                        Label("استمع إلى الإجابة والشرح", systemImage: "speaker.wave.2.fill")
+                    }
+                    .font(.subheadline)
                 }
             }
         }
@@ -3260,7 +3373,7 @@ struct V3ExamView: View {
                         Text("الخيارات ناقصة").tag("missing_options")
                         Text("السؤال مكرر").tag("duplicate")
                         Text("السؤال في موضوع غير صحيح").tag("wrong_topic")
-                        Text("الشرح غير صحيح").tag("wrong_explanation")
+                        Text("الشرح ناقص أو غير صحيح").tag("wrong_explanation")
                         Text("السؤال غير واضح").tag("unclear")
                         Text("مشكلة في المصدر").tag("source")
                         Text("سبب آخر").tag("other")
@@ -3403,6 +3516,8 @@ struct V3ExamView: View {
                 availableFilterRounds = roundValues
                 availableFilterDifficulties = difficultyValues
                 for q in qs where !q.storedAnswer.isEmpty { answers[q.id] = q.storedAnswer }
+                // Only server-graded answers become available for offline recall.
+                V49StudyStore.shared.rememberPreviouslyGraded(qs, subject: subject, topic: topic)
                 app.subscribed = jBool(d["subscribed"])
                 app.freeUsed = jInt(d["free_used"])
                 app.freeRemaining = d["free_remaining"] is NSNull ? nil : jInt(d["free_remaining"])
@@ -3506,6 +3621,14 @@ struct V3ExamView: View {
                     textAnswerFocused = false
                     if let grade {
                         withAnimation(.easeInOut(duration: 0.22)) { grades[q.id] = grade }
+                    }
+                    if let grade, grade["is_correct"] != nil {
+                        V49StudyStore.shared.rememberGraded(
+                            q, subject: subject, topic: topic, answer: answer,
+                            correct: jBool(grade["is_correct"]),
+                            correctAnswer: jString(grade["correct_answer"], default: q.correctAnswer),
+                            explanation: jString(grade["explanation"], default: q.explanation)
+                        )
                     }
                     app.subscribed = jBool(d["subscribed"], default: app.subscribed)
                     app.freeUsed = jInt(d["free_used"], default: app.freeUsed)
@@ -3872,7 +3995,7 @@ struct V3AccountView: View {
                         V3AccountRowLabel(title: "خدمة العملاء", subtitle: "محادثة مباشرة مع الدعم", icon: "message.fill")
                     }
                     Divider().padding(.leading, 48)
-                    NavigationLink(destination: StoriesView()) {
+                    NavigationLink(destination: V43StoriesView()) {
                         V3AccountRowLabel(title: "غيّر جو", subtitle: "رسائل وقصص قصيرة", icon: "sparkles")
                     }
                 }
@@ -4246,9 +4369,23 @@ struct V3SubscriptionView: View {
 }
 
 struct V3PasswordRecoveryView: View {
-    @EnvironmentObject var app: AppSession
+    @EnvironmentObject private var app: AppSession
+
     @State private var phoneToken: String?
     @State private var finished = false
+    @State private var contacts: JSON = [:]
+    @State private var channel = ""
+    @State private var fetching = true
+    @State private var sending = false
+    @State private var error = ""
+    @State private var resultMessage = ""
+
+    private var emailContact: JSON { contacts["email"] as? JSON ?? [:] }
+    private var phoneContact: JSON { contacts["phone"] as? JSON ?? [:] }
+    private var canSend: Bool {
+        let record = channel == "email" ? emailContact : phoneContact
+        return jBool(record["enabled"])
+    }
 
     var body: some View {
         Group {
@@ -4261,15 +4398,206 @@ struct V3PasswordRecoveryView: View {
                 VStack(spacing: 16) {
                     Image(systemName: "checkmark.circle.fill").font(.system(size: 54)).foregroundStyle(.green)
                     Text("تم تحديث كلمة المرور").font(.title2.bold())
-                    Text("لأمان حسابك ستحتاج إلى تسجيل الدخول من جديد.").foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    Text("لأمان حسابك ستحتاج إلى تسجيل الدخول من جديد.")
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                 }
                 .padding(28)
             } else {
-                ForgotPasswordView { token in phoneToken = token }
+                accountBoundForm
             }
         }
         .navigationTitle("كلمة المرور")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            guard contacts.isEmpty && phoneToken == nil && !finished else { return }
+            await loadContacts()
+        }
+    }
+
+    private var accountBoundForm: some View {
+        ScrollView {
+            VStack(spacing: 17) {
+                AuthHeader(subtitle: "استعادة آمنة لبيانات حسابك الحالي")
+                    .padding(.top, 12)
+
+                MurshidCard {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Label("استعادة كلمة المرور", systemImage: "key.fill")
+                            .font(.title2.bold())
+
+                        Text("يمكن إرسال رمز الاستعادة أو رابط تغيير كلمة المرور إلى البريد الإلكتروني أو رقم الهاتف المسجل في حسابك فقط. لا يمكن تعديل وجهة الاستعادة من هنا.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        if fetching {
+                            ProgressView("جاري جلب بيانات حسابك المسجلة…")
+                                .frame(maxWidth: .infinity, minHeight: 92)
+                        } else {
+                            let email = jString(emailContact["value"])
+                            let phone = jString(phoneContact["value"])
+                            if !email.isEmpty {
+                                contactRow(
+                                    label: "البريد الإلكتروني المسجل",
+                                    destination: email,
+                                    method: "email",
+                                    icon: "envelope.fill",
+                                    available: jBool(emailContact["enabled"])
+                                )
+                            }
+                            if !phone.isEmpty {
+                                contactRow(
+                                    label: "رقم WhatsApp المسجل",
+                                    destination: phone,
+                                    method: "phone",
+                                    icon: "phone.fill",
+                                    available: jBool(phoneContact["enabled"])
+                                )
+                            }
+                            if email.isEmpty && phone.isEmpty {
+                                Label("لا يوجد بريد أو رقم مرتبط بحسابك. تواصل مع دعم المنصة لتحديث بيانات التواصل بعد التحقق من هويتك.", systemImage: "exclamationmark.shield.fill")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if !email.isEmpty || !phone.isEmpty {
+                                Label("البيانات المعروضة مأخوذة من الحساب مباشرة ولا يمكن تغييرها أثناء الاستعادة.", systemImage: "lock.shield.fill")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            if !error.isEmpty { AuthMessage(text: error, kind: .error) }
+                            if !resultMessage.isEmpty {
+                                AuthMessage(text: resultMessage, kind: .success)
+                            }
+
+                            if !email.isEmpty || !phone.isEmpty {
+                                Button {
+                                    Task { await beginRecovery() }
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        if sending { ProgressView().tint(.white) }
+                                        Label(sending ? "جاري إرسال طلب الاستعادة…" : "إرسال إلى وسيلة الحساب المسجلة", systemImage: "lock.shield.fill")
+                                    }
+                                }
+                                .buttonStyle(PrimaryButtonStyle())
+                                .disabled(fetching || sending || !canSend || !resultMessage.isEmpty)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 32)
+        }
+        .background(Color.murshidBackground.ignoresSafeArea())
+        .refreshable { await loadContacts() }
+    }
+
+    private func contactRow(label: String, destination: String, method: String,
+                            icon: String, available: Bool) -> some View {
+        Button {
+            if available {
+                channel = method
+                error = ""
+                resultMessage = ""
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: channel == method ? "largecircle.fill.circle" : "circle")
+                    .font(.title3)
+                    .foregroundStyle(available ? Color.murshidBlue : .gray)
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(label, systemImage: icon)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(destination)
+                        .font(.footnote.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !available {
+                        Text("هذه الوسيلة غير مؤكدة أو غير مفعلة حالياً")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                }
+                Spacer(minLength: 2)
+                Image(systemName: "lock.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(13)
+            .background(
+                Color.murshidBlue.opacity(channel == method && available ? 0.10 : 0.045),
+                in: RoundedRectangle(cornerRadius: 14)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color.murshidBlue.opacity(channel == method && available ? 0.55 : 0.12),
+                            lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!available)
+        .accessibilityHint(available ? "وجهة ثابتة مرتبطة بحسابك، اضغط لاختيار طريقة الاستعادة" : "غير متاحة للاستعادة")
+    }
+
+    @MainActor
+    private func loadContacts() async {
+        fetching = true
+        error = ""
+        do {
+            // Never cache contact destinations; password-recovery always uses
+            // the currently authenticated user and the server's own DB values.
+            let data = try await APIClient.shared.request("mobile/bound-password-recovery.php")
+            contacts = data["contacts"] as? JSON ?? [:]
+            let email = contacts["email"] as? JSON ?? [:]
+            let phone = contacts["phone"] as? JSON ?? [:]
+            channel = jBool(email["enabled"]) ? "email" :
+                      (jBool(phone["enabled"]) ? "phone" : "")
+        } catch let failure as APIError where failure.status == 404 {
+            contacts = [:]
+            channel = ""
+            self.error = "خدمة استعادة كلمة المرور لم تُثبَّت على الموقع بعد. يرجى إبلاغ إدارة المنصة لتفعيلها."
+        } catch {
+            contacts = [:]
+            channel = ""
+            self.error = error.localizedDescription
+        }
+        fetching = false
+    }
+
+    @MainActor
+    private func beginRecovery() async {
+        guard !channel.isEmpty, canSend, !sending else { return }
+        sending = true
+        error = ""
+        resultMessage = ""
+        do {
+            // The client sends ONLY a channel; it never sends an address,
+            // phone number, identifier or user ID as the reset recipient.
+            let response = try await APIClient.shared.request(
+                "mobile/bound-password-recovery.php",
+                method: "POST",
+                body: ["csrf": app.csrf, "channel": channel]
+            )
+            if jString(response["channel"]) == "phone" {
+                let token = jString(response["phone_token"])
+                guard !token.isEmpty else {
+                    throw APIError(message: "تعذر إنشاء طلب استعادة الهاتف.", status: 422, paymentRequired: false)
+                }
+                phoneToken = token
+            } else {
+                resultMessage = jString(response["message"],
+                                        default: "تم إرسال رابط الاستعادة إلى البريد المرتبط بحسابك.")
+            }
+            haptic()
+        } catch {
+            self.error = error.localizedDescription
+            haptic(.error)
+        }
+        sending = false
     }
 }
 
@@ -4364,7 +4692,7 @@ struct RegisterV3View: View {
 
                             navigationButtons(proxy: proxy)
 
-                            Text("نسخة iPhone 4.2 • Build 420")
+                            Text("نسخة iPhone \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—") • Build \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—")")
                                 .font(.caption2.monospacedDigit())
                                 .foregroundStyle(.tertiary)
                                 .frame(maxWidth: .infinity, alignment: .center)
