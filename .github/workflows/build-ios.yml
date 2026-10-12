@@ -3,7 +3,7 @@ name: Build Murshid iPhone v4.9.3 Free 100 Preview IPAs
 on:
   workflow_dispatch:
   push:
-    branches: [ ios-free100-v493-offer-fix ]
+    branches: [ ios-admin-v494-subscription-sources ]
     paths:
       - '.github/workflows/build-ios.yml'
       - 'patches/**'
@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   build:
+    if: ${{ false }}
     name: Build v4.9.3 Build 502 unsigned student IPA
     runs-on: macos-15
     timeout-minutes: 35
@@ -520,7 +521,7 @@ jobs:
           retention-days: 14
 
   admin_build:
-    name: Build v4.9.3 Build 502 unsigned iPhone admin IPA
+    name: Build v4.9.4 Build 503 unsigned iPhone admin IPA
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -560,7 +561,7 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \
             MARKETING_VERSION='4.9.3' \
-            CURRENT_PROJECT_VERSION='502' \
+            CURRENT_PROJECT_VERSION='503' \
             clean build
 
       - name: Validate and package admin IPA
@@ -574,14 +575,16 @@ jobs:
           test -f "$APP/Assets.car"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid.admin'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.9.3'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '502'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '503'
           grep -Fq 'FreeMonthCampaignScreen' App/MurshidAdminApp.swift
           grep -Fq 'promo_save' App/MurshidAdminApp.swift
+          grep -Fq 'SubscriptionSourcesHome' App/MurshidAdminApp.swift
+          grep -Fq 'subscription_sources' App/MurshidAdminApp.swift
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Murshid_Admin_iOS_v4_9_3_BUILD502_unsigned.ipa Payload
-          test -s Murshid_Admin_iOS_v4_9_3_BUILD502_unsigned.ipa
-          shasum -a 256 Murshid_Admin_iOS_v4_9_3_BUILD502_unsigned.ipa | tee Murshid_Admin_iOS_v4_9_3_BUILD502_unsigned.sha256
+          /usr/bin/zip -qry Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.ipa Payload
+          test -s Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.ipa
+          shasum -a 256 Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.ipa | tee Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.sha256
 
       - name: Publish admin IPA preview
         env:
@@ -589,21 +592,21 @@ jobs:
         run: |
           set -euo pipefail
           cd admin_ios
-          TAG='v4.9.3-build502-free100-admin-preview'
-          NOTES='Unsigned native iPhone admin IPA. Owner controls free-seat count, Baghdad-time launch and end, pause/resume, and the claimed counter. Requires the updated SQL and PHP backend.'
+          TAG='v4.9.4-build503-free100-admin-preview'
+          NOTES='Unsigned native iPhone admin IPA. Native iPhone admin: three separate subscription source lists (codes, free month, confirmed payments) with student profile and subscription details. Requires updating admin/native-api.php on the hosting.'
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" Murshid_Admin_iOS_v4_9_3_BUILD502_unsigned.ipa Murshid_Admin_iOS_v4_9_3_BUILD502_unsigned.sha256 --clobber
+            gh release upload "$TAG" Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.ipa Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.sha256 --clobber
           else
-            gh release create "$TAG" Murshid_Admin_iOS_v4_9_3_BUILD502_unsigned.ipa Murshid_Admin_iOS_v4_9_3_BUILD502_unsigned.sha256 --target "$GITHUB_SHA" --prerelease --title 'Murshid Admin iPhone v4.9.3 Build 502' --notes "$NOTES"
+            gh release create "$TAG" Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.ipa Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.sha256 --target "$GITHUB_SHA" --prerelease --title 'Murshid Admin iPhone v4.9.4 Build 503' --notes "$NOTES"
           fi
 
       - name: Upload admin IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Admin-iPhone-v4.9.3-Build502-Unsigned
+          name: Murshid-Admin-iPhone-v4.9.4-Build503-Unsigned
           path: |
-            admin_ios/Murshid_Admin_iOS_v4_9_3_BUILD502_unsigned.ipa
-            admin_ios/Murshid_Admin_iOS_v4_9_3_BUILD502_unsigned.sha256
+            admin_ios/Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.ipa
+            admin_ios/Murshid_Admin_iOS_v4_9_4_BUILD503_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
 
@@ -620,6 +623,8 @@ jobs:
           php -l server_updates/v4_9_1_free_month/mobile/free-month-offer.php
           php -l server_updates/v4_9_1_free_month/admin/native-api.php
           grep -Fq 'ends_at_utc' server_updates/v4_9_1_free_month/includes/free_month_campaign.php
+          grep -Fq "subscription_sources" server_updates/v4_9_1_free_month/admin/native-api.php
+          grep -Fq "status='success'" server_updates/v4_9_1_free_month/admin/native-api.php
           grep -Fq 'eligible_new_student' server_updates/v4_9_1_free_month/mobile/free-month-offer.php
           test -s server_updates/v4_9_1_free_month/sql/051_new_accounts_campaign_window.sql
           grep -Fq 'FOR UPDATE' server_updates/v4_9_1_free_month/mobile/free-month-offer.php
@@ -644,8 +649,8 @@ jobs:
         run: |
           set -u
           mkdir -p .build-status
-          STATUS_FILE=".build-status/v4.9.3-build502-status.txt"
-          LOG_FILE=".build-status/v4.9.3-build502-failed.log"
+          STATUS_FILE=".build-status/v4.9.4-build503-status.txt"
+          LOG_FILE=".build-status/v4.9.4-build503-failed.log"
           {
             echo "run_id=$GITHUB_RUN_ID"
             echo "run_attempt=$GITHUB_RUN_ATTEMPT"
