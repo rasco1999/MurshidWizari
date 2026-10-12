@@ -391,6 +391,9 @@ jobs:
             -derivedDataPath source/simulator-build \
             -resultBundlePath qa-output/V498Final.xcresult \
             -parallel-testing-enabled NO \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 90 \
+            -maximum-test-execution-time-allowance 120 \
             SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG V498_QA' \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             2>&1 | tee qa-output/simulator-tests.log

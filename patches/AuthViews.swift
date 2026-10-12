@@ -1723,10 +1723,11 @@ struct MainV3TabView: View {
     @State private var visited: Set<Int> = [0]
     @State private var keyboardVisible = false
 
-    private var canMonitorAds: Bool {
-        scenePhase == .active && app.v3Authenticated && !device.isLocked && device.isOnline
+    private var canViewAds: Bool {
+        scenePhase == .active && app.v3Authenticated && !device.isLocked
     }
-    private var adsMonitorKey: String { "\(app.user?.id ?? 0):\(canMonitorAds)" }
+    private var canMonitorAds: Bool { canViewAds && device.isOnline }
+    private var adsMonitorKey: String { "\(app.user?.id ?? 0):\(canViewAds):\(device.isOnline)" }
 
     // Five destinations fit in one native bottom bar without a Study tab.
     private let tabs: [(title: String, symbol: String)] = [
@@ -1767,12 +1768,12 @@ struct MainV3TabView: View {
         .environment(\.layoutDirection, .rightToLeft)
         .onChange(of: selection) { value in
             visited.insert(value)
-            schoolAds.setViewingAds(value == 3 && canMonitorAds)
+            schoolAds.setViewingAds(value == 3 && canViewAds)
             V49QuestionSpeech.shared.stop()
             selectionHaptic()
         }
         .task(id: adsMonitorKey) {
-            schoolAds.setViewingAds(selection == 3 && canMonitorAds)
+            schoolAds.setViewingAds(selection == 3 && canViewAds)
             guard canMonitorAds else { return }
             await schoolAds.monitor(userID: app.user?.id ?? 0)
         }

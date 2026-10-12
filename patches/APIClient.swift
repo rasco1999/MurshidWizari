@@ -113,7 +113,9 @@ final class AppSession: ObservableObject {
         if let user { V49StudyStore.shared.bind(to: user) }
         if let user {
             V498SchoolAdsStore.shared.bind(userID: user.id)
-            if let rows = json["ads"] as? [JSON] {
+            // Seed once. A slower unrelated home/account bootstrap must not
+            // overwrite a newer response from the dedicated live-ad monitor.
+            if !V498SchoolAdsStore.shared.hasLoaded, let rows = json["ads"] as? [JSON] {
                 V498SchoolAdsStore.shared.ingest(rows, for: user.id)
             }
         }

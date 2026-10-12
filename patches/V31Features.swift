@@ -773,7 +773,7 @@ struct V31SchoolAdsView: View {
                     V3SkeletonCard(height: 130)
                 } else if feed.ads.isEmpty && feed.error.isEmpty {
                     EmptyStateView(systemImage: "megaphone", title: "لا توجد إعلانات مدرسية الآن", message: "ستظهر الإعلانات هنا تلقائياً بعد نشرها من الإدارة.")
-                } else {
+                } else if !feed.ads.isEmpty {
                     V31SchoolAdTicker(text: tickerText)
                     ForEach(feed.ads) { ad in
                         MurshidCard {
@@ -1676,11 +1676,13 @@ extension APIClient {
 final class MurshidAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        #if !V498_QA
         Task {
             let center = UNUserNotificationCenter.current()
             let granted = (try? await center.requestAuthorization(options: [.alert, .badge, .sound])) ?? false
             if granted { await MainActor.run { UIApplication.shared.registerForRemoteNotifications() } }
         }
+        #endif
         return true
     }
 
