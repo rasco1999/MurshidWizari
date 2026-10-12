@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 func murshidQuestionDisplayText(_ raw: String) -> String {
     var text = raw
@@ -1716,9 +1717,12 @@ struct V49StudentAvatar: View {
 
 struct MainV3TabView: View {
     @EnvironmentObject var app: AppSession
+    @Environment(\.scenePhase) private var scenePhase
+    @ObservedObject private var schoolAdNotices = V44SchoolAdNoticeStore.shared
     @State private var selection = 0
     @State private var visited: Set<Int> = [0]
     @State private var keyboardVisible = false
+    private let schoolAdTicker = Timer.publish(every: 45, on: .main, in: .common).autoconnect()
 
     // Five destinations fit in one native bottom bar without a Study tab.
     private let tabs: [(title: String, symbol: String)] = [
@@ -1749,7 +1753,7 @@ struct MainV3TabView: View {
                 }
             }
             if visited.contains(3) {
-                tabPane(3) { NavigationStack { tabRoot { V31SchoolAdsView() } } }
+                tabPane(3) { NavigationStack { tabRoot { V31SchoolAdsView(isVisible: selection == 3) } } }
             }
             if visited.contains(4) {
                 tabPane(4) { NavigationStack { tabRoot { V31AccountView() } } }
@@ -1760,10 +1764,26 @@ struct MainV3TabView: View {
         .onChange(of: selection) { value in
             visited.insert(value)
             selectionHaptic()
+            if value == 3, let studentID = app.user?.id {
+                schoolAdNotices.markRead(for: studentID)
+                Task { await checkSchoolAds() }
+            }
+        }
+        .onReceive(schoolAdTicker) { _ in
+            guard scenePhase == .active else { return }
+            Task { await checkSchoolAds() }
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active { Task { await checkSchoolAds() } }
+        }
+        .onChange(of: app.v3Authenticated) { authenticated in
+            if authenticated { Task { await checkSchoolAds() } }
+            else { schoolAdNotices.clearForLogout() }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardVisible = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardVisible = false }
         .task { await keepSessionAlive() }
+        .task { await checkSchoolAds() }
         .onOpenURL { url in
             switch (url.host ?? url.path.replacingOccurrences(of: "/", with: "")).lowercased() {
             case "tests", "exam", "subjects": selection = 1
@@ -1803,8 +1823,19 @@ struct MainV3TabView: View {
                             V49StudentAvatar(raw: app.avatarURL, revision: app.avatarRevision,
                                              cachedUserID: app.user?.id ?? 0, size: 23)
                         } else {
-                            Image(systemName: tabs[index].symbol)
-                                .font(.system(size: 19, weight: selection == index ? .bold : .medium))
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: tabs[index].symbol)
+                                    .font(.system(size: 19, weight: selection == index ? .bold : .medium))
+                                if index == 3 && schoolAdNotices.unreadCount > 0 {
+                                    Text(schoolAdNotices.unreadCount > 9 ? "9+" : "\(schoolAdNotices.unreadCount)")
+                                        .font(.system(size: 9, weight: .heavy, design: .rounded))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 4)
+                                        .frame(minWidth: 16, minHeight: 16)
+                                        .background(.red, in: Capsule())
+                                        .offset(x: -11, y: -10)
+                                }
+                            }
                         }
                         Text(tabs[index].title)
                             .font(.system(size: 10, weight: selection == index ? .bold : .medium))
@@ -1816,7 +1847,9 @@ struct MainV3TabView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(tabs[index].title)
+                .accessibilityLabel(index == 3 && schoolAdNotices.unreadCount > 0
+                                    ? "الإعلانات، \(schoolAdNotices.unreadCount) جديد"
+                                    : tabs[index].title)
             }
         }
         .padding(.horizontal, 5)
@@ -1824,6 +1857,13 @@ struct MainV3TabView: View {
         .padding(.bottom, 4)
         .background(.regularMaterial)
         .overlay(alignment: .top) { Divider() }
+    }
+
+    private func checkSchoolAds() async {
+        guard scenePhase == .active, app.v3Authenticated,
+              let studentID = app.user?.id, studentID > 0 else { return }
+        await schoolAdNotices.refresh(for: studentID)
+        if selection == 3 { schoolAdNotices.markRead(for: studentID) }
     }
 
     private func keepSessionAlive() async {
