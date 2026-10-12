@@ -11,18 +11,11 @@ enum V498SpeechText {
                                       ("&#39;", "'"), ("&lt;", "<"), ("&gt;", ">") ] {
             text = text.replacingOccurrences(of: entity, with: replacement)
         }
-        return text.replacingOccurrences(of: "[\\s\u{200B}\u{200E}\u{200F}]+", with: " ", options: .regularExpression)
+        // Remove formatting controls, not Arabic vowels, shadda or Quranic marks.
+        // A bidi control inside a word must not introduce a spoken word break.
+        text = text.replacingOccurrences(of: "[\u{061C}\u{0640}\u{200B}\u{200E}\u{200F}\u{202A}-\u{202E}\u{2066}-\u{2069}\u{FEFF}]", with: "", options: .regularExpression)
+        return text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    static func language(_ text: String) -> String {
-        let arabic = text.unicodeScalars.contains {
-            CharacterSet.letters.contains($0) &&
-            ((0x0600...0x06FF).contains($0.value) || (0x0750...0x077F).contains($0.value) ||
-             (0x08A0...0x08FF).contains($0.value) || (0xFB50...0xFDFF).contains($0.value) ||
-             (0xFE70...0xFEFF).contains($0.value))
-        }
-        return arabic ? "ar-SA" : "en-US"
     }
 
     static func chunks(_ raw: String, limit: Int = 500) -> [String] {
@@ -33,13 +26,84 @@ enum V498SpeechText {
         while remaining.count > size {
             let boundary = remaining.index(remaining.startIndex, offsetBy: size)
             let prefix = remaining[..<boundary]
-            let split = prefix.lastIndex(where: { $0.isWhitespace || ".!?؟؛،".contains($0) })
+            // Prefer the end of a complete sentence, then a clause. Do not
+            // split a decimal such as 3.14 or ٣٫١٤ at its decimal separator.
+            let sentence = prefix.indices.last(where: { index in
+                guard ".!?؟؛".contains(remaining[index]) else { return false }
+                let next = remaining.index(after: index)
+                return next == remaining.endIndex || remaining[next].isWhitespace
+            })
+            let clause = prefix.indices.last(where: { index in
+                guard ",،:".contains(remaining[index]) else { return false }
+                let next = remaining.index(after: index)
+                return next == remaining.endIndex || remaining[next].isWhitespace
+            })
+            let split = sentence ?? clause ?? prefix.lastIndex(where: { $0.isWhitespace })
             let end = split.map { remaining.index(after: $0) } ?? boundary
             let part = String(remaining[..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
             if !part.isEmpty { result.append(part) }
             remaining = String(remaining[end...]).trimmingCharacters(in: .whitespacesAndNewlines)
         }
         if !remaining.isEmpty { result.append(remaining) }
+        return result
+    }
+}
+
+// Explicit policy instead of relying on the device's default Arabic voice.
+// Gender comes from the system catalog, never from pitch shifting or a guessed name.
+struct V499VoiceCandidate {
+    let identifier: String
+    let language: String
+    let gender: AVSpeechSynthesisVoiceGender
+    let quality: AVSpeechSynthesisVoiceQuality
+    var restricted = false
+}
+
+enum V499ArabicNarration {
+    static let unavailableMessage = "لا يوجد صوت عربي أنثوي متاح للتطبيق على هذا الجهاز. افتح الإعدادات ← تسهيلات الاستخدام ← القراءة والنطق (أو المحتوى المنطوق) ← الأصوات ← العربية، واختر صوتًا أنثويًا ونزّل جودته المحسّنة إن توفرت، ثم عُد واضغط الاستماع."
+
+    static func localeRank(_ language: String) -> Int? {
+        switch language.lowercased().replacingOccurrences(of: "_", with: "-") {
+        case "ar-001": return 0 // Arabic (World), preferred for formal narration.
+        case "ar-sa": return 1
+        case "ar": return 2
+        default: return nil
+        }
+    }
+
+    static func preferredIdentifier(in candidates: [V499VoiceCandidate], preferCompact: Bool = false,
+                                    excluding identifier: String? = nil) -> String? {
+        let eligible = candidates.filter {
+            $0.gender == .female && !$0.restricted && localeRank($0.language) != nil && $0.identifier != identifier
+        }
+        return eligible.sorted { a, b in
+            if preferCompact, (a.quality == .default) != (b.quality == .default) {
+                return a.quality == .default
+            }
+            if a.quality != b.quality { return a.quality.rawValue > b.quality.rawValue }
+            let left = localeRank(a.language)!, right = localeRank(b.language)!
+            if left != right { return left < right }
+            return a.identifier < b.identifier
+        }.first?.identifier
+    }
+
+    static func pauseAfter(_ text: String) -> TimeInterval {
+        let last = text.last(where: { !$0.isWhitespace && !"»”\"')]}".contains($0) })
+        guard let last else { return 0 }
+        if ".!?؟…".contains(last) { return 0.24 }
+        if ",،؛:".contains(last) { return 0.14 }
+        return 0.04
+    }
+
+    static func utterance(_ text: String, voice: AVSpeechSynthesisVoice, first: Bool) -> AVSpeechUtterance {
+        let result = AVSpeechUtterance(string: text)
+        result.voice = voice
+        result.rate = AVSpeechUtteranceDefaultSpeechRate * 0.88
+        result.pitchMultiplier = 1.0 // Preserve the female voice's natural timbre.
+        result.volume = 1
+        result.prefersAssistiveTechnologySettings = false
+        result.preUtteranceDelay = first ? 0.06 : 0
+        result.postUtteranceDelay = pauseAfter(text)
         return result
     }
 }
@@ -62,6 +126,7 @@ final class V49QuestionSpeech: NSObject, ObservableObject, @preconcurrency AVSpe
     private var releaseTask: Task<Void, Never>?
     private let session = AVAudioSession.sharedInstance()
     private var ownsAudioSession = false
+    private var selectedVoice: AVSpeechSynthesisVoice?
 
     private override init() {
         super.init()
@@ -92,6 +157,13 @@ final class V49QuestionSpeech: NSObject, ObservableObject, @preconcurrency AVSpe
         activeID = id
         chunkIndex = 0
         retryCount = 0
+        // One Arabic female voice is retained for the entire reading, even
+        // when a later chunk contains only numbers or a foreign abbreviation.
+        selectedVoice = Self.availableVoice()
+        guard selectedVoice != nil else {
+            fail(V499ArabicNarration.unavailableMessage)
+            return
+        }
         // Recreate after cancellation: iOS can leave a stopped synthesizer's
         // queue stalled when stopSpeaking/speak are called in the same turn.
         replaceSynthesizer()
@@ -129,26 +201,29 @@ final class V49QuestionSpeech: NSObject, ObservableObject, @preconcurrency AVSpe
         configureSynthesizer()
     }
 
-    static func availableVoice(for language: String, preferCompact: Bool = false) -> AVSpeechSynthesisVoice? {
-        let prefix = String(language.prefix(2))
-        let voices = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix(prefix) }
-        if preferCompact, let compact = voices.first(where: { $0.quality == .default }) { return compact }
-        return AVSpeechSynthesisVoice(language: language) ?? voices.first
+    static func availableVoice(preferCompact: Bool = false, excluding identifier: String? = nil) -> AVSpeechSynthesisVoice? {
+        let voices = AVSpeechSynthesisVoice.speechVoices()
+        let candidates = voices.map { voice in
+            var candidate = V499VoiceCandidate(identifier: voice.identifier, language: voice.language,
+                                               gender: voice.gender, quality: voice.quality)
+            if #available(iOS 17.0, *) {
+                candidate.restricted = voice.voiceTraits.contains(.isNoveltyVoice) || voice.voiceTraits.contains(.isPersonalVoice)
+            }
+            return candidate
+        }
+        guard let selected = V499ArabicNarration.preferredIdentifier(in: candidates, preferCompact: preferCompact,
+                                                                   excluding: identifier) else { return nil }
+        return voices.first(where: { $0.identifier == selected })
     }
 
     private func speakNextChunk() {
         guard pending.indices.contains(chunkIndex), activeID != nil else { stop(); return }
         let text = pending[chunkIndex]
-        guard let voice = Self.availableVoice(for: V498SpeechText.language(text), preferCompact: retryCount > 0) else {
-            fail("الصوت المطلوب غير مثبت على iPhone. نزّل صوت العربية من الإعدادات ← تسهيلات الاستخدام ← المحتوى المنطوق (أو القراءة والنطق) ← الأصوات، ثم حاول مجددًا.")
+        guard let voice = selectedVoice else {
+            fail(V499ArabicNarration.unavailableMessage)
             return
         }
-        let next = AVSpeechUtterance(string: text)
-        next.voice = voice
-        next.volume = 1
-        next.rate = AVSpeechUtteranceDefaultSpeechRate * 0.88
-        next.preUtteranceDelay = 0
-        next.postUtteranceDelay = 0.05
+        let next = V499ArabicNarration.utterance(text, voice: voice, first: chunkIndex == 0)
         utterance = next
         phase = .preparing
         synthesizer.speak(next)
@@ -158,6 +233,10 @@ final class V49QuestionSpeech: NSObject, ObservableObject, @preconcurrency AVSpe
             guard let self, self.phase == .preparing else { return }
             if self.retryCount == 0 {
                 self.retryCount = 1
+                // Recovery also respects the female/Arabic requirement. Never
+                // fall back silently to a male or English system default.
+                self.selectedVoice = Self.availableVoice(preferCompact: true, excluding: self.selectedVoice?.identifier)
+                    ?? Self.availableVoice(preferCompact: true)
                 self.replaceSynthesizer()
                 do { try self.activatePlayback(); self.speakNextChunk() }
                 catch { self.fail("تعذر تهيئة الصوت. حاول مجددًا بعد إنهاء المكالمة أو تغيير مخرج الصوت.") }
@@ -174,6 +253,7 @@ final class V49QuestionSpeech: NSObject, ObservableObject, @preconcurrency AVSpe
         utterance = nil // Ignore delayed callbacks from an older utterance.
         synthesizer.stopSpeaking(at: .immediate)
         pending = []
+        selectedVoice = nil
         activeID = nil
         phase = .idle
         releaseAudioSession()
@@ -286,3 +366,4 @@ struct V498SpeechButton: View {
         .onDisappear { speech.stop(ifOwnedBy: speechID) }
     }
 }
+

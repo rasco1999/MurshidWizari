@@ -36,6 +36,19 @@ final class V498FinalUITests: XCTestCase {
         let question = app.buttons["recall-question-98765001"]
         XCTAssertTrue(question.waitForExistence(timeout: 8))
         question.tap()
+        let setup = app.staticTexts["recall-question-98765001-message"]
+        if question.value as? String == "متوقف", setup.exists {
+            XCTAssertTrue(setup.label.contains("لا يوجد صوت عربي أنثوي"))
+            XCTAssertTrue(setup.label.contains("تسهيلات الاستخدام"))
+            screenshot("03-female-voice-setup-guidance")
+            app.buttons["اكشف الإجابة"].tap()
+            let answer = app.buttons["recall-answer-98765001"]
+            if !answer.isHittable { app.swipeUp() }
+            answer.tap()
+            XCTAssertEqual(answer.value as? String, "متوقف")
+            XCTAssertTrue(app.staticTexts["recall-answer-98765001-message"].label.contains("لا يوجد صوت عربي أنثوي"))
+            return
+        }
         XCTAssertEqual(question.value as? String, "قيد التشغيل")
         question.tap()
         XCTAssertEqual(question.value as? String, "متوقف")
