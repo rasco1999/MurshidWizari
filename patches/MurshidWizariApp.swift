@@ -7,6 +7,16 @@ struct MurshidWizariApp: App {
     @StateObject private var device = DeviceServices.shared
     @AppStorage("appearance") private var appearance = "system"
     @State private var showAcademicWelcome = true
+    // A native iOS app often resumes instead of relaunching when its icon is tapped.
+    // Remember genuine background visits so the greeting is visible on both paths.
+    @State private var backgroundedAt: Date?
+    @State private var pendingWelcomeAfterUnlock = false
+    @State private var welcomePlaybackInProgress = false
+    @State private var completedInitialWelcome = false
+    @State private var bootstrapNeedsNetworkRetry = false
+    @State private var bootstrapAttempt = 0
+    @State private var bootstrapTask: Task<Void, Never>?
+    @State private var bootstrapTimeoutTask: Task<Void, Never>?
 
     private var colorScheme: ColorScheme? {
         appearance == "dark" ? .dark : (appearance == "light" ? .light : nil)
@@ -15,16 +25,18 @@ struct MurshidWizariApp: App {
     var body: some Scene {
         WindowGroup {
             ZStack {
-                RootView()
+                RootView(onRetryBootstrap: { beginBootstrap() })
                     .environmentObject(app)
                     .environmentObject(device)
                     .environment(\.layoutDirection, .rightToLeft)
+                    .environment(\.locale, Locale(identifier: "en_US_POSIX"))
                     .preferredColorScheme(colorScheme)
                     .opacity(showAcademicWelcome ? 0 : 1)
 
                 if showAcademicWelcome {
-                    AcademicWelcomeView()
-                        .transition(.opacity)
+                    V45WelcomeView()
+                        .environmentObject(app)
+                        .transition(.opacity.combined(with: .scale(scale: 1.015)))
                         .zIndex(20)
                 }
 
@@ -35,43 +47,191 @@ struct MurshidWizariApp: App {
                 }
             }
             .task {
-                async let restore: Void = restoreSession()
-                try? await Task.sleep(nanoseconds: 1_250_000_000)
-                await restore
-                withAnimation(.easeOut(duration: 0.28)) { showAcademicWelcome = false }
+                // Cold start: show the branded transition long enough to be noticed,
+                // while restoring authentication in parallel.
+                guard !completedInitialWelcome else { return }
+                // Restore the account independently: never make the splash longer
+                // than three seconds because of a slow network call.
+                beginBootstrap()
+                try? await Task.sleep(nanoseconds: 2_700_000_000)
+                withAnimation(.easeInOut(duration: 0.30)) {
+                    showAcademicWelcome = false
+                }
+                completedInitialWelcome = true
             }
             .onChange(of: scenePhase) { phase in
                 switch phase {
                 case .background:
+                    backgroundedAt = Date()
                     device.didEnterBackground()
                 case .active:
-                    Task {
+                    Task { @MainActor in
+                        if bootstrapNeedsNetworkRetry { beginBootstrap() }
                         await device.didBecomeActive()
-                        if app.authenticated { try? await APIClient.shared.heartbeat() }
+                        if app.v3Authenticated { Task { try? await APIClient.shared.heartbeat() } }
+                        // A brief system interruption should not replay the greeting.
+                        guard completedInitialWelcome,
+                              let left = backgroundedAt else { return }
+                        backgroundedAt = nil
+                        guard Date().timeIntervalSince(left) >= 3 else { return }
+                        if device.isLocked {
+                            // Preserve Face ID privacy: wait until the student unlocks.
+                            pendingWelcomeAfterUnlock = true
+                        } else {
+                            await replayWelcome()
+                        }
                     }
                 default: break
                 }
+            }
+            .onChange(of: device.isOnline) { online in
+                guard online, bootstrapNeedsNetworkRetry else { return }
+                Task { @MainActor in beginBootstrap() }
+            }
+            .onChange(of: device.isLocked) { locked in
+                guard !locked, pendingWelcomeAfterUnlock, scenePhase == .active else { return }
+                pendingWelcomeAfterUnlock = false
+                Task { @MainActor in await replayWelcome() }
             }
         }
     }
 
     @MainActor
-    private func restoreSession() async {
-        defer { app.bootstrapping = false }
-        do { app.applyBootstrap(try await APIClient.shared.bootstrap()) }
-        catch { app.reset() }
+    private func replayWelcome() async {
+        guard completedInitialWelcome,
+              !device.isLocked,
+              !showAcademicWelcome,
+              !welcomePlaybackInProgress,
+              scenePhase == .active else { return }
+
+        welcomePlaybackInProgress = true
+        withAnimation(.spring(response: 0.55, dampingFraction: 0.86)) {
+            showAcademicWelcome = true
+        }
+        // Resume greeting is lightweight; it never waits for network access.
+        try? await Task.sleep(nanoseconds: 2_700_000_000)
+        withAnimation(.easeInOut(duration: 0.30)) {
+            showAcademicWelcome = false
+        }
+        welcomePlaybackInProgress = false
+    }
+
+    // Run one session bootstrap at a time. A separate deadline prevents an
+    // indefinitely spinning login screen when carrier DNS or connectivity stalls.
+    @MainActor
+    private func beginBootstrap() {
+        guard !app.bootstrapping || bootstrapTask == nil else { return }
+        bootstrapAttempt += 1
+        let attempt = bootstrapAttempt
+        bootstrapTask?.cancel()
+        bootstrapTimeoutTask?.cancel()
+        app.bootstrapping = true
+        app.bootstrapNetworkFailed = false
+        bootstrapNeedsNetworkRetry = false
+
+        bootstrapTask = Task { @MainActor in
+            do {
+                let response = try await APIClient.shared.bootstrap()
+                guard bootstrapAttempt == attempt else { return }
+                app.applyBootstrap(response)
+                bootstrapNeedsNetworkRetry = false
+            } catch let failure as APIError where failure.status == 0 {
+                guard bootstrapAttempt == attempt else { return }
+                // Network timeouts are not invalid credentials. Keep stored
+                // cookies and allow retry; never reset the student account.
+                app.bootstrapNetworkFailed = true
+                bootstrapNeedsNetworkRetry = true
+            } catch is CancellationError {
+                return
+            } catch {
+                guard bootstrapAttempt == attempt else { return }
+                // Real expired/invalid sessions still return to sign-in.
+                bootstrapNeedsNetworkRetry = false
+                app.reset()
+            }
+            guard bootstrapAttempt == attempt else { return }
+            app.bootstrapping = false
+            bootstrapTask = nil
+            bootstrapTimeoutTask?.cancel()
+            bootstrapTimeoutTask = nil
+        }
+
+        bootstrapTimeoutTask = Task { @MainActor in
+            do { try await Task.sleep(nanoseconds: 20_000_000_000) }
+            catch { return }
+            guard bootstrapAttempt == attempt, app.bootstrapping else { return }
+            // Invalidate this attempt *before* cancellation so its late
+            // response cannot overwrite the next attempt or restore the spinner.
+            bootstrapAttempt += 1
+            bootstrapTask?.cancel()
+            bootstrapTask = nil
+            bootstrapTimeoutTask = nil
+            app.bootstrapNetworkFailed = true
+            bootstrapNeedsNetworkRetry = true
+            app.bootstrapping = false
+        }
     }
 }
 
 struct RootView: View {
     @EnvironmentObject var app: AppSession
+    @State private var showingOfflineReview = false
+    let onRetryBootstrap: () -> Void
     var body: some View {
         Group {
             if app.bootstrapping { LoadingView(text: "جاري تجهيز حسابك…") }
+            else if app.bootstrapNetworkFailed {
+                VStack(spacing: 18) {
+                    Image(systemName: "wifi.exclamationmark")
+                        .font(.system(size: 52, weight: .semibold))
+                        .foregroundStyle(Color.murshidBlue)
+                    Text("تعذّر تحميل بيانات الحساب")
+                        .font(.title3.bold())
+                    Text("تعذّر الوصول إلى خادم المنصة عبر هذه الشبكة. حسابك محفوظ، ويمكنك إعادة المحاولة عند تحسن الاتصال.")
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
+                    Button {
+                        onRetryBootstrap()
+                    } label: {
+                        Label("إعادة المحاولة", systemImage: "arrow.clockwise")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(14)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.murshidBlue)
+                    if V49StudyStore.shared.hasOfflineReview() {
+                        Divider().padding(.vertical, 4)
+                        Button { showingOfflineReview = true } label: {
+                            Label("مراجعة ما حفظته دون إنترنت", systemImage: "books.vertical.fill")
+                                .font(.headline)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+                .frame(maxWidth: 420)
+                .padding(24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
             else if app.authenticated { MainV3TabView() }
             else { AuthFlowView() }
         }
         .animation(.easeInOut(duration: 0.22), value: app.authenticated)
+        .fullScreenCover(isPresented: $showingOfflineReview) {
+            VStack(spacing: 0) {
+                HStack {
+                    Button { showingOfflineReview = false } label: {
+                        Label("العودة", systemImage: "xmark.circle.fill")
+                    }
+                    Spacer()
+                    Text("وضع المراجعة الآمنة").font(.subheadline.bold())
+                }
+                .padding(16)
+                V49OfflineAccessView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .background(Color.murshidBackground.ignoresSafeArea())
+        }
         .alert("انتهت الجلسة", isPresented: Binding(get: { app.sessionExpired }, set: { app.sessionExpired = $0 })) {
             Button("تسجيل الدخول", role: .cancel) { app.sessionExpired = false }
         } message: {
