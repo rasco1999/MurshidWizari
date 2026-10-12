@@ -400,8 +400,8 @@ jobs:
           grep -Fq 'الانتقال إلى الدفع الخارجي' MurshidWizari/V31Features.swift
           grep -Fq 'preloadAllImages' MurshidWizari/V31Features.swift
           grep -Fq 'toggleAppearance' MurshidWizari/V31Features.swift
-          grep -Fq 'ios_rev=' MurshidWizari/V31Features.swift
-          grep -Fq 'تم تغيير صورة الحساب فورًا' MurshidWizari/V31Features.swift
+          grep -Fq 'V43AvatarCache.url(raw, revision: revision)' MurshidWizari/V31Features.swift
+          grep -Fq 'تم تغيير صورة الحساب. الصورة ظاهرة وجاري تحديث رابطها.' MurshidWizari/V31Features.swift
           grep -Fq 'app-config.php' MurshidWizari/V31Features.swift
           grep -Fq 'featureEnabled(' MurshidWizari/V31Features.swift
           grep -Fq 'releaseUpdateStrip' MurshidWizari/V31Features.swift
