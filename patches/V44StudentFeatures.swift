@@ -3,6 +3,84 @@ import SwiftUI
 import Foundation
 import Combine
 
+// A foreground-only indicator for newly published school ads. It reads the
+// same public ad list as the native ads tab, without claiming popup impressions.
+// The read baseline is kept separately for each student on this device.
+@MainActor
+final class V44SchoolAdNoticeStore: ObservableObject {
+    static let shared = V44SchoolAdNoticeStore()
+    @Published private(set) var unreadCount = 0
+    @Published private(set) var publishedRevision = 0
+
+    private var userID = 0
+    private var latestAdIDs: Set<String> = []
+    private var checking = false
+
+    private init() {}
+
+    func refresh(for studentID: Int) async {
+        guard studentID > 0 else { return }
+        if userID != studentID {
+            userID = studentID
+            latestAdIDs = []
+            unreadCount = 0
+        }
+        guard !checking else { return }
+        checking = true
+        defer { checking = false }
+        do {
+            // A unique URL bypasses intermediary and URLSession GET caches.
+            let response = try await APIClient.shared.request(
+                "mobile/bootstrap.php",
+                query: [URLQueryItem(name: "_school_ads_check", value: String(Int(Date().timeIntervalSince1970)))]
+            )
+            guard userID == studentID else { return }
+            guard response["ads"] is [JSON] else { return }
+            let active = Set(jArray(response["ads"]).compactMap { ad -> String? in
+                let school = jString(ad["school"]).trimmingCharacters(in: .whitespacesAndNewlines)
+                let details = jString(ad["text"]).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !school.isEmpty, !details.isEmpty, jBool(ad["active"], default: true) else { return nil }
+                let id = jInt(ad["id"])
+                return id > 0 ? "id:\(id)" : "text:\(String(school.prefix(80)))|\(String(details.prefix(160)))"
+            })
+            let key = readKey(for: studentID)
+            if let seen = UserDefaults.standard.stringArray(forKey: key) {
+                unreadCount = active.subtracting(Set(seen)).count
+            } else {
+                // Ads that already existed on first launch aren't a new alert.
+                UserDefaults.standard.set(Array(active), forKey: key)
+                unreadCount = 0
+            }
+            if latestAdIDs != active {
+                latestAdIDs = active
+                publishedRevision += 1
+            }
+        } catch {
+            // Transient network errors retain the last known badge state.
+        }
+    }
+
+    func markRead(for studentID: Int) {
+        guard studentID > 0, userID == studentID else { return }
+        let key = readKey(for: studentID)
+        var seen = Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
+        seen.formUnion(latestAdIDs)
+        // Bound local storage even after years of school publications.
+        UserDefaults.standard.set(Array(seen.sorted().suffix(300)), forKey: key)
+        unreadCount = 0
+    }
+
+    func clearForLogout() {
+        userID = 0
+        latestAdIDs = []
+        unreadCount = 0
+    }
+
+    private func readKey(for studentID: Int) -> String {
+        "murshid_school_ads_seen_v1_\(studentID)"
+    }
+}
+
 private struct V44SchoolAd: Identifiable {
     let adID: Int
     let slot: Int
