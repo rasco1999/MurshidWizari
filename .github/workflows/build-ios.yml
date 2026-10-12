@@ -1,9 +1,9 @@
-name: Build Murshid iOS Production v4.2 IPA
+name: Build Murshid iPhone v4.9 Preview IPA
 
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ main, ios-study-v49 ]
     paths:
       - '.github/workflows/build-ios.yml'
       - 'patches/**'
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build:
-    name: Build Production v4.2 unsigned iPhone IPA
+    name: Build v4.9 Build 499 unsigned iPhone IPA
     runs-on: macos-15
     timeout-minutes: 35
 
@@ -25,6 +25,9 @@ jobs:
         run: |
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Check iPhone offline review security invariants
+        run: python3 scripts/ios_v49_static_qa.py
 
       - name: Reconstruct exact Production v2 source
         shell: bash
@@ -74,8 +77,8 @@ jobs:
               if line == '        PRODUCT_NAME: MurshidWizari':
                   out.extend([
                       '        TARGETED_DEVICE_FAMILY: "1"',
-                      '        MARKETING_VERSION: "4.2.0"',
-                      '        CURRENT_PROJECT_VERSION: "420"',
+                      '        MARKETING_VERSION: "4.9.0"',
+                      '        CURRENT_PROJECT_VERSION: "499"',
                       '        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon',
                       '        CODE_SIGN_ENTITLEMENTS: MurshidWizari/MurshidWizari.entitlements',
                   ])
@@ -143,6 +146,10 @@ jobs:
           cp patches/MurshidWizariApp.swift source/MurshidWizari/MurshidWizariApp.swift
           cp patches/V31Features.swift source/MurshidWizari/V31Features.swift
           cp patches/V40Features.swift source/MurshidWizari/V40Features.swift
+          cp patches/V43Enhancements.swift source/MurshidWizari/V43Enhancements.swift
+          cp patches/V44StudentFeatures.swift source/MurshidWizari/V44StudentFeatures.swift
+          cp patches/V45ContestWelcome.swift source/MurshidWizari/V45ContestWelcome.swift
+          cp patches/V49StudyIntelligence.swift source/MurshidWizari/V49StudyIntelligence.swift
           cp patches/ServicesV32.swift source/MurshidWizari/Services.swift
           cp patches/ThemeV34.swift source/MurshidWizari/Theme.swift
           cp patches/MainViewsV33.swift source/MurshidWizari/MainViews.swift
@@ -224,6 +231,10 @@ jobs:
           swiftc -parse source/MurshidWizari/MurshidWizariApp.swift
           swiftc -parse source/MurshidWizari/V31Features.swift
           swiftc -parse source/MurshidWizari/V40Features.swift
+          swiftc -parse source/MurshidWizari/V43Enhancements.swift
+          swiftc -parse source/MurshidWizari/V44StudentFeatures.swift
+          swiftc -parse source/MurshidWizari/V45ContestWelcome.swift
+          swiftc -parse source/MurshidWizari/V49StudyIntelligence.swift
           swiftc -parse source/MurshidWizari/Theme.swift
           swiftc -parse source/MurshidWizari/MainViews.swift
           swiftc -parse source/MurshidWizari/ExamView.swift
@@ -315,8 +326,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \
-            MARKETING_VERSION='4.2.0' \
-            CURRENT_PROJECT_VERSION='420' \
+            MARKETING_VERSION='4.9.0' \
+            CURRENT_PROJECT_VERSION='499' \
             clean build
 
       - name: Compile Apple asset catalog
@@ -346,8 +357,8 @@ jobs:
           info.update(partial)
           info['CFBundleDisplayName'] = 'المرشد الوزاري'
           info['CFBundleName'] = 'منصة المرشد الوزاري'
-          info['CFBundleShortVersionString'] = '4.2.0'
-          info['CFBundleVersion'] = '420'
+          info['CFBundleShortVersionString'] = '4.9.0'
+          info['CFBundleVersion'] = '499'
           info['NSFaceIDUsageDescription'] = 'يستخدم المرشد الوزاري Face ID لحماية حسابك عند العودة إلى التطبيق.'
           info['UISupportedInterfaceOrientations'] = ['UIInterfaceOrientationPortrait']
           info['UILaunchScreen'] = {'UIColorName': 'LaunchBackground'}
@@ -372,15 +383,15 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid'
           /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string المرشد الوزاري' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleName منصة المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleName string منصة المرشد الوزاري' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 4.2.0' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 420' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 4.9.0' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 499' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Delete :UIDeviceFamily' "$APP/Info.plist" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily array' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily:0 integer 1' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" | grep -Fx 'المرشد الوزاري'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$APP/Info.plist" | grep -Fx 'منصة المرشد الوزاري'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.2.0'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '420'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.9.0'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '499'
           /usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist" | grep -Fx '1'
           test -f "$APP/Assets.car"
           test -f "$APP/PrivacyInfo.xcprivacy"
@@ -419,6 +430,10 @@ jobs:
           grep -Fq 'V40QuestionSearchView' MurshidWizari/V40Features.swift
           grep -Fq 'V40MoreQuestionsRequestView' MurshidWizari/V40Features.swift
           grep -Fq 'V40DailyQuestion' MurshidWizari/V40Features.swift
+          grep -Fq 'V49StudyStore.shared.rememberGraded' MurshidWizari/AuthViews.swift
+          grep -Fq 'V49OfflineAccessView' MurshidWizari/MurshidWizariApp.swift
+          grep -Fq 'completeFileProtectionUntilFirstUserAuthentication' MurshidWizari/V49StudyIntelligence.swift
+          grep -Fq 'لا يُرسل إلى الخادم' MurshidWizari/V49StudyIntelligence.swift
           test "$(grep -c '^struct V40DailyChallengeView' MurshidWizari/V40Features.swift)" -eq 1
           test "$(grep -c '^struct V40MoreQuestionsRequestView' MurshidWizari/V40Features.swift)" -eq 1
           test "$(grep -c '^struct V40QuestionSearchView' MurshidWizari/V40Features.swift)" -eq 1
@@ -436,11 +451,11 @@ jobs:
             exit 1
           fi
           if grep -A230 'struct V31SubscriptionView' MurshidWizari/V31Features.swift | grep -q 'طريقة الدفع'; then
-            echo 'ERROR: payment-method chooser remains in v4.2 subscription UI.' >&2
+            echo 'ERROR: payment-method chooser remains in subscription UI.' >&2
             exit 1
           fi
           if grep -A260 'struct V31AccountView' MurshidWizari/V31Features.swift | grep -q 'طلب حذف الحساب'; then
-            echo 'ERROR: delete-account control remains in v4.2 account screen.' >&2
+            echo 'ERROR: delete-account control remains in account screen.' >&2
             exit 1
           fi
           echo "Assets.car present:"
@@ -454,32 +469,33 @@ jobs:
             echo 'ERROR: Web wrapper marker found unexpectedly.' >&2
             exit 1
           fi
-          rm -rf Payload Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.ipa
+          rm -rf Payload Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.ipa Payload
-          test -s Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.ipa
-          shasum -a 256 Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.ipa | tee Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.sha256
+          /usr/bin/zip -qry Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.ipa Payload
+          test -s Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.ipa
+          shasum -a 256 Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.ipa | tee Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.sha256
 
-      - name: Publish v4.2 unsigned IPA release
+      - name: Publish iPhone IPA release from main only
+        if: github.ref == 'refs/heads/main'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           cd source
-          TAG="v4.2-build420"
-          TITLE="Murshid Wizari iOS v4.2 Build 420"
-          NOTES="Unsigned iPhone IPA v4.2 with advanced filters, custom exams, daily challenge, question search, question submissions, request-more flow, private notes, attempt history, stronger question integrity, sharing and instant avatar updates without external moderation."
+          TAG="v4.9-build499"
+          TITLE="Murshid Wizari iPhone v4.9 Build 499"
+          NOTES="Unsigned iPhone IPA with private offline recall of previously graded questions, spaced review, daily streaks and spoken explanations. Paid exams and entitlements always remain server-controlled."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" \
-              Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.ipa \
-              Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.sha256 \
+              Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.ipa \
+              Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.sha256 \
               --clobber
           else
             gh release create "$TAG" \
-              Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.ipa \
-              Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.sha256 \
+              Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.ipa \
+              Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.sha256 \
               --title "$TITLE" \
               --notes "$NOTES"
           fi
@@ -487,16 +503,16 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Wizari-iOS-Production-v4.2-Build420-Unsigned
+          name: Murshid-Wizari-iPhone-v4.9-Build499-Unsigned
           path: |
-            source/Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.ipa
-            source/Murshid_Wizari_iOS_Production_v4_2_BUILD420_unsigned.sha256
+            source/Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.ipa
+            source/Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
 
 
   diagnostics:
-    name: Publish v4.2 build diagnostics
+    name: Publish iPhone build diagnostics
     needs: build
     if: always()
     runs-on: ubuntu-latest
@@ -512,8 +528,8 @@ jobs:
         run: |
           set -u
           mkdir -p .build-status
-          STATUS_FILE=".build-status/v4.2-build420-status.txt"
-          LOG_FILE=".build-status/v4.2-build420-failed.log"
+          STATUS_FILE=".build-status/v4.9-build499-status.txt"
+          LOG_FILE=".build-status/v4.9-build499-failed.log"
           {
             echo "run_id=$GITHUB_RUN_ID"
             echo "run_attempt=$GITHUB_RUN_ATTEMPT"
@@ -522,12 +538,12 @@ jobs:
             echo "workflow=$GITHUB_WORKFLOW"
           } > "$STATUS_FILE"
           gh run view "$GITHUB_RUN_ID" --log-failed > "$LOG_FILE" 2>&1 || true
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "$STATUS_FILE" "$LOG_FILE"
-          if git diff --cached --quiet; then
-            exit 0
-          fi
-          git commit -m "Record v4.2 build result [skip ci]"
-          git pull --rebase origin main || true
-          git push origin HEAD:main
+          cat "$STATUS_FILE"
+
+      - name: Upload diagnostics without modifying any branch
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iPhone-v49-build-diagnostics
+          path: .build-status/
+          retention-days: 14
