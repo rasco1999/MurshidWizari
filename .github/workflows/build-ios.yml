@@ -1,9 +1,9 @@
-name: Build Murshid iPhone v4.9.1 Free 100 Preview IPAs
+name: Build Murshid iPhone v4.9.2 Free 100 Preview IPAs
 
 on:
   workflow_dispatch:
   push:
-    branches: [ ios-free100-v491 ]
+    branches: [ ios-free100-v492 ]
     paths:
       - '.github/workflows/build-ios.yml'
       - 'patches/**'
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   build:
-    name: Build v4.9.1 Build 500 unsigned student IPA
+    name: Build v4.9.2 Build 501 unsigned student IPA
     runs-on: macos-15
     timeout-minutes: 35
 
@@ -79,8 +79,8 @@ jobs:
               if line == '        PRODUCT_NAME: MurshidWizari':
                   out.extend([
                       '        TARGETED_DEVICE_FAMILY: "1"',
-                      '        MARKETING_VERSION: "4.9.1"',
-                      '        CURRENT_PROJECT_VERSION: "500"',
+                      '        MARKETING_VERSION: "4.9.2"',
+                      '        CURRENT_PROJECT_VERSION: "501"',
                       '        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon',
                       '        CODE_SIGN_ENTITLEMENTS: MurshidWizari/MurshidWizari.entitlements',
                   ])
@@ -327,8 +327,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \
-            MARKETING_VERSION='4.9.1' \
-            CURRENT_PROJECT_VERSION='500' \
+            MARKETING_VERSION='4.9.2' \
+            CURRENT_PROJECT_VERSION='501' \
             clean build
 
       - name: Compile Apple asset catalog
@@ -358,8 +358,8 @@ jobs:
           info.update(partial)
           info['CFBundleDisplayName'] = 'المرشد الوزاري'
           info['CFBundleName'] = 'منصة المرشد الوزاري'
-          info['CFBundleShortVersionString'] = '4.9.1'
-          info['CFBundleVersion'] = '500'
+          info['CFBundleShortVersionString'] = '4.9.2'
+          info['CFBundleVersion'] = '501'
           info['NSFaceIDUsageDescription'] = 'يستخدم المرشد الوزاري Face ID لحماية حسابك عند العودة إلى التطبيق.'
           info['UISupportedInterfaceOrientations'] = ['UIInterfaceOrientationPortrait']
           info['UILaunchScreen'] = {'UIColorName': 'LaunchBackground'}
@@ -384,15 +384,15 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid'
           /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string المرشد الوزاري' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleName منصة المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleName string منصة المرشد الوزاري' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 4.9.1' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 500' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 4.9.2' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 501' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Delete :UIDeviceFamily' "$APP/Info.plist" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily array' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily:0 integer 1' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" | grep -Fx 'المرشد الوزاري'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$APP/Info.plist" | grep -Fx 'منصة المرشد الوزاري'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.9.1'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '500'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.9.2'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '501'
           /usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist" | grep -Fx '1'
           test -f "$APP/Assets.car"
           test -f "$APP/PrivacyInfo.xcprivacy"
@@ -435,6 +435,9 @@ jobs:
           grep -Fq 'V49OfflineAccessView' MurshidWizari/MurshidWizariApp.swift
           grep -Fq 'V50FreeMonthOfferCard()' MurshidWizari/V31Features.swift
           grep -Fq 'mobile/free-month-offer.php' MurshidWizari/V50FreeMonthOffer.swift
+          grep -Fq 'showWelcomeOffer' MurshidWizari/V50FreeMonthOffer.swift
+          grep -Fq 'eligible_new_student' MurshidWizari/V50FreeMonthOffer.swift
+          grep -Fq 'ends_at_utc' MurshidWizari/V50FreeMonthOffer.swift
           grep -Fq 'completeFileProtectionUntilFirstUserAuthentication' MurshidWizari/V49StudyIntelligence.swift
           grep -Fq 'لا يُرسل إلى الخادم' MurshidWizari/V49StudyIntelligence.swift
           test "$(grep -c '^struct V40DailyChallengeView' MurshidWizari/V40Features.swift)" -eq 1
@@ -472,34 +475,34 @@ jobs:
             echo 'ERROR: Web wrapper marker found unexpectedly.' >&2
             exit 1
           fi
-          rm -rf Payload Murshid_Wizari_iOS_v4_9_1_BUILD500_unsigned.ipa
+          rm -rf Payload Murshid_Wizari_iOS_v4_9_2_BUILD501_unsigned.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Murshid_Wizari_iOS_v4_9_1_BUILD500_unsigned.ipa Payload
-          test -s Murshid_Wizari_iOS_v4_9_1_BUILD500_unsigned.ipa
-          shasum -a 256 Murshid_Wizari_iOS_v4_9_1_BUILD500_unsigned.ipa | tee Murshid_Wizari_iOS_v4_9_1_BUILD500_unsigned.sha256
+          /usr/bin/zip -qry Murshid_Wizari_iOS_v4_9_2_BUILD501_unsigned.ipa Payload
+          test -s Murshid_Wizari_iOS_v4_9_2_BUILD501_unsigned.ipa
+          shasum -a 256 Murshid_Wizari_iOS_v4_9_2_BUILD501_unsigned.ipa | tee Murshid_Wizari_iOS_v4_9_2_BUILD501_unsigned.sha256
 
       - name: Publish iPhone IPA preview release
-        if: github.ref == 'refs/heads/ios-free100-v491'
+        if: github.ref == 'refs/heads/ios-free100-v492'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           cd source
-          TAG="v4.9.1-build500-free100-ios-preview"
-          TITLE="Murshid Wizari iPhone v4.9.1 Build 500 (Unsigned Preview)"
+          TAG="v4.9.2-build501-free100-ios-preview"
+          TITLE="Murshid Wizari iPhone v4.9.2 Build 501 (Unsigned Preview)"
           RELEASE_FLAGS=(--prerelease)
-          NOTES="Unsigned student iPhone IPA. Restored the white/gold v4.8.18 icon and added the server-validated First 100 Students free one-month offer. Backend SQL/PHP deployment is required before activation."
+          NOTES="Unsigned student iPhone IPA. New confirmed students created during the admin-defined campaign window see a one-time welcome claim sheet and a persistent home claim button until campaign end. The backend validates creation time, cap and expiration. Requires updated SQL/PHP deployment."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" \
-              Murshid_Wizari_iOS_v4_9_1_BUILD500_unsigned.ipa \
-              Murshid_Wizari_iOS_v4_9_1_BUILD500_unsigned.sha256 \
+              Murshid_Wizari_iOS_v4_9_2_BUILD501_unsigned.ipa \
+              Murshid_Wizari_iOS_v4_9_2_BUILD501_unsigned.sha256 \
               --clobber
           else
             gh release create "$TAG" \
-              Murshid_Wizari_iOS_v4_9_1_BUILD500_unsigned.ipa \
-              Murshid_Wizari_iOS_v4_9_1_BUILD500_unsigned.sha256 \
+              Murshid_Wizari_iOS_v4_9_2_BUILD501_unsigned.ipa \
+              Murshid_Wizari_iOS_v4_9_2_BUILD501_unsigned.sha256 \
               --target "$GITHUB_SHA" \
               "${RELEASE_FLAGS[@]}" \
               --title "$TITLE" \
@@ -509,15 +512,15 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Wizari-iPhone-v4.9.1-Build500-Unsigned
+          name: Murshid-Wizari-iPhone-v4.9.2-Build501-Unsigned
           path: |
-            source/Murshid_Wizari_iOS_v4_9_1_BUILD500_unsigned.ipa
-            source/Murshid_Wizari_iOS_v4_9_1_BUILD500_unsigned.sha256
+            source/Murshid_Wizari_iOS_v4_9_2_BUILD501_unsigned.ipa
+            source/Murshid_Wizari_iOS_v4_9_2_BUILD501_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
 
   admin_build:
-    name: Build v4.9.1 Build 500 unsigned iPhone admin IPA
+    name: Build v4.9.2 Build 501 unsigned iPhone admin IPA
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -556,8 +559,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \
-            MARKETING_VERSION='4.9.1' \
-            CURRENT_PROJECT_VERSION='500' \
+            MARKETING_VERSION='4.9.2' \
+            CURRENT_PROJECT_VERSION='501' \
             clean build
 
       - name: Validate and package admin IPA
@@ -570,15 +573,15 @@ jobs:
           test -f "$APP/MurshidAdmin"
           test -f "$APP/Assets.car"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid.admin'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.9.1'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '500'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.9.2'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '501'
           grep -Fq 'FreeMonthCampaignScreen' App/MurshidAdminApp.swift
           grep -Fq 'promo_save' App/MurshidAdminApp.swift
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Murshid_Admin_iOS_v4_9_1_BUILD500_unsigned.ipa Payload
-          test -s Murshid_Admin_iOS_v4_9_1_BUILD500_unsigned.ipa
-          shasum -a 256 Murshid_Admin_iOS_v4_9_1_BUILD500_unsigned.ipa | tee Murshid_Admin_iOS_v4_9_1_BUILD500_unsigned.sha256
+          /usr/bin/zip -qry Murshid_Admin_iOS_v4_9_2_BUILD501_unsigned.ipa Payload
+          test -s Murshid_Admin_iOS_v4_9_2_BUILD501_unsigned.ipa
+          shasum -a 256 Murshid_Admin_iOS_v4_9_2_BUILD501_unsigned.ipa | tee Murshid_Admin_iOS_v4_9_2_BUILD501_unsigned.sha256
 
       - name: Publish admin IPA preview
         env:
@@ -586,21 +589,21 @@ jobs:
         run: |
           set -euo pipefail
           cd admin_ios
-          TAG='v4.9.1-build500-free100-admin-preview'
-          NOTES='Unsigned native iPhone admin IPA. Owner can schedule the Baghdad-time start, pause and resume the first-100-students free month campaign and inspect the claimed seat counter. Requires deploying the included SQL and PHP backend update.'
+          TAG='v4.9.2-build501-free100-admin-preview'
+          NOTES='Unsigned native iPhone admin IPA. Owner controls free-seat count, Baghdad-time launch and end, pause/resume, and the claimed counter. Requires the updated SQL and PHP backend.'
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" Murshid_Admin_iOS_v4_9_1_BUILD500_unsigned.ipa Murshid_Admin_iOS_v4_9_1_BUILD500_unsigned.sha256 --clobber
+            gh release upload "$TAG" Murshid_Admin_iOS_v4_9_2_BUILD501_unsigned.ipa Murshid_Admin_iOS_v4_9_2_BUILD501_unsigned.sha256 --clobber
           else
-            gh release create "$TAG" Murshid_Admin_iOS_v4_9_1_BUILD500_unsigned.ipa Murshid_Admin_iOS_v4_9_1_BUILD500_unsigned.sha256 --target "$GITHUB_SHA" --prerelease --title 'Murshid Admin iPhone v4.9.1 Build 500' --notes "$NOTES"
+            gh release create "$TAG" Murshid_Admin_iOS_v4_9_2_BUILD501_unsigned.ipa Murshid_Admin_iOS_v4_9_2_BUILD501_unsigned.sha256 --target "$GITHUB_SHA" --prerelease --title 'Murshid Admin iPhone v4.9.2 Build 501' --notes "$NOTES"
           fi
 
       - name: Upload admin IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Admin-iPhone-v4.9.1-Build500-Unsigned
+          name: Murshid-Admin-iPhone-v4.9.2-Build501-Unsigned
           path: |
-            admin_ios/Murshid_Admin_iOS_v4_9_1_BUILD500_unsigned.ipa
-            admin_ios/Murshid_Admin_iOS_v4_9_1_BUILD500_unsigned.sha256
+            admin_ios/Murshid_Admin_iOS_v4_9_2_BUILD501_unsigned.ipa
+            admin_ios/Murshid_Admin_iOS_v4_9_2_BUILD501_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
 
@@ -616,6 +619,9 @@ jobs:
           php -l server_updates/v4_9_1_free_month/includes/free_month_campaign.php
           php -l server_updates/v4_9_1_free_month/mobile/free-month-offer.php
           php -l server_updates/v4_9_1_free_month/admin/native-api.php
+          grep -Fq 'ends_at_utc' server_updates/v4_9_1_free_month/includes/free_month_campaign.php
+          grep -Fq 'eligible_new_student' server_updates/v4_9_1_free_month/mobile/free-month-offer.php
+          test -s server_updates/v4_9_1_free_month/sql/051_new_accounts_campaign_window.sql
           grep -Fq 'FOR UPDATE' server_updates/v4_9_1_free_month/mobile/free-month-offer.php
           grep -Fq 'UNIQUE KEY uq_free_month_once_per_student' server_updates/v4_9_1_free_month/sql/050_free_month_first_100.sql
           grep -Fq 'claimed_count < capacity' server_updates/v4_9_1_free_month/mobile/free-month-offer.php
@@ -638,8 +644,8 @@ jobs:
         run: |
           set -u
           mkdir -p .build-status
-          STATUS_FILE=".build-status/v4.9.1-build500-status.txt"
-          LOG_FILE=".build-status/v4.9.1-build500-failed.log"
+          STATUS_FILE=".build-status/v4.9.2-build501-status.txt"
+          LOG_FILE=".build-status/v4.9.2-build501-failed.log"
           {
             echo "run_id=$GITHUB_RUN_ID"
             echo "run_attempt=$GITHUB_RUN_ATTEMPT"

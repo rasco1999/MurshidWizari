@@ -756,6 +756,7 @@ private struct FreeMonthCampaignScreen:View {
     @State private var enabled=false
     @State private var capacityInput="100"
     @State private var startDate=Date().addingTimeInterval(3600)
+    @State private var endDate=Date().addingTimeInterval(8*86400)
     @State private var needsImmediateConfirmation=false
     private let baghdad=TimeZone(identifier:"Asia/Baghdad") ?? .current
 
@@ -812,7 +813,11 @@ private struct FreeMonthCampaignScreen:View {
                             .datePickerStyle(.compact)
                             .environment(\.timeZone,baghdad)
                             .disabled(claimed>0)
-                        Text("التوقيت المعروض: بغداد (UTC+3). سيبدأ العرض تلقائيًا عند حلول الموعد إذا كان مفعّلًا.")
+                        DatePicker("موعد انتهاء الحملة",selection:$endDate,
+                                   displayedComponents:[.date,.hourAndMinute])
+                            .datePickerStyle(.compact)
+                            .environment(\.timeZone,baghdad)
+                        Text("التوقيت المعروض: بغداد (UTC+3). يظهر العرض للحسابات التي تُنشأ خلال الفترة فقط، ويتوقف تلقائيًا عند النهاية.")
                             .font(.footnote).foregroundStyle(Ink.faded)
                             .fixedSize(horizontal:false,vertical:true)
                         if claimed>0 {
@@ -822,6 +827,8 @@ private struct FreeMonthCampaignScreen:View {
                         Primary(title:"حفظ المقاعد والموعد والحالة",symbol:"checkmark.shield.fill",busy:state.busy) {
                             if requestedCapacity == nil {
                                 state.error="اختر عدد مقاعد صحيحًا بين 1 و10000 ولا يقل عن المحجوز حاليًا."
+                            } else if endDate <= startDate {
+                                state.error="اختر موعد انتهاء بعد موعد البداية."
                             } else if enabled && startDate <= Date() && claimed==0 {
                                 needsImmediateConfirmation=true
                             } else {
@@ -835,9 +842,9 @@ private struct FreeMonthCampaignScreen:View {
                     VStack(alignment:.leading,spacing:9) {
                         Label("كيف يستفيد الطلاب؟",systemImage:"person.3.fill")
                             .foregroundStyle(Ink.gold).font(.headline)
-                        Text("بعد الموعد يظهر زر الحصول على شهر مجاني للطلاب الذين لا يملكون اشتراكًا فعّالًا. أول \(capacity) طلب ناجح فقط يحصلون على شهر كامل يبدأ من لحظة التفعيل.")
+                        Text("بعد البداية، يظهر تنبيه للشخص الذي أنشأ حسابه خلال مدة الحملة وأكّد بياناته، مع زر ثانٍ في الرئيسية إذا أغلق التنبيه. أول \(capacity) طلب ناجح يحصل على شهر كامل من لحظة التفعيل.")
                             .font(.subheadline).foregroundStyle(Ink.faded)
-                        Text("الإيقاف لا يلغي أشهر الطلاب الذين استفادوا سابقًا. ولا يمكن تجاوز العدد الذي تحدده حتى مع الطلبات المتزامنة.")
+                        Text("بعد نهاية الحملة يختفي العرض تلقائيًا، والحسابات القديمة غير مؤهلة. الإيقاف لا يلغي الأشهر التي مُنحت سابقًا، ولا يُتجاوز عدد المقاعد.")
                             .font(.footnote).foregroundStyle(Ink.faded)
                     }
                 }
@@ -868,8 +875,11 @@ private struct FreeMonthCampaignScreen:View {
     private func load() async {
         await state.refresh("promo_status")
         guard let value=state.campaign["starts_at_utc"] as? String,
-              let date=ISO8601DateFormatter().date(from:value) else {return}
+              let date=ISO8601DateFormatter().date(from:value),
+              let endValue=state.campaign["ends_at_utc"] as? String,
+              let end=ISO8601DateFormatter().date(from:endValue) else {return}
         startDate=date
+        endDate=end
         enabled=(state.campaign["enabled"] as? Bool) == true
         capacityInput=String(capacity)
     }
@@ -881,7 +891,13 @@ private struct FreeMonthCampaignScreen:View {
             state.error="عدد المقاعد غير صحيح؛ الحد 1 إلى 10000 ولا يقل عن المحجوز."
             return
         }
-        let params:J=["enabled":enabled,"capacity":wanted,"starts_at_utc":formatter.string(from:startDate)]
+        guard endDate>startDate else {
+            state.error="موعد النهاية يجب أن يكون بعد البداية."
+            return
+        }
+        let params:J=["enabled":enabled,"capacity":wanted,
+                      "starts_at_utc":formatter.string(from:startDate),
+                      "ends_at_utc":formatter.string(from:endDate)]
         if await state.mutation("promo_save",params,refresh:"promo_status") != nil {
             await load()
         }

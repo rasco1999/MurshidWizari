@@ -91,9 +91,13 @@ try {
         $capacity=mn_int($body,'capacity');
         if($capacity<1 || $capacity>10000) mn_fail('عدد المقاعد يجب أن يكون بين 1 و10000 طالب.');
         $rawStart=mn_required(mn_str($body,'starts_at_utc',40),'موعد البداية');
+        $rawEnd=mn_required(mn_str($body,'ends_at_utc',40),'موعد النهاية');
         $start=DateTimeImmutable::createFromFormat('!Y-m-d\TH:i:s\Z',$rawStart,new DateTimeZone('UTC'));
+        $end=DateTimeImmutable::createFromFormat('!Y-m-d\TH:i:s\Z',$rawEnd,new DateTimeZone('UTC'));
         if(!$start || $start->format('Y-m-d\TH:i:s\Z')!==$rawStart)
             mn_fail('صيغة الموعد غير صالحة. اختر التاريخ والوقت من التطبيق.');
+        if(!$end || $end->format('Y-m-d\TH:i:s\Z')!==$rawEnd || $end<=$start)
+            mn_fail('موعد النهاية يجب أن يكون بعد موعد البداية.');
         $pdo->beginTransaction();
         $current=free_month_campaign($pdo,true);
         if($capacity<(int)$current['claimed_count']){
@@ -101,14 +105,15 @@ try {
             mn_fail('لا يمكنك خفض عدد المقاعد عن عدد الطلاب الذين استفادوا بالفعل.',409);
         }
         $newUTC=$start->format('Y-m-d H:i:s');
+        $endUTC=$end->format('Y-m-d H:i:s');
         if((int)$current['claimed_count']>0 && (string)$current['starts_at_utc']!==$newUTC){
             $pdo->rollBack();
             mn_fail('بدأ حجز المقاعد بالفعل؛ يمكنك إيقاف العرض أو تشغيله لكن لا تغيّر موعد بدايته.',409);
         }
         $stmt=$pdo->prepare('UPDATE murshid_free_month_campaigns
-            SET enabled=?,starts_at_utc=?,capacity=?,updated_by=?,updated_at_utc=UTC_TIMESTAMP()
+            SET enabled=?,starts_at_utc=?,ends_at_utc=?,capacity=?,updated_by=?,updated_at_utc=UTC_TIMESTAMP()
             WHERE id=1');
-        $stmt->execute([$enabled,$newUTC,$capacity,$uid]);
+        $stmt->execute([$enabled,$newUTC,$endUTC,$capacity,$uid]);
         $pdo->commit();
         mn_audit('تحديث حملة أول 100 اشتراك مجاني','promotion','1');
         mn_reply(['ok'=>true,'campaign'=>free_month_status($pdo,free_month_campaign($pdo)),

@@ -48,6 +48,14 @@ try {
         $pdo->rollBack();
         json_response(['ok'=>false,'message'=>'عرض الشهر المجاني لم يبدأ بعد أو أوقفته الإدارة.'], 409);
     }
+    if ($status['expired']) {
+        $pdo->rollBack();
+        json_response(['ok'=>false,'message'=>'انتهت المهلة المحددة لحملة المقاعد المجانية.'], 409);
+    }
+    if (!$status['eligible_new_student']) {
+        $pdo->rollBack();
+        json_response(['ok'=>false,'message'=>'العرض مخصص للحسابات الجديدة المؤكدة التي أُنشئت خلال فترة الحملة فقط.'], 403);
+    }
     if ($status['remaining'] <= 0) {
         $pdo->rollBack();
         json_response(['ok'=>false,'message'=>'اكتملت المقاعد المئة المجانية.'], 409);
