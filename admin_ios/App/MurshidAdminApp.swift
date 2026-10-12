@@ -75,10 +75,11 @@ enum LoginStage {case loading, signin, otp, ready}
         }
         throw URLError(.unknown)
     }
-    func call(_ action:String, params:J?=nil, query:String?=nil) async throws -> J {
+    func call(_ action:String, params:J?=nil, query:String?=nil, extras:[URLQueryItem]=[]) async throws -> J {
         var components=URLComponents(url:endpoint,resolvingAgainstBaseURL:false)!
         var qs=[URLQueryItem(name:"action",value:action)]
         if let query, !query.isEmpty {qs.append(URLQueryItem(name:"q",value:query))}
+        qs.append(contentsOf:extras)
         components.queryItems=qs
         guard let url=components.url else {throw ServiceError(message:"رابط الخدمة غير صحيح.")}
         var request=URLRequest(url:url)
@@ -693,6 +694,8 @@ private struct MoreScreen:View {
                         VStack(spacing:14){
                             NavigationLink{SubscriptionsScreen(state:state)}label:{entry("اشتراكات الطلاب","creditcard.fill")}
                             Divider().overlay(Ink.blue2)
+                            NavigationLink{SubscriptionSourcesHome(state:state)}label:{entry("مصادر الاشتراكات الثلاثة","person.crop.rectangle.stack.fill")}
+                            Divider().overlay(Ink.blue2)
                             NavigationLink{FreeMonthCampaignScreen(state:state)}label:{entry("إدارة المقاعد المجانية","gift.fill")}
                             Divider().overlay(Ink.blue2)
                             NavigationLink{QuestionsScreen(state:state)}label:{entry("بنك الأسئلة","doc.text.fill")}
@@ -726,6 +729,12 @@ private struct SubscriptionsScreen:View{
             VStack(spacing:14){
                 ScreenTitle(text:"الاشتراكات",detail:"شهر أو 3 أشهر • من قاعدة بيانات الموقع")
                 Note(state:state)
+                NavigationLink { SubscriptionSourcesHome(state:state) } label: {
+                    Label("عرض الاشتراكات حسب طريقة التفعيل",systemImage:"square.stack.3d.up.fill")
+                        .font(.headline).foregroundStyle(Ink.navy)
+                        .frame(maxWidth:.infinity).padding(15)
+                        .background(Ink.gold,in:RoundedRectangle(cornerRadius:14))
+                }
                 ForEach(state.subscriptions){row in
                     GlassBox{
                         VStack(alignment:.leading,spacing:8){
@@ -748,6 +757,209 @@ private struct SubscriptionsScreen:View{
     private func mutate(_ months:Int){
         guard let row=chosen else{return}
         Task{_ = await state.mutation("subscription_set",["id":num(row,"id"),"mode":months==0 ? "cancel":"activate","months":months],refresh:"subscriptions")}
+    }
+}
+
+// Read-only subscription provenance, backed by authenticated admin-only SQL.
+// A student may be present in more than one category after several activations.
+private struct SubscriptionSourcesHome:View {
+    @ObservedObject var state:AdminState
+    var body:some View {
+        ScrollView {
+            VStack(alignment:.leading,spacing:17) {
+                ScreenTitle(text:"مصادر اشتراكات الطلاب",detail:"ثلاث قوائم مستقلة • بيانات الحساب والاشتراك الفعّال")
+                Text("اختر طريقة الاشتراك. يظهر الطالب في أكثر من قائمة إذا سبق له استخدام أكثر من طريقة؛ الدفع لا يُحتسب إلا بعملية مالية ناجحة.")
+                    .font(.subheadline).foregroundStyle(Ink.faded)
+                sourceButton("اشتراك بواسطة كود","ticket.fill","code","عرض الطلاب الذين فعّلوا أكواد الاشتراك")
+                sourceButton("اشتراك بالعرض المجاني","gift.fill","offer","عرض المستفيدين من مقاعد الشهر المجاني")
+                sourceButton("اشتراك بواسطة دفع","creditcard.fill","paid","عرض الطلاب أصحاب عمليات الدفع المؤكدة")
+                GlassBox {
+                    Label("هذه القوائم للاطلاع فقط. التفعيل اليدوي من الإدارة لا يُصنّف على أنه دفع مالي.",systemImage:"info.circle")
+                        .font(.footnote).foregroundStyle(Ink.faded)
+                }
+            }.padding(16)
+        }.adminBG().navigationTitle("مصادر الاشتراكات").navigationBarTitleDisplayMode(.inline)
+    }
+    private func sourceButton(_ title:String,_ symbol:String,_ source:String,_ detail:String)->some View {
+        NavigationLink {
+            SubscriptionSourceList(state:state,source:source,title:title)
+        } label: {
+            GlassBox {
+                HStack(spacing:13) {
+                    Image(systemName:symbol).font(.title2).foregroundStyle(Ink.gold)
+                        .frame(width:46,height:46).background(Ink.navy,in:RoundedRectangle(cornerRadius:12))
+                    VStack(alignment:.leading,spacing:6) {
+                        Text(title).font(.headline).foregroundStyle(.white)
+                        Text(detail).font(.caption).foregroundStyle(Ink.faded)
+                    }
+                    Spacer(minLength:4)
+                    Image(systemName:"chevron.left").foregroundStyle(Ink.gold)
+                }
+            }
+        }.buttonStyle(.plain)
+    }
+}
+
+private struct SubscriptionSourceList:View {
+    @ObservedObject var state:AdminState
+    let source:String
+    let title:String
+    @State private var rows:[J]=[]
+    @State private var search=""
+    @State private var submittedSearch=""
+    @State private var loading=false
+    @State private var more=false
+    @State private var total=0
+    @State private var error=""
+
+    var body:some View {
+        ScrollView {
+            LazyVStack(alignment:.leading,spacing:13) {
+                ScreenTitle(text:title,detail:"الحسابات ذات الاشتراك الفعّال فقط")
+                HStack(spacing:8) {
+                    TextField("اسم الطالب أو الهاتف أو البريد",text:$search)
+                        .textFieldStyle(.roundedBorder)
+                        .submitLabel(.search)
+                        .onSubmit {Task{await reload()}}
+                    Button("بحث"){Task{await reload()}}.buttonStyle(.borderedProminent).tint(Ink.gold)
+                        .foregroundStyle(Ink.navy)
+                }
+                Text("العدد: \(total) طالب • اضغط على الاسم لمعرفة تفاصيل الحساب")
+                    .font(.subheadline).foregroundStyle(Ink.faded)
+                if !error.isEmpty {
+                    GlassBox {
+                        Label(error,systemImage:"exclamationmark.triangle.fill")
+                            .font(.footnote).foregroundStyle(.orange)
+                        Button("إعادة المحاولة"){Task{await load(reset:rows.isEmpty)}}
+                    }
+                }
+                ForEach(rows){row in
+                    NavigationLink { SubscriptionSourceDetails(row:row) } label: {
+                        GlassBox {
+                            VStack(alignment:.leading,spacing:7) {
+                                HStack {
+                                    Text(s(row,"full_name")).font(.headline).foregroundStyle(.white)
+                                    Spacer()
+                                    Image(systemName:"chevron.left").foregroundStyle(Ink.gold)
+                                }
+                                Text("رقم الحساب: #\(s(row,"id")) • \(s(row,"grade_name","غير محدد"))")
+                                    .font(.caption).foregroundStyle(Ink.faded)
+                                Text("الهاتف: \(display(row,"phone")) • ينتهي: \(display(row,"expires_at"))")
+                                    .font(.caption).foregroundStyle(Ink.faded)
+                            }
+                        }
+                    }.buttonStyle(.plain)
+                }
+                if loading {ProgressView("جاري تحميل الطلاب…").frame(maxWidth:.infinity).padding()}
+                if rows.isEmpty && !loading && error.isEmpty {
+                    GlassBox {Text("لا توجد اشتراكات فعّالة مطابقة لهذه الفئة والبحث.").foregroundStyle(Ink.faded)}
+                }
+                if more && !loading {
+                    Button("تحميل المزيد من الطلاب"){Task{await load(reset:false)}}
+                        .frame(maxWidth:.infinity).buttonStyle(.borderedProminent).tint(Ink.gold)
+                }
+            }.padding(16)
+        }.adminBG().navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+            .task{await reload()}.refreshable{await reload()}
+    }
+    private func reload() async {
+        submittedSearch=safe(search)
+        await load(reset:true)
+    }
+    private func load(reset:Bool) async {
+        guard !loading else{return}
+        loading=true;error=""
+        defer{loading=false}
+        do {
+            let result=try await state.call("subscription_sources",extras:[
+                URLQueryItem(name:"source",value:source),
+                URLQueryItem(name:"offset",value:String(reset ? 0 : rows.count)),
+                URLQueryItem(name:"q",value:submittedSearch)
+            ])
+            let newRows=list(result)
+            if reset {rows=newRows} else {rows.append(contentsOf:newRows)}
+            total=num(result,"total")
+            more=result["has_more"] as? Bool ?? false
+        } catch {self.error=error.localizedDescription}
+    }
+    private func display(_ row:J,_ key:String)->String {
+        let value=s(row,key,"")
+        return value.isEmpty ? "غير مضاف" : value
+    }
+}
+
+private struct SubscriptionSourceDetails:View {
+    let row:J
+    var body:some View {
+        ScrollView {
+            VStack(alignment:.leading,spacing:15) {
+                ScreenTitle(text:s(row,"full_name"),detail:"الملف الكامل المتاح للمدير • حساب #\(s(row,"id"))")
+                GlassBox {
+                    VStack(alignment:.leading,spacing:11) {
+                        Label("بيانات حساب الطالب",systemImage:"person.text.rectangle.fill").foregroundStyle(Ink.gold).font(.headline)
+                        field("الاسم", "full_name")
+                        field("رقم الحساب", "id")
+                        field("الصف الدراسي", "grade_name")
+                        field("الهاتف", "phone")
+                        field("البريد الإلكتروني", "email")
+                        field("الجنس", "gender")
+                        field("حالة الحساب", "account_status")
+                        field("تاريخ إنشاء الحساب", "created_at")
+                        field("تأكيد البريد", "email_verified_at")
+                        field("تأكيد الهاتف", "phone_verified_at")
+                    }
+                }
+                GlassBox {
+                    VStack(alignment:.leading,spacing:11) {
+                        Label("الاشتراك الحالي",systemImage:"checkmark.shield.fill").foregroundStyle(Ink.gold).font(.headline)
+                        field("الحالة", "subscription_status")
+                        field("البداية", "starts_at")
+                        field("الانتهاء", "expires_at")
+                        field("القيمة المسجلة (د.ع)", "subscription_amount")
+                    }
+                }
+                if num(row,"code_id")>0 {
+                    GlassBox {
+                        VStack(alignment:.leading,spacing:11) {
+                            Label("سجل تفعيل بكود",systemImage:"ticket.fill").foregroundStyle(Ink.gold).font(.headline)
+                            field("مجموعة الكود", "code_batch")
+                            field("مدة الكود بالأشهر", "code_months")
+                            field("تاريخ استخدام الكود", "code_redeemed_at")
+                        }
+                    }
+                }
+                if num(row,"offer_seat")>0 {
+                    GlassBox {
+                        VStack(alignment:.leading,spacing:11) {
+                            Label("سجل الشهر المجاني",systemImage:"gift.fill").foregroundStyle(Ink.gold).font(.headline)
+                            field("رقم المقعد", "offer_seat")
+                            field("تاريخ الحجز (UTC)", "offer_claimed_at_utc")
+                        }
+                    }
+                }
+                if num(row,"payment_id")>0 {
+                    GlassBox {
+                        VStack(alignment:.leading,spacing:11) {
+                            Label("سجل دفع مؤكّد",systemImage:"creditcard.fill").foregroundStyle(Ink.gold).font(.headline)
+                            field("رقم الطلب", "payment_id")
+                            field("مزود الدفع", "payment_provider")
+                            field("المبلغ المدفوع (د.ع)", "payment_amount")
+                            field("تاريخ الدفع", "payment_paid_at")
+                        }
+                    }
+                }
+                Text("البيانات من سجلات موثّقة. لا تُعرض كلمات المرور أو بيانات البطاقات. إذا غُيّرت طريقة الاشتراك لاحقاً قد يظهر الحساب في أكثر من سجل.")
+                    .font(.footnote).foregroundStyle(Ink.faded)
+            }.padding(16)
+        }.adminBG().navigationTitle("تفاصيل الطالب").navigationBarTitleDisplayMode(.inline)
+    }
+    private func field(_ title:String,_ key:String)->some View {
+        let value=s(row,key,"")
+        return VStack(alignment:.leading,spacing:3) {
+            Text(title).font(.caption).foregroundStyle(Ink.faded)
+            Text(value.isEmpty ? "غير متوفر" : value)
+                .font(.subheadline).foregroundStyle(.white).textSelection(.enabled)
+        }
     }
 }
 
