@@ -338,7 +338,8 @@ final class V49QuestionSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDe
     }
 
     private func finishIfCurrent(_ utteranceID: ObjectIdentifier) {
-        guard let currentUtterance, ObjectIdentifier(currentUtterance) == utteranceID else { return }
+        guard let activeUtterance = currentUtterance,
+              ObjectIdentifier(activeUtterance) == utteranceID else { return }
         currentUtterance = nil
         currentText = ""
         isSpeaking = false
