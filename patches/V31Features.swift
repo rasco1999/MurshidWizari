@@ -907,7 +907,10 @@ struct V31SchoolAdsView: View {
 
     private func loadAds() async {
         do {
-            let response = try await APIClient.shared.request("mobile/bootstrap.php")
+            let response = try await APIClient.shared.request(
+                "mobile/bootstrap.php",
+                query: [URLQueryItem(name: "_school_ads_open", value: String(Int(Date().timeIntervalSince1970)))]
+            )
             await MainActor.run {
                 ads = jArray(response["ads"]).filter {
                     !jString($0["school"]).isEmpty && !jString($0["text"]).isEmpty
