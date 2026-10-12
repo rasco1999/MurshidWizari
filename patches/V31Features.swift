@@ -513,19 +513,19 @@ struct V31HomeView: View {
                 HStack(spacing: 9) {
                     socialLinkButton(
                         title: "إنستغرام",
-                        icon: "camera.fill",
+                        icon: "instagram",
                         url: URL(string: "https://www.instagram.com/murshid.iq/")!,
                         color: Color(red: 0.76, green: 0.19, blue: 0.50)
                     )
                     socialLinkButton(
                         title: "فيسبوك",
-                        icon: "f",
+                        icon: "facebook",
                         url: URL(string: "https://www.facebook.com/Murshidiq/")!,
                         color: Color(red: 0.12, green: 0.33, blue: 0.77)
                     )
                     socialLinkButton(
                         title: "تيليجرام",
-                        icon: "paperplane.fill",
+                        icon: "telegram",
                         url: URL(string: "https://t.me/El_Murshed_iq")!,
                         color: Color(red: 0.10, green: 0.57, blue: 0.79)
                     )
@@ -549,31 +549,44 @@ struct V31HomeView: View {
         color: Color
     ) -> some View {
         Link(destination: url) {
-            VStack(spacing: 9) {
+            VStack(spacing: 6) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(color)
-                        .frame(width: 55, height: 55)
-                        .shadow(color: color.opacity(0.20), radius: 7, y: 3)
-
-                    if icon == "f" {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(LinearGradient(colors: icon == "instagram"
+                                             ? [Color(red: 0.98, green: 0.55, blue: 0.15),
+                                                Color(red: 0.86, green: 0.17, blue: 0.46),
+                                                Color(red: 0.48, green: 0.20, blue: 0.72)]
+                                             : [color, color.opacity(0.88)],
+                                             startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 39, height: 39)
+                    if icon == "instagram" {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 5.5)
+                                .stroke(.white, lineWidth: 2.1)
+                                .frame(width: 21, height: 21)
+                            Circle().stroke(.white, lineWidth: 2).frame(width: 8.5, height: 8.5)
+                            Circle().fill(.white).frame(width: 2.7, height: 2.7)
+                                .offset(x: 6, y: -6)
+                        }
+                    } else if icon == "facebook" {
                         Text("f")
-                            .font(.system(size: 36, weight: .heavy, design: .rounded))
+                            .font(.system(size: 27, weight: .heavy, design: .default))
                             .foregroundStyle(.white)
-                            .offset(y: 3)
+                            .offset(y: 2)
                     } else {
-                        Image(systemName: icon)
-                            .font(.system(size: 25, weight: .semibold))
+                        Image(systemName: "paperplane.fill")
+                            .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(.white)
+                            .rotationEffect(.degrees(-17))
                     }
                 }
                 Text(title)
-                    .font(.caption.weight(.semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
-            .frame(maxWidth: .infinity, minHeight: 94)
+            .frame(maxWidth: .infinity, minHeight: 69)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -839,6 +852,8 @@ private struct V31WebsiteHeroSlider: View {
 // MARK: - Published school advertisements
 
 struct V31SchoolAdsView: View {
+    var isVisible = true
+    @ObservedObject private var schoolAdNotices = V44SchoolAdNoticeStore.shared
     @State private var ads: [JSON] = []
     @State private var loading = true
     @State private var error = ""
@@ -882,6 +897,12 @@ struct V31SchoolAdsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await loadAds() }
         .refreshable { await loadAds() }
+        .onChange(of: isVisible) { visible in
+            if visible { Task { await loadAds() } }
+        }
+        .onChange(of: schoolAdNotices.publishedRevision) { _ in
+            if isVisible { Task { await loadAds() } }
+        }
     }
 
     private func loadAds() async {
