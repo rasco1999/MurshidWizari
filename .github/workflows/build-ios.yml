@@ -476,8 +476,8 @@ jobs:
           test -s Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.ipa
           shasum -a 256 Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.ipa | tee Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.sha256
 
-      - name: Publish iPhone IPA release from main only
-        if: github.ref == 'refs/heads/main'
+      - name: Publish iPhone IPA preview release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ios-study-v49'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -486,6 +486,12 @@ jobs:
           cd source
           TAG="v4.9-build499"
           TITLE="Murshid Wizari iPhone v4.9 Build 499"
+          RELEASE_FLAGS=()
+          if [ "$GITHUB_REF_NAME" = "ios-study-v49" ]; then
+            TAG="v4.9-build499-ios-preview"
+            TITLE="$TITLE (Unsigned Preview)"
+            RELEASE_FLAGS+=(--prerelease)
+          fi
           NOTES="Unsigned iPhone IPA with private offline recall of previously graded questions, spaced review, daily streaks and spoken explanations. Paid exams and entitlements always remain server-controlled."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" \
@@ -496,6 +502,8 @@ jobs:
             gh release create "$TAG" \
               Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.ipa \
               Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.sha256 \
+              --target "$GITHUB_SHA" \
+              "${RELEASE_FLAGS[@]}" \
               --title "$TITLE" \
               --notes "$NOTES"
           fi
