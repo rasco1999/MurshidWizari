@@ -3,12 +3,77 @@ import LocalAuthentication
 import UIKit
 
 typealias J = [String: Any]
+// The palette is local to the administrator's iPhone and never changes server data.
+private enum AdminPalette: String, CaseIterable, Identifiable {
+    case aurora, orchid, royal
+    var id: String { rawValue }
+    static var current: AdminPalette {
+        AdminPalette(rawValue: UserDefaults.standard.string(forKey: "admin_palette") ?? "aurora") ?? .aurora
+    }
+    var name: String {
+        switch self {
+        case .aurora: return "أورورا"
+        case .orchid: return "بنفسجي"
+        case .royal: return "ملكي"
+        }
+    }
+    var caption: String {
+        switch self {
+        case .aurora: return "فيروزي × أزرق"
+        case .orchid: return "بنفسجي × وردي"
+        case .royal: return "كحلي × ذهبي"
+        }
+    }
+    var background: Color {
+        switch self {
+        case .aurora: return Color(red: 0.024, green: 0.060, blue: 0.105)
+        case .orchid: return Color(red: 0.065, green: 0.042, blue: 0.125)
+        case .royal: return Color(red: 0.025, green: 0.074, blue: 0.145)
+        }
+    }
+    var surface: Color {
+        switch self {
+        case .aurora: return Color(red: 0.060, green: 0.127, blue: 0.171)
+        case .orchid: return Color(red: 0.132, green: 0.092, blue: 0.219)
+        case .royal: return Color(red: 0.075, green: 0.148, blue: 0.250)
+        }
+    }
+    var edge: Color {
+        switch self {
+        case .aurora: return Color(red: 0.155, green: 0.297, blue: 0.330)
+        case .orchid: return Color(red: 0.251, green: 0.180, blue: 0.365)
+        case .royal: return Color(red: 0.115, green: 0.205, blue: 0.310)
+        }
+    }
+    var accent: Color {
+        switch self {
+        case .aurora: return Color(red: 0.335, green: 0.925, blue: 0.776)
+        case .orchid: return Color(red: 0.842, green: 0.682, blue: 1.000)
+        case .royal: return Color(red: 0.972, green: 0.801, blue: 0.456)
+        }
+    }
+    var second: Color {
+        switch self {
+        case .aurora: return Color(red: 0.375, green: 0.725, blue: 1.000)
+        case .orchid: return Color(red: 1.000, green: 0.519, blue: 0.722)
+        case .royal: return Color(red: 1.000, green: 0.657, blue: 0.439)
+        }
+    }
+    var muted: Color {
+        switch self {
+        case .aurora: return Color(red: 0.715, green: 0.832, blue: 0.852)
+        case .orchid: return Color(red: 0.801, green: 0.754, blue: 0.876)
+        case .royal: return Color(red: 0.710, green: 0.785, blue: 0.870)
+        }
+    }
+}
 private enum Ink {
-    static let navy = Color(red: 0.025, green: 0.074, blue: 0.145)
-    static let blue = Color(red: 0.075, green: 0.148, blue: 0.250)
-    static let blue2 = Color(red: 0.115, green: 0.205, blue: 0.310)
-    static let gold = Color(red: 0.972, green: 0.801, blue: 0.456)
-    static let faded = Color(red: 0.710, green: 0.785, blue: 0.870)
+    static var navy: Color { AdminPalette.current.background }
+    static var blue: Color { AdminPalette.current.surface }
+    static var blue2: Color { AdminPalette.current.edge }
+    static var gold: Color { AdminPalette.current.accent }
+    static var secondary: Color { AdminPalette.current.second }
+    static var faded: Color { AdminPalette.current.muted }
 }
 private func s(_ d:J,_ key:String,_ fallback:String="—")->String {
     guard let v=d[key], !(v is NSNull) else{return fallback}
@@ -226,6 +291,7 @@ enum LoginStage {case loading, signin, otp, ready}
 @main struct MurshidAdministration:App {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var state=AdminState()
+    @AppStorage("admin_palette") private var paletteID="aurora"
     var body:some Scene {
         WindowGroup {
             Group {
@@ -238,7 +304,7 @@ enum LoginStage {case loading, signin, otp, ready}
             }
             .environment(\.layoutDirection,.rightToLeft)
             .preferredColorScheme(.dark)
-            .tint(Ink.gold)
+            .tint(AdminPalette(rawValue:paletteID)?.accent ?? Ink.gold)
             .onAppear {state.setAppActive(scenePhase == .active)}
             .onChange(of:scenePhase) {phase in
                 state.setAppActive(phase == .active)
@@ -248,14 +314,26 @@ enum LoginStage {case loading, signin, otp, ready}
     }
 }
 private struct AdminBackground:ViewModifier {
-    func body(content:Content)->some View {content.background(Ink.navy.ignoresSafeArea())}
+    func body(content:Content)->some View {
+        content.background {
+            ZStack {
+                LinearGradient(colors:[Ink.navy,Ink.blue.opacity(0.85),Ink.navy],startPoint:.topLeading,endPoint:.bottomTrailing)
+                Circle().fill(Ink.gold.opacity(0.12)).frame(width:310,height:310)
+                    .blur(radius:90).offset(x:190,y:-300)
+                Circle().fill(Ink.secondary.opacity(0.10)).frame(width:300,height:300)
+                    .blur(radius:105).offset(x:-190,y:290)
+            }.ignoresSafeArea()
+        }
+    }
 }
 private extension View {func adminBG()->some View {modifier(AdminBackground())}}
 private struct Splash:View {
     var body:some View {
         VStack(spacing:18) {
-            Image(systemName:"shield.lefthalf.filled").font(.system(size:70)).foregroundStyle(Ink.gold)
-            Text("الإدارة").font(.largeTitle.bold())
+            Image(systemName:"shield.lefthalf.filled").font(.system(size:70))
+                .foregroundStyle(LinearGradient(colors:[Ink.gold,Ink.secondary],startPoint:.topLeading,endPoint:.bottomTrailing))
+            Text("المرشد | الإدارة").font(.largeTitle.bold())
+            Text("كل المنصة بين يديك").font(.subheadline).foregroundStyle(Ink.faded)
             ProgressView().tint(Ink.gold)
         }.frame(maxWidth:.infinity,maxHeight:.infinity).adminBG()
     }
@@ -264,9 +342,11 @@ private struct GlassBox<Content:View>:View {
     let content:Content
     init(@ViewBuilder _ content:()->Content){self.content=content()}
     var body:some View {
-        content.padding(16).frame(maxWidth:.infinity,alignment:.leading)
-            .background(Ink.blue,in:RoundedRectangle(cornerRadius:20))
-            .overlay(RoundedRectangle(cornerRadius:20).stroke(Ink.blue2,lineWidth:1))
+        content.padding(17).frame(maxWidth:.infinity,alignment:.leading)
+            .background(LinearGradient(colors:[Ink.blue.opacity(0.96),Ink.blue.opacity(0.72)],startPoint:.topLeading,endPoint:.bottomTrailing),in:RoundedRectangle(cornerRadius:23,style:.continuous))
+            .overlay(RoundedRectangle(cornerRadius:23,style:.continuous)
+                .stroke(LinearGradient(colors:[Ink.gold.opacity(0.18),Ink.blue2.opacity(0.9),Ink.secondary.opacity(0.13)],startPoint:.topLeading,endPoint:.bottomTrailing),lineWidth:1))
+            .shadow(color:Ink.navy.opacity(0.35),radius:16,x:0,y:8)
     }
 }
 private struct Primary:View {
@@ -282,7 +362,9 @@ private struct Primary:View {
                 Text(title).fontWeight(.bold)
             }
             .frame(maxWidth:.infinity).padding(14)
-            .foregroundStyle(Ink.navy).background(Ink.gold,in:RoundedRectangle(cornerRadius:14))
+            .foregroundStyle(Ink.navy)
+            .background(LinearGradient(colors:[Ink.gold,Ink.secondary],startPoint:.leading,endPoint:.trailing),in:RoundedRectangle(cornerRadius:15,style:.continuous))
+            .shadow(color:Ink.gold.opacity(0.17),radius:11,y:5)
         }.buttonStyle(.plain).disabled(busy)
     }
 }
@@ -293,9 +375,20 @@ private struct LoginScreen:View {
     var body:some View {
         ScrollView {
             VStack(spacing:22) {
-                Image(systemName:"building.columns.circle.fill").font(.system(size:96)).foregroundStyle(Ink.gold).padding(.top,65)
-                Text("الإدارة").font(.system(size:36,weight:.heavy))
-                Text("المركز الخاص لإدارة منصة المرشد الوزاري").foregroundStyle(Ink.faded).multilineTextAlignment(.center)
+                ZStack {
+                    Circle().fill(Ink.gold.opacity(0.12)).frame(width:155,height:155)
+                    Circle().stroke(Ink.gold.opacity(0.35),lineWidth:1).frame(width:137,height:137)
+                    Image(systemName:"building.columns.circle.fill").font(.system(size:85))
+                        .foregroundStyle(LinearGradient(colors:[Ink.gold,Ink.secondary],startPoint:.topLeading,endPoint:.bottomTrailing))
+                }.padding(.top,45)
+                VStack(spacing:6) {
+                    Text("مرحباً بك في الإدارة").font(.system(size:31,weight:.heavy,design:.rounded))
+                    Text("لوحة قيادة المرشد الوزاري").foregroundStyle(Ink.faded).multilineTextAlignment(.center)
+                }
+                Label("بوابة الإدارة الآمنة",systemImage:"lock.shield.fill")
+                    .font(.caption.bold()).foregroundStyle(Ink.gold)
+                    .padding(.horizontal,16).padding(.vertical,8)
+                    .background(Ink.gold.opacity(0.11),in:Capsule())
                 GlassBox {
                     VStack(alignment:.leading,spacing:16) {
                         Label("حساب المدير",systemImage:"person.crop.circle.fill").foregroundStyle(Ink.gold)
@@ -348,16 +441,25 @@ private struct MainAdmin:View {
             AdsScreen(state:state).tabItem{Label(AdminTab.ads.title,systemImage:AdminTab.ads.icon)}.tag(AdminTab.ads)
             StudentsScreen(state:state).tabItem{Label(AdminTab.students.title,systemImage:AdminTab.students.icon)}.tag(AdminTab.students)
             MoreScreen(state:state).tabItem{Label(AdminTab.more.title,systemImage:AdminTab.more.icon)}.tag(AdminTab.more)
-        }.tint(Ink.gold).adminBG()
+        }
+        .tint(Ink.gold)
+        .toolbarBackground(Ink.navy,for:.tabBar)
+        .toolbarBackground(.visible,for:.tabBar)
+        .toolbarColorScheme(.dark,for:.tabBar)
+        .adminBG()
     }
 }
 private struct ScreenTitle:View {
     let text:String;let detail:String
     var body:some View {
-        VStack(alignment:.leading,spacing:5){
-            Text(text).font(.system(size:28,weight:.bold))
+        VStack(alignment:.leading,spacing:8){
+            HStack(spacing:7) {
+                Capsule().fill(LinearGradient(colors:[Ink.gold,Ink.secondary],startPoint:.leading,endPoint:.trailing)).frame(width:21,height:4)
+                Text("MURSHID  /  ADMIN").tracking(1.6).font(.system(size:9,weight:.bold,design:.rounded)).foregroundStyle(Ink.gold)
+            }
+            Text(text).font(.system(size:28,weight:.heavy,design:.rounded))
             Text(detail).font(.subheadline).foregroundStyle(Ink.faded)
-        }.frame(maxWidth:.infinity,alignment:.leading).padding(.top,6)
+        }.frame(maxWidth:.infinity,alignment:.leading).padding(.top,9)
     }
 }
 private struct Note:View {
@@ -373,10 +475,17 @@ private struct MetricTile:View {
     let name:String;let count:String;let icon:String
     var body:some View {
         GlassBox {
-            VStack(alignment:.leading,spacing:14){
-                Image(systemName:icon).font(.title2).foregroundStyle(Ink.gold)
-                Text(count).font(.system(size:29,weight:.bold,design:.rounded)).minimumScaleFactor(0.7).lineLimit(1)
-                Text(name).foregroundStyle(Ink.faded).font(.footnote)
+            VStack(alignment:.leading,spacing:13){
+                HStack {
+                    Image(systemName:icon).font(.system(size:20,weight:.semibold))
+                        .foregroundStyle(Ink.gold)
+                        .frame(width:43,height:43)
+                        .background(Ink.gold.opacity(0.11),in:RoundedRectangle(cornerRadius:14))
+                    Spacer(minLength:0)
+                    Image(systemName:"arrow.up.left").font(.caption2.bold()).foregroundStyle(Ink.faded.opacity(0.65))
+                }
+                Text(count).font(.system(size:32,weight:.heavy,design:.rounded)).minimumScaleFactor(0.7).lineLimit(1)
+                Text(name).foregroundStyle(Ink.faded).font(.system(size:12,weight:.medium))
             }
         }
     }
@@ -391,23 +500,35 @@ private struct HomeScreen:View {
                 VStack(alignment:.leading,spacing:18){
                     HStack {
                         VStack(alignment:.leading,spacing:5){
-                            Text("مركز التحكم").font(.largeTitle.bold())
+                            Text("أهلاً بك ✨").font(.caption.bold()).foregroundStyle(Ink.gold)
+                            Text("مركز التحكم").font(.system(size:32,weight:.heavy,design:.rounded))
                             Text("أهلًا، \(state.name)").foregroundStyle(Ink.faded)
                         }
                         Spacer()
-                        Image(systemName:"checkmark.shield.fill").font(.title).foregroundStyle(Ink.gold)
+                        Image(systemName:"square.grid.2x2.fill").font(.title2).foregroundStyle(Ink.gold)
+                            .frame(width:52,height:52)
+                            .background(Ink.gold.opacity(0.12),in:RoundedRectangle(cornerRadius:16))
                     }.padding(.top,12)
-                    GlassBox {
-                        VStack(alignment:.leading,spacing:8){
-                            Label("منصة المرشد الوزاري",systemImage:"building.columns.fill").foregroundStyle(Ink.gold).font(.headline)
-                            Text("إحصائيات مباشرة من موقعك").foregroundStyle(Ink.faded).font(.subheadline)
-                            HStack{
-                                Image(systemName:"circle.fill").font(.system(size:8)).foregroundStyle(.green)
-                                Text("الإدارة محمية بحساب المدير").font(.caption)
-                            }
-                        }
-                    }
+                    ZStack(alignment:.leading) {
+                        RoundedRectangle(cornerRadius:26,style:.continuous)
+                            .fill(LinearGradient(colors:[Ink.gold.opacity(0.88),Ink.secondary.opacity(0.88)],startPoint:.topLeading,endPoint:.bottomTrailing))
+                        Circle().stroke(Ink.navy.opacity(0.12),lineWidth:23).frame(width:185,height:185).offset(x:-15,y:65)
+                        Circle().fill(.white.opacity(0.13)).frame(width:110,height:110).offset(x:240,y:-48)
+                        VStack(alignment:.leading,spacing:11) {
+                            Label("المرشد الوزاري",systemImage:"building.columns.fill")
+                                .font(.caption.bold()).foregroundStyle(Ink.navy.opacity(0.78))
+                            Text("مساحتك لإدارة\nكل التفاصيل").font(.system(size:25,weight:.heavy,design:.rounded))
+                                .foregroundStyle(Ink.navy).fixedSize(horizontal:false,vertical:true)
+                            Label("إحصائيات متصلة ببيانات المنصة",systemImage:"checkmark.shield.fill")
+                                .font(.system(size:11,weight:.medium)).foregroundStyle(Ink.navy.opacity(0.78))
+                        }.padding(22).frame(maxWidth:.infinity,alignment:.leading)
+                    }.frame(minHeight:166).clipShape(RoundedRectangle(cornerRadius:26,style:.continuous))
                     Note(state:state)
+                    HStack {
+                        Text("نظرة عامة").font(.title3.bold())
+                        Spacer()
+                        Text("إحصائيات المنصة").font(.caption).foregroundStyle(Ink.faded)
+                    }
                     LazyVGrid(columns:grids,spacing:12) {
                         MetricTile(name:"الطلاب",count:fmt("students"),icon:"person.3.fill")
                         MetricTile(name:"الاشتراكات الفعالة",count:fmt("subscriptions"),icon:"crown.fill")
@@ -416,7 +537,11 @@ private struct HomeScreen:View {
                         MetricTile(name:"إعلانات نشطة",count:fmt("ads"),icon:"megaphone.fill")
                         MetricTile(name:"المعلمون",count:fmt("teachers"),icon:"person.crop.rectangle.stack")
                     }
-                    Text("الوصول السريع").font(.title3.bold())
+                    HStack {
+                        Text("الوصول السريع").font(.title3.bold())
+                        Spacer()
+                        Image(systemName:"bolt.fill").foregroundStyle(Ink.gold)
+                    }
                     GlassBox{
                         VStack(spacing:5){
                             quick("إنشاء أكواد الاشتراك","ticket.fill"){tab = .codes}
@@ -729,12 +854,50 @@ private struct StudentsScreen:View {
 }
 private struct MoreScreen:View {
     @ObservedObject var state:AdminState
+    @AppStorage("admin_palette") private var paletteID="aurora"
     var body:some View {
         NavigationStack{
             ScrollView {
                 VStack(alignment:.leading,spacing:16) {
                     ScreenTitle(text:"إدارة المنصة",detail:"جميع الأدوات • تطبيق أصلي للآيفون")
                     Note(state:state)
+                    GlassBox {
+                        VStack(alignment:.leading,spacing:14) {
+                            HStack {
+                                VStack(alignment:.leading,spacing:5) {
+                                    Label("مظهر تطبيق الإدارة",systemImage:"paintpalette.fill")
+                                        .font(.headline).foregroundStyle(Ink.gold)
+                                    Text("اختر الألوان التي تناسب ذوقك، ويمكنك تغييرها بأي وقت")
+                                        .font(.caption).foregroundStyle(Ink.faded)
+                                }
+                                Spacer(minLength:0)
+                                Image(systemName:"sparkles").foregroundStyle(Ink.secondary)
+                            }
+                            HStack(spacing:9) {
+                                ForEach(AdminPalette.allCases) { palette in
+                                    Button {
+                                        paletteID=palette.rawValue
+                                        UISelectionFeedbackGenerator().selectionChanged()
+                                    } label: {
+                                        VStack(spacing:7) {
+                                            Image(systemName:paletteID==palette.rawValue ? "checkmark" : "paintbrush.pointed.fill")
+                                                .font(.system(size:16,weight:.bold))
+                                                .foregroundStyle(palette.background)
+                                                .frame(width:47,height:47)
+                                                .background(LinearGradient(colors:[palette.accent,palette.second],startPoint:.topLeading,endPoint:.bottomTrailing),in:RoundedRectangle(cornerRadius:16))
+                                            Text(palette.name).font(.caption.bold()).foregroundStyle(.white)
+                                            Text(palette.caption).font(.system(size:9,weight:.medium))
+                                                .foregroundStyle(Ink.faded).lineLimit(1).minimumScaleFactor(0.8)
+                                        }
+                                        .frame(maxWidth:.infinity)
+                                        .padding(.vertical,12).padding(.horizontal,4)
+                                        .background(paletteID==palette.rawValue ? Ink.gold.opacity(0.10) : Ink.navy.opacity(0.25),in:RoundedRectangle(cornerRadius:17))
+                                        .overlay(RoundedRectangle(cornerRadius:17).stroke(paletteID==palette.rawValue ? Ink.gold : Ink.blue2,lineWidth:paletteID==palette.rawValue ? 1.7 : 1))
+                                    }.buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
                     GlassBox{
                         VStack(spacing:14){
                             NavigationLink{SubscriptionsScreen(state:state)}label:{entry("اشتراكات الطلاب","creditcard.fill")}
