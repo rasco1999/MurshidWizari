@@ -245,23 +245,107 @@ final class V49StudyStore: ObservableObject {
 }
 
 @MainActor
-final class V49QuestionSpeech {
+final class V49QuestionSpeech: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     static let shared = V49QuestionSpeech()
-    private let synthesizer = AVSpeechSynthesizer()
-    private init() {}
+    @Published private(set) var isSpeaking = false
+    @Published private(set) var currentText = ""
+    @Published private(set) var errorMessage = ""
 
-    func speak(_ text: String) {
-        synthesizer.stopSpeaking(at: .immediate)
-        let input = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(3200))
-        guard !input.isEmpty else { return }
-        let utterance = AVSpeechUtterance(string: input)
-        let arabicLetters = input.unicodeScalars.filter { (0x0600...0x06FF).contains($0.value) }.count
-        utterance.voice = AVSpeechSynthesisVoice(language: arabicLetters > 0 ? "ar-SA" : "en-US")
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.88
-        synthesizer.speak(utterance)
+    private let synthesizer = AVSpeechSynthesizer()
+    private var currentUtterance: AVSpeechUtterance?
+
+    private override init() {
+        super.init()
+        synthesizer.delegate = self
+        synthesizer.usesApplicationAudioSession = true
     }
 
-    func stop() { synthesizer.stopSpeaking(at: .immediate) }
+    func isReading(_ text: String) -> Bool {
+        isSpeaking && currentText == normalized(text)
+    }
+
+    // The previous ambient/default audio category was muted by the iPhone
+    // Ring/Silent switch. Explicit spoken-audio playback uses media volume.
+    @discardableResult
+    func speak(_ text: String) -> Bool {
+        let input = normalized(text)
+        guard !input.isEmpty else {
+            errorMessage = "لا يوجد نص متاح للاستماع إليه."
+            return false
+        }
+        if isReading(input) { stop(); return true }
+        stop()
+        errorMessage = ""
+
+        do {
+            let audio = AVAudioSession.sharedInstance()
+            try audio.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+            try audio.setActive(true)
+        } catch {
+            errorMessage = "تعذّر تفعيل صوت الآيفون. جرّب فصل البلوتوث ثم أعد المحاولة."
+            return false
+        }
+
+        let arabic = input.unicodeScalars.contains { (0x0600...0x06FF).contains($0.value) }
+        let voice: AVSpeechSynthesisVoice?
+        if arabic {
+            voice = AVSpeechSynthesisVoice(language: "ar-IQ")
+                ?? AVSpeechSynthesisVoice(language: "ar-SA")
+                ?? AVSpeechSynthesisVoice.speechVoices().first(where: { $0.language.hasPrefix("ar") })
+        } else {
+            voice = AVSpeechSynthesisVoice(language: "en-US")
+                ?? AVSpeechSynthesisVoice.speechVoices().first(where: { $0.language.hasPrefix("en") })
+        }
+        guard let voice else {
+            errorMessage = "لا يوجد صوت \(arabic ? "عربي" : "إنجليزي") متاح على الجهاز. فعّل أحد أصوات هذه اللغة من إعدادات تسهيلات الاستخدام في الآيفون."
+            deactivateAudio()
+            return false
+        }
+
+        let utterance = AVSpeechUtterance(string: input)
+        utterance.voice = voice
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.82
+        utterance.volume = 1.0
+        currentUtterance = utterance
+        currentText = input
+        isSpeaking = true
+        synthesizer.speak(utterance)
+        return true
+    }
+
+    func stop() {
+        currentUtterance = nil
+        isSpeaking = false
+        currentText = ""
+        if synthesizer.isSpeaking || synthesizer.isPaused {
+            _ = synthesizer.stopSpeaking(at: .immediate)
+        }
+        deactivateAudio()
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        finishIfCurrent(utterance)
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        finishIfCurrent(utterance)
+    }
+
+    private func finishIfCurrent(_ utterance: AVSpeechUtterance) {
+        guard currentUtterance === utterance else { return }
+        currentUtterance = nil
+        currentText = ""
+        isSpeaking = false
+        deactivateAudio()
+    }
+
+    private func deactivateAudio() {
+        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+    }
+
+    private func normalized(_ text: String) -> String {
+        String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(3200))
+    }
 }
 
 // MARK: - Smart review home (does not claim server rankings or academic grades)
@@ -370,6 +454,7 @@ struct V49StudyHubView: View {
 struct V49RecallView: View {
     let questionIDs: [Int]
     @ObservedObject private var store = V49StudyStore.shared
+    @ObservedObject private var speech = V49QuestionSpeech.shared
     @State private var index = 0
     @State private var reveal = false
     @State private var remembered = 0
@@ -395,8 +480,9 @@ struct V49RecallView: View {
                         VStack(alignment: .leading, spacing: 15) {
                             Text(q.topicName).font(.caption.bold()).foregroundStyle(Color.murshidBlue)
                             Text(q.question).font(.title3.bold()).lineSpacing(5).textSelection(.enabled)
-                            Button { V49QuestionSpeech.shared.speak(q.question) } label: {
-                                Label("استمع إلى السؤال", systemImage: "speaker.wave.2.fill")
+                            Button { speech.speak(q.question) } label: {
+                                Label(speech.isReading(q.question) ? "إيقاف الاستماع" : "استمع إلى السؤال",
+                                      systemImage: speech.isReading(q.question) ? "stop.circle.fill" : "speaker.wave.2.fill")
                             }
                             .font(.subheadline)
                             if reveal {
@@ -409,10 +495,15 @@ struct V49RecallView: View {
                                 } else {
                                     Text("لا يتوفر شرح معتمد لهذا السؤال حتى الآن.").font(.caption).foregroundStyle(.secondary)
                                 }
-                                Button { V49QuestionSpeech.shared.speak(q.correctAnswer + ". " + q.explanation) } label: {
-                                    Label("استمع إلى الإجابة والشرح", systemImage: "waveform")
+                                Button { speech.speak(q.correctAnswer + ". " + q.explanation) } label: {
+                                    Label(speech.isReading(q.correctAnswer + ". " + q.explanation) ? "إيقاف الاستماع" : "استمع إلى الإجابة والشرح",
+                                          systemImage: speech.isReading(q.correctAnswer + ". " + q.explanation) ? "stop.circle.fill" : "waveform")
                                 }
                                 .font(.subheadline)
+                            }
+                            if !speech.errorMessage.isEmpty {
+                                Label(speech.errorMessage, systemImage: "speaker.slash.fill")
+                                    .font(.caption).foregroundStyle(.orange)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
