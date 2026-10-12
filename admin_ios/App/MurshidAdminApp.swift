@@ -1,5 +1,6 @@
 import SwiftUI
 import LocalAuthentication
+import UIKit
 
 typealias J = [String: Any]
 private enum Ink {
@@ -36,6 +37,8 @@ enum LoginStage {case loading, signin, otp, ready}
     @Published var subscriptions:[J] = []
     @Published var questions:[J] = []
     @Published var curriculum:J = [:]
+    private var appIsActive=false
+    private var keepAliveTask:Task<Void,Never>?
     private let session:URLSession = {
         let c=URLSessionConfiguration.default
         c.httpCookieAcceptPolicy = .always
@@ -119,9 +122,43 @@ enum LoginStage {case loading, signin, otp, ready}
         }
         guard http>=200, http<300, result["ok"] as? Bool == true else {
             if http==401 && action != "login" && action != "verify_2fa" {stage = .signin}
+            if http==404 && action=="subscription_sources" {
+                throw ServiceError(message:"خدمة تصنيف الاشتراكات غير مثبّتة على الاستضافة. استبدل ملف public_html/admin/native-api.php بالتحديث الجديد، ثم اضغط إعادة المحاولة.")
+            }
             throw ServiceError(message:s(result,"message",http==404 ? "تحتاج تركيب native-api.php على الاستضافة أولاً." : "تعذر الاتصال بالخدمة (\(http))."))
         }
         return result
+    }
+    // A foreground admin session stays refreshed while the app is in use.
+    // The server continues to enforce admin status, authorization and 2FA.
+    func setAppActive(_ active:Bool) {
+        appIsActive=active
+        UIApplication.shared.isIdleTimerDisabled=active
+        if active {startKeepAlive()} else {stopKeepAlive()}
+    }
+    private func stopKeepAlive() {
+        keepAliveTask?.cancel()
+        keepAliveTask=nil
+    }
+    private func startKeepAlive() {
+        stopKeepAlive()
+        guard appIsActive && stage == .ready else{return}
+        keepAliveTask=Task { [weak self] in
+            // Revalidate on foreground return, then renew every 90 seconds.
+            while !Task.isCancelled {
+                guard let self, self.appIsActive, self.stage == .ready else {break}
+                do {
+                    let result=try await self.call("status")
+                    self.csrf=s(result,"csrf",self.csrf)
+                } catch {
+                    // A temporary network error is not a reason to log out.
+                    // Explicit server rejection still changes the login stage.
+                    if self.stage != .ready {break}
+                }
+                do {try await Task.sleep(nanoseconds:90_000_000_000)}
+                catch {break}
+            }
+        }
     }
     func bootstrap() async {
         stage = .loading
@@ -135,6 +172,7 @@ enum LoginStage {case loading, signin, otp, ready}
         name=s(r,"name","مدير المنصة")
         csrf=s(r,"csrf","")
         stage = .ready
+        if appIsActive {startKeepAlive()}
     }
     func login(_ identifier:String,_ password:String) async {
         busy=true; error=""
@@ -152,6 +190,7 @@ enum LoginStage {case loading, signin, otp, ready}
         catch {self.error=error.localizedDescription}
     }
     func logout() async {
+        stopKeepAlive()
         _=try? await call("logout",params:[:])
         csrf="";name="الإدارة";stage = .signin
     }
@@ -185,6 +224,7 @@ enum LoginStage {case loading, signin, otp, ready}
     }
 }
 @main struct MurshidAdministration:App {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var state=AdminState()
     var body:some Scene {
         WindowGroup {
@@ -199,6 +239,11 @@ enum LoginStage {case loading, signin, otp, ready}
             .environment(\.layoutDirection,.rightToLeft)
             .preferredColorScheme(.dark)
             .tint(Ink.gold)
+            .onAppear {state.setAppActive(scenePhase == .active)}
+            .onChange(of:scenePhase) {phase in
+                state.setAppActive(phase == .active)
+            }
+            .onDisappear {state.setAppActive(false)}
         }
     }
 }
