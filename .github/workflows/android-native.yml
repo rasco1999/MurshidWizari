@@ -12,11 +12,29 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: synthetic-ci-only
+          MYSQL_DATABASE: murshid_push_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -psynthetic-ci-only"
+          --health-interval=10s --health-timeout=5s --health-retries=10
     defaults:
       run:
         working-directory: android-native
     steps:
       - uses: actions/checkout@v4
+      - name: Verify Android push PHP and isolated database behavior
+        env:
+          FCM_TEST_DSN: 'mysql:host=127.0.0.1;port=3306;dbname=murshid_push_test;charset=utf8mb4'
+          FCM_TEST_USER: root
+          FCM_TEST_PASSWORD: synthetic-ci-only
+        run: |
+          find server-push -name '*.php' -print0 | xargs -0 -n1 php -l
+          php server-push/tests/integration.php
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

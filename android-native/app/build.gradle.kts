@@ -1,5 +1,8 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
-dependencies { testImplementation("junit:junit:4.13.2") }
+dependencies {
+    implementation("com.google.firebase:firebase-messaging:25.0.2")
+    testImplementation("junit:junit:4.13.2")
+}
 
 // Release keys must be supplied by the owner's secure build environment, never committed.
 val productionStore = System.getenv("MURSHID_RELEASE_KEYSTORE")
@@ -13,7 +16,7 @@ android {
     namespace = "com.murshidwizari.student"
     compileSdk = 35
     buildFeatures { buildConfig = true }
-    defaultConfig { applicationId = "com.murshidwizari.student"; minSdk = 26; targetSdk = 35; versionCode = 49801; versionName = "4.8.18"; buildConfigField("String", "API_ORIGIN", "\"https://www.mur-iq.com/\"") }
+    defaultConfig { applicationId = "com.murshidwizari.student"; minSdk = 26; targetSdk = 35; versionCode = 49802; versionName = "4.8.18"; buildConfigField("String", "API_ORIGIN", "\"https://www.mur-iq.com/\"") }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
     signingConfigs {

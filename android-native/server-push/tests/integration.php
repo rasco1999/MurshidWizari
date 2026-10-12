@@ -1,0 +1,54 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__.'/../public_html/includes/android_fcm.php';
+function check(bool $condition,string $message): void { if (!$condition) throw new RuntimeException($message); }
+$pdo=new PDO((string)getenv('FCM_TEST_DSN'),(string)getenv('FCM_TEST_USER'),(string)getenv('FCM_TEST_PASSWORD'),[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+check((string)$pdo->query('SELECT DATABASE()')->fetchColumn()==='murshid_push_test','Tests must use disposable test database only');
+$pdo->exec('CREATE TABLE users(id INT UNSIGNED PRIMARY KEY) ENGINE=InnoDB');
+$pdo->exec('CREATE TABLE notifications(id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,user_id INT UNSIGNED NOT NULL,title TEXT,body TEXT,is_read TINYINT NOT NULL DEFAULT 0) ENGINE=InnoDB');
+$pdo->exec('INSERT INTO users(id) VALUES(10),(20)');
+$pdo->exec("INSERT INTO notifications(user_id,title,body) VALUES(10,'OLD A','PRIVATE A'),(20,'OLD B','PRIVATE B')");
+android_fcm_schema($pdo);
+$install='11111111-1111-1111-1111-111111111111';
+$bindingA='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+$bindingB='bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+$input=['installation_id'=>$install,'binding_id'=>$bindingA,'token'=>str_repeat('synthetic-token-',10)];
+check(android_fcm_validate_registration($input),'Valid input rejected');
+check(!android_fcm_validate_registration(array_merge($input,['token'=>"bad\ntoken"])),'Token newline accepted');
+check(!android_fcm_validate_registration(array_merge($input,['installation_id'=>'../attack'])),'Invalid installation accepted');
+android_fcm_register($pdo,10,$input);
+check((int)$pdo->query('SELECT last_notification_id FROM android_fcm_devices')->fetchColumn()===1,'Registration must baseline existing inbox');
+$sent=[];
+$send=static function(array $device,int $id) use (&$sent): array { $sent[]=android_fcm_payload($device,$id);return ['ok'=>true]; };
+$result=android_fcm_dispatch($pdo,40,$send);
+check($result['sent']===0,'Old inbox was pushed');
+$pdo->exec("INSERT INTO notifications(user_id,title,body) VALUES(10,'NEW A','SECRET BODY A'),(20,'NEW B','SECRET BODY B')");
+$pdo->exec('UPDATE android_fcm_devices SET next_attempt_at=NOW()');
+check(android_fcm_dispatch($pdo,40,$send)['sent']===1,'New notification was not delivered');
+check($sent[0]['message']['data']===['binding_id'=>$bindingA,'notification_id'=>'3'],'Push crossed accounts or payload contract');
+check(!str_contains(json_encode($sent[0]),'SECRET') && !isset($sent[0]['message']['notification']),'Personal content must not leave inbox');
+$pdo->exec('UPDATE android_fcm_devices SET next_attempt_at=NOW()');
+check(android_fcm_dispatch($pdo,40,$send)['sent']===0,'Duplicate notification resent');
+
+// Token refresh preserves the notification cursor; switching accounts resets it.
+$input['token']=str_repeat('rotated-token-',10); android_fcm_register($pdo,10,$input);
+check((int)$pdo->query('SELECT last_notification_id FROM android_fcm_devices')->fetchColumn()===3,'Rotation lost cursor');
+$input['binding_id']=$bindingB; android_fcm_register($pdo,20,$input);
+check((int)$pdo->query('SELECT last_notification_id FROM android_fcm_devices')->fetchColumn()===4,'Account switch replayed old inbox');
+android_fcm_revoke($pdo,10,$install,$bindingA);
+check((int)$pdo->query('SELECT COUNT(*) FROM android_fcm_devices')->fetchColumn()===1,'Old account could revoke new binding');
+$pdo->exec("INSERT INTO notifications(user_id,title,body) VALUES(20,'RETRY','PRIVATE')");
+$retry=static fn(array $device,int $id):array=>['ok'=>false,'status'=>429,'retry_after'=>1800];
+check(android_fcm_dispatch($pdo,40,$retry)['retry']===1,'Retry not recorded');
+$row=$pdo->query('SELECT last_notification_id,attempts,TIMESTAMPDIFF(SECOND,NOW(),next_attempt_at) delay FROM android_fcm_devices')->fetch(PDO::FETCH_ASSOC);
+check((int)$row['last_notification_id']===4 && (int)$row['attempts']===1 && (int)$row['delay']>=1798,'Failure consumed cursor or ignored Retry-After');
+check(android_fcm_dispatch($pdo,40,$send)['scanned']===0,'Backoff ignored');
+$pdo->exec('UPDATE android_fcm_devices SET next_attempt_at=NOW()');
+check(android_fcm_dispatch($pdo,40,$send)['sent']===1,'Retry failed to recover');
+$pdo->exec("INSERT INTO notifications(user_id,title,body) VALUES(20,'INVALID','PRIVATE')");
+$pdo->exec('UPDATE android_fcm_devices SET next_attempt_at=NOW()');
+check(android_fcm_dispatch($pdo,40,static fn(array $d,int $i):array=>['ok'=>false,'unregistered'=>true])['revoked']===1,'Invalid token not removed');
+android_fcm_register($pdo,20,$input); android_fcm_revoke($pdo,20,$install,$bindingB);
+check((int)$pdo->query('SELECT COUNT(*) FROM android_fcm_devices')->fetchColumn()===0,'Logout did not revoke token');
+check(!android_fcm_ready(),'No credentials must mean disabled, not fabricated configuration');
+echo "PASS: account isolation, registration, rotation, baseline, dedup, logout, privacy, invalid tokens and retry/backoff. No external messages sent.\n";

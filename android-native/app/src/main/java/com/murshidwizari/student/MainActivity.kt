@@ -353,6 +353,7 @@ class MainActivity : Activity() {
                     else setContentView(content)
                 }
                 protectedContentWhileLocked = null
+                main.post { openPushInboxIfReady() }
                 if (resumeWelcomeAfterUnlock) {
                     resumeWelcomeAfterUnlock = false
                     replayWelcomeAfterBackground()
@@ -384,6 +385,11 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>,
                                              grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == StudentPush.requestCode) {
+            StudentPush.refresh(this)
+            if (activeScreen == "notifications") notificationsScreen()
+            return
+        }
         if (requestCode != DailyStudyReminder.requestCode || !reminderPermissionPending) return
         reminderPermissionPending = false
         if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) setStudyReminder(true)
@@ -953,6 +959,8 @@ class MainActivity : Activity() {
             result.optBoolean("transport_uncertain"))
     private fun expireSession() {
         sessionGeneration++
+        StudentPush.detach(this)
+        intent.removeExtra(StudentPush.inboxExtra)
         serviceTicker?.let { main.removeCallbacks(it) }; serviceTicker = null
         popupChecking = false; lastPopupPoll = 0L
         currentAdDialog?.dismiss(); currentAdDialog = null
@@ -1869,6 +1877,8 @@ class MainActivity : Activity() {
                 if (activeScreen != "phone_reset") return@recoveryRequest
                 if (result.optBoolean("ok")) {
                     sessionGeneration++
+                    StudentPush.detach(this)
+                    intent.removeExtra(StudentPush.inboxExtra)
                     csrf = ""; student = JSONObject(); homepage = JSONObject(); subscribed = false
                     message(result.optString("message", "تم تغيير كلمة المرور. سجّل الدخول من جديد."))
                     loginScreen()
@@ -2279,6 +2289,29 @@ class MainActivity : Activity() {
         homepage = response; csrf = response.optString("csrf", csrf)
         student = response.optJSONObject("user") ?: JSONObject()
         subscribed = response.optBoolean("subscribed")
+        StudentPush.attach(this, api, student.optInt("id"), csrf) { configured ->
+            if (!isFinishing && !isDestroyed && configured && student.optInt("id") > 0 &&
+                biometricOverlay == null && !biometricAuthInProgress && Build.VERSION.SDK_INT >= 33 &&
+                !StudentPush.allowed(this) && !prefs.getBoolean("push_permission_prompted", false)) {
+                prefs.edit().putBoolean("push_permission_prompted", true).apply()
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), StudentPush.requestCode)
+            }
+        }
+        main.post { openPushInboxIfReady() }
+    }
+
+    private fun openPushInboxIfReady() {
+        if (biometricOverlay != null || biometricAuthInProgress || student.optInt("id") <= 0) return
+        if (StudentPush.matchesInboxIntent(this, intent, student.optInt("id"))) {
+            intent.removeExtra(StudentPush.inboxExtra)
+            notificationsScreen()
+        }
+    }
+
+    override fun onNewIntent(newIntent: Intent) {
+        super.onNewIntent(newIntent)
+        intent = newIntent
+        // onResume decides whether the biometric shield is required before routing.
     }
 
     private fun showHome(response: JSONObject) {
@@ -4601,6 +4634,8 @@ class MainActivity : Activity() {
                     .setPositiveButton("تسجيل الخروج") { _, _ ->
                         fun clearAfterLogout() {
                             sessionGeneration++
+                            StudentPush.detach(this@MainActivity)
+                            intent.removeExtra(StudentPush.inboxExtra)
                             api.clear(); csrf = ""; student = JSONObject()
                             homeFeatureFlags = JSONObject()
                             homeInsightsLoaded = false; homeInsights = JSONObject(); homeWeekly = JSONObject()
@@ -4608,7 +4643,7 @@ class MainActivity : Activity() {
                         }
                         if (csrf.isBlank()) {
                             clearAfterLogout()
-                        } else fetch("mobile/logout.php", JSONObject().put("csrf", csrf), showError = false) { result ->
+                        } else fetch("mobile/logout.php", StudentPush.logoutPayload(this, csrf), showError = false) { result ->
                             if (LogoutRules.mayClearLocalSession(csrf, result.optBoolean("ok"))) {
                                 clearAfterLogout()
                             } else {
@@ -4675,6 +4710,13 @@ class MainActivity : Activity() {
             base("الإشعارات", true)
             val items = response.optJSONArray("items") ?: JSONArray()
             caption("غير المقروءة: " + response.optInt("unread", 0))
+            if (!StudentPush.allowed(this)) button("تفعيل إشعارات الحساب", secondary = true) {
+                if (Build.VERSION.SDK_INT >= 33 && !prefs.getBoolean("push_permission_prompted", false)) {
+                    prefs.edit().putBoolean("push_permission_prompted", true).apply()
+                    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), StudentPush.requestCode)
+                } else startActivity(Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName))
+            }
             if (items.length() > 0) button("تحديد الكل مقروءاً", secondary = true) {
                 fetch("mobile/notifications.php",JSONObject().put("csrf",csrf).put("read_all",true)) {
                     if (it.optBoolean("ok")) notificationsScreen()
@@ -6359,6 +6401,8 @@ class MainActivity : Activity() {
             val order = prefs.getInt(lastPaymentKey(), 0)
             if (order > 0) checkPaymentStatus(order)
         }
+        if (student.optInt("id") > 0) StudentPush.attach(this, api, student.optInt("id"), csrf)
+        openPushInboxIfReady()
         if (timeAwayMs >= 3000L && activeScreen != "welcome") {
             if (biometricOverlay != null || biometricAuthInProgress) {
                 resumeWelcomeAfterUnlock = true

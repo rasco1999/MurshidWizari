@@ -5,10 +5,15 @@
   <uses-permission android:name="android.permission.USE_FINGERPRINT"/>
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-  <application android:label="المرشد الوزاري" android:icon="@drawable/ic_ios_v4818"
+  <application android:name=".MurshidApplication" android:label="المرشد الوزاري" android:icon="@drawable/ic_ios_v4818"
      android:allowBackup="false" android:theme="@style/MurshidLight"
      android:usesCleartextTraffic="false" android:supportsRtl="true">
-    <activity android:name=".MainActivity" android:exported="true" android:windowSoftInputMode="adjustResize"
+    <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false"/>
+    <meta-data android:name="firebase_analytics_collection_enabled" android:value="false"/>
+    <service android:name=".StudentMessagingService" android:exported="false">
+      <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT"/></intent-filter>
+    </service>
+    <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:windowSoftInputMode="adjustResize"
         android:configChanges="orientation|screenSize|smallestScreenSize|keyboardHidden">
       <intent-filter>
         <action android:name="android.intent.action.MAIN"/>

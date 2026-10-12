@@ -58,6 +58,7 @@ jobs:
             python3 android-native/scripts/student_fixture_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/student"
             python3 android-native/scripts/specialized_exam_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/specialized"
             python3 android-native/scripts/biometric_lock_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/lock"
+            python3 android-native/scripts/final_services_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/services"
       - name: Upload anonymous layout screenshots and accessibility hierarchy
         if: always()
         uses: actions/upload-artifact@v4

@@ -1,1 +1,13 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools"><application android:usesCleartextTraffic="true" tools:replace="android:usesCleartextTraffic" /></manifest>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+  <application android:usesCleartextTraffic="true" tools:replace="android:usesCleartextTraffic">
+    <receiver android:name=".QaPushReceiver" android:exported="true"/>
+    <activity android:name=".QaCheckoutActivity" android:exported="true">
+      <intent-filter android:autoVerify="true">
+        <action android:name="android.intent.action.VIEW"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+        <category android:name="android.intent.category.BROWSABLE"/>
+        <data android:scheme="https" android:host="checkout.example.test"/>
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>
