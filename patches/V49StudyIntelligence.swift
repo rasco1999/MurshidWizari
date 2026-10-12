@@ -244,25 +244,8 @@ final class V49StudyStore: ObservableObject {
     }
 }
 
-@MainActor
-final class V49QuestionSpeech {
-    static let shared = V49QuestionSpeech()
-    private let synthesizer = AVSpeechSynthesizer()
-    private init() {}
-
-    func speak(_ text: String) {
-        synthesizer.stopSpeaking(at: .immediate)
-        let input = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(3200))
-        guard !input.isEmpty else { return }
-        let utterance = AVSpeechUtterance(string: input)
-        let arabicLetters = input.unicodeScalars.filter { (0x0600...0x06FF).contains($0.value) }.count
-        utterance.voice = AVSpeechSynthesisVoice(language: arabicLetters > 0 ? "ar-SA" : "en-US")
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.88
-        synthesizer.speak(utterance)
-    }
-
-    func stop() { synthesizer.stopSpeaking(at: .immediate) }
-}
+// AVSpeechSynthesizer and the shared audio-session lifecycle live in
+// V498QuestionSpeech.swift. Both online explanations and offline recall use it.
 
 // MARK: - Smart review home (does not claim server rankings or academic grades)
 
@@ -395,10 +378,8 @@ struct V49RecallView: View {
                         VStack(alignment: .leading, spacing: 15) {
                             Text(q.topicName).font(.caption.bold()).foregroundStyle(Color.murshidBlue)
                             Text(q.question).font(.title3.bold()).lineSpacing(5).textSelection(.enabled)
-                            Button { V49QuestionSpeech.shared.speak(q.question) } label: {
-                                Label("استمع إلى السؤال", systemImage: "speaker.wave.2.fill")
-                            }
-                            .font(.subheadline)
+                            V498SpeechButton(text: q.question, title: "استمع إلى السؤال",
+                                             speechID: "recall-question-\(q.id)")
                             if reveal {
                                 Divider()
                                 Text("الإجابة النموذجية").font(.caption.bold()).foregroundStyle(.secondary)
@@ -409,10 +390,9 @@ struct V49RecallView: View {
                                 } else {
                                     Text("لا يتوفر شرح معتمد لهذا السؤال حتى الآن.").font(.caption).foregroundStyle(.secondary)
                                 }
-                                Button { V49QuestionSpeech.shared.speak(q.correctAnswer + ". " + q.explanation) } label: {
-                                    Label("استمع إلى الإجابة والشرح", systemImage: "waveform")
-                                }
-                                .font(.subheadline)
+                                V498SpeechButton(text: q.correctAnswer + ". " + q.explanation,
+                                                 title: "استمع إلى الإجابة والشرح",
+                                                 speechID: "recall-answer-\(q.id)")
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -519,3 +499,4 @@ struct V49OfflineAccessView: View {
         }
     }
 }
+

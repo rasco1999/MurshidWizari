@@ -499,87 +499,7 @@ struct V31HomeView: View {
         }
     }
 
-    // Official website accounts. HTTPS universal links open the installed social
-    // app when supported by iOS; otherwise they remain reachable in Safari.
-    // Dynamic system surface/text colors follow both manually selected themes.
-    private var socialLinksFooter: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            V3SectionHeader(
-                title: "تابعنا على منصات التواصل",
-                subtitle: "كل جديد من منصة المرشد الوزاري",
-                icon: "bubble.left.and.bubble.right.fill"
-            )
-            MurshidCard {
-                HStack(spacing: 9) {
-                    socialLinkButton(
-                        title: "إنستغرام",
-                        icon: "camera.fill",
-                        url: URL(string: "https://www.instagram.com/murshid.iq/")!,
-                        color: Color(red: 0.76, green: 0.19, blue: 0.50)
-                    )
-                    socialLinkButton(
-                        title: "فيسبوك",
-                        icon: "f",
-                        url: URL(string: "https://www.facebook.com/Murshidiq/")!,
-                        color: Color(red: 0.12, green: 0.33, blue: 0.77)
-                    )
-                    socialLinkButton(
-                        title: "تيليجرام",
-                        icon: "paperplane.fill",
-                        url: URL(string: "https://t.me/El_Murshed_iq")!,
-                        color: Color(red: 0.10, green: 0.57, blue: 0.79)
-                    )
-                }
-                .frame(maxWidth: .infinity)
-                Text("اضغط على الأيقونة لزيارة حسابنا الرسمي")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 5)
-            }
-        }
-        .padding(.top, 5)
-        .accessibilityElement(children: .contain)
-    }
-
-    private func socialLinkButton(
-        title: String,
-        icon: String,
-        url: URL,
-        color: Color
-    ) -> some View {
-        Link(destination: url) {
-            VStack(spacing: 9) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(color)
-                        .frame(width: 55, height: 55)
-                        .shadow(color: color.opacity(0.20), radius: 7, y: 3)
-
-                    if icon == "f" {
-                        Text("f")
-                            .font(.system(size: 36, weight: .heavy, design: .rounded))
-                            .foregroundStyle(.white)
-                            .offset(y: 3)
-                    } else {
-                        Image(systemName: icon)
-                            .font(.system(size: 25, weight: .semibold))
-                            .foregroundStyle(.white)
-                    }
-                }
-                Text(title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-            .frame(maxWidth: .infinity, minHeight: 94)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("فتح حساب منصة المرشد الوزاري على \(title)")
-        .accessibilityHint("يفتح الرابط خارج التطبيق")
-    }
+    private var socialLinksFooter: some View { V498SocialLinksFooter() }
 
     private var isDarkAppearance: Bool {
         appearance == "dark" || (appearance == "system" && colorScheme == .dark)
@@ -839,39 +759,36 @@ private struct V31WebsiteHeroSlider: View {
 // MARK: - Published school advertisements
 
 struct V31SchoolAdsView: View {
-    @State private var ads: [JSON] = []
-    @State private var loading = true
-    @State private var error = ""
+    @ObservedObject private var feed = V498SchoolAdsStore.shared
 
     private var tickerText: String {
-        ads.map { "\(jString($0["school"])) — \(jString($0["text"]))" }
+        feed.ads.map { "\($0.school) — \($0.text)" }
             .joined(separator: "     •     ")
     }
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 14) {
-                if loading {
+                if !feed.hasLoaded && feed.isLoading {
                     V3SkeletonCard(height: 130)
-                } else if ads.isEmpty {
+                } else if feed.ads.isEmpty && feed.error.isEmpty {
                     EmptyStateView(systemImage: "megaphone", title: "لا توجد إعلانات مدرسية الآن", message: "ستظهر الإعلانات هنا تلقائياً بعد نشرها من الإدارة.")
                 } else {
                     V31SchoolAdTicker(text: tickerText)
-                    ForEach(ads.indices, id: \.self) { index in
-                        let ad = ads[index]
+                    ForEach(feed.ads) { ad in
                         MurshidCard {
                             VStack(alignment: .leading, spacing: 10) {
-                                Label(jString(ad["school"]), systemImage: "building.2.fill")
+                                Label(ad.school, systemImage: "building.2.fill")
                                     .font(.headline).foregroundStyle(Color.murshidBlue)
-                                Text(jString(ad["text"])).font(.body)
+                                Text(ad.text).font(.body)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                 }
-                if !error.isEmpty {
-                    V3InlineMessage(text: error, icon: "exclamationmark.triangle.fill", tone: .warning)
+                if !feed.error.isEmpty {
+                    V3InlineMessage(text: feed.error, icon: "exclamationmark.triangle.fill", tone: .warning)
                 }
             }
             .padding(16)
@@ -880,27 +797,8 @@ struct V31SchoolAdsView: View {
         .background(Color.murshidBackground.ignoresSafeArea())
         .navigationTitle("الإعلانات")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await loadAds() }
-        .refreshable { await loadAds() }
-    }
-
-    private func loadAds() async {
-        do {
-            let response = try await APIClient.shared.request("mobile/bootstrap.php")
-            await MainActor.run {
-                ads = jArray(response["ads"]).filter {
-                    !jString($0["school"]).isEmpty && !jString($0["text"]).isEmpty
-                        && jBool($0["active"], default: true)
-                }
-                loading = false
-                error = ""
-            }
-        } catch let fetchError {
-            await MainActor.run {
-                loading = false
-                error = "تعذر تحديث الإعلانات: \(fetchError.localizedDescription)"
-            }
-        }
+        .task { await feed.refresh() }
+        .refreshable { await feed.refresh() }
     }
 }
 
@@ -1821,3 +1719,4 @@ enum V31PushRegistrar {
         } catch { }
     }
 }
+

@@ -85,6 +85,8 @@ final class AppSession: ObservableObject {
         // Review cards are tied to the last authenticated student and must not
         // survive an explicit logout or a server-confirmed expired session.
         V49StudyStore.shared.eraseOnLogout(userID: user?.id)
+        V49QuestionSpeech.shared.stop()
+        V498SchoolAdsStore.shared.bind(userID: 0)
         authenticated = false
         v3Authenticated = false
         bootstrapNetworkFailed = false
@@ -109,6 +111,12 @@ final class AppSession: ObservableObject {
         let u = json["user"] as? JSON ?? [:]
         user = UserSummary(id: jInt(u["id"]), name: jString(u["name"]), grade: jString(u["grade"]), gradeID: jInt(u["grade_id"]))
         if let user { V49StudyStore.shared.bind(to: user) }
+        if let user {
+            V498SchoolAdsStore.shared.bind(userID: user.id)
+            if let rows = json["ads"] as? [JSON] {
+                V498SchoolAdsStore.shared.ingest(rows, for: user.id)
+            }
+        }
         avatarURL = jString(u["avatar_url"])
         avatarRevision = jString(u["avatar_revision"])
         subjects = MurshidSubjectCatalog.visibleSubjects(jArray(json["subjects"]).map(Subject.init))
@@ -152,6 +160,10 @@ final class APIClient {
 
     private init() {
         let config = URLSessionConfiguration.default
+        #if V498_QA
+        // CI-only transport: deterministic fixtures, no real account/server writes.
+        config.protocolClasses = [V498QAURLProtocol.self]
+        #endif
         config.httpCookieStorage = .shared
         config.httpShouldSetCookies = true
         // API requests work on Wi-Fi, 4G, 5G and Low Data Mode. Optional
@@ -175,7 +187,7 @@ final class APIClient {
         session = URLSession(configuration: config)
     }
 
-    func request(_ path: String, method: String = "GET", body: JSON? = nil, query: [URLQueryItem] = [], cacheKey: String? = nil) async throws -> JSON {
+    func request(_ path: String, method: String = "GET", body: JSON? = nil, query: [URLQueryItem] = [], cacheKey: String? = nil, fresh: Bool = false) async throws -> JSON {
         guard var components = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false) else {
             throw APIError(message: "تعذر تكوين عنوان الطلب.", status: 0, paymentRequired: false)
         }
@@ -183,6 +195,10 @@ final class APIClient {
         guard let url = components.url else { throw APIError(message: "عنوان الطلب غير صالح.", status: 0, paymentRequired: false) }
 
         var req = URLRequest(url: url)
+        if fresh {
+            req.cachePolicy = .reloadIgnoringLocalCacheData
+            req.setValue("no-cache, no-store", forHTTPHeaderField: "Cache-Control")
+        }
         req.httpMethod = method
         // A metered/Low Data Mode connection must never disable essential API calls.
         req.allowsCellularAccess = true
@@ -466,3 +482,4 @@ final class APIClient {
         return (text, type.contains("error") || type.contains("bad"))
     }
 }
+

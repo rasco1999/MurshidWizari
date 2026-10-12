@@ -48,6 +48,9 @@ struct MurshidWizariApp: App {
                 }
             }
             .tint(StudentPalette(rawValue: studentPaletteID)?.primary ?? .murshidBlue)
+            #if V498_QA
+            .modifier(V498QATools())
+            #endif
             .task {
                 // Cold start: show the branded transition long enough to be noticed,
                 // while restoring authentication in parallel.
@@ -294,3 +297,4 @@ struct LockShieldView: View {
         }
     }
 }
+

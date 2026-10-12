@@ -1716,9 +1716,17 @@ struct V49StudentAvatar: View {
 
 struct MainV3TabView: View {
     @EnvironmentObject var app: AppSession
+    @EnvironmentObject private var device: DeviceServices
+    @Environment(\.scenePhase) private var scenePhase
+    @ObservedObject private var schoolAds = V498SchoolAdsStore.shared
     @State private var selection = 0
     @State private var visited: Set<Int> = [0]
     @State private var keyboardVisible = false
+
+    private var canMonitorAds: Bool {
+        scenePhase == .active && app.v3Authenticated && !device.isLocked && device.isOnline
+    }
+    private var adsMonitorKey: String { "\(app.user?.id ?? 0):\(canMonitorAds)" }
 
     // Five destinations fit in one native bottom bar without a Study tab.
     private let tabs: [(title: String, symbol: String)] = [
@@ -1759,8 +1767,16 @@ struct MainV3TabView: View {
         .environment(\.layoutDirection, .rightToLeft)
         .onChange(of: selection) { value in
             visited.insert(value)
+            schoolAds.setViewingAds(value == 3 && canMonitorAds)
+            V49QuestionSpeech.shared.stop()
             selectionHaptic()
         }
+        .task(id: adsMonitorKey) {
+            schoolAds.setViewingAds(selection == 3 && canMonitorAds)
+            guard canMonitorAds else { return }
+            await schoolAds.monitor(userID: app.user?.id ?? 0)
+        }
+        .onDisappear { schoolAds.setViewingAds(false) }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardVisible = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardVisible = false }
         .task { await keepSessionAlive() }
@@ -1805,6 +1821,12 @@ struct MainV3TabView: View {
                         } else {
                             Image(systemName: tabs[index].symbol)
                                 .font(.system(size: 19, weight: selection == index ? .bold : .medium))
+                                .overlay(alignment: .topTrailing) {
+                                    if index == 3 {
+                                        V498UnreadAdBadge(count: schoolAds.unreadCount)
+                                            .offset(x: 11, y: -9)
+                                    }
+                                }
                         }
                         Text(tabs[index].title)
                             .font(.system(size: 10, weight: selection == index ? .bold : .medium))
@@ -1817,6 +1839,8 @@ struct MainV3TabView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(tabs[index].title)
+                .accessibilityValue(index == 3 && schoolAds.unreadCount > 0 ? "\(schoolAds.unreadCount) إعلانات جديدة" : "")
+                .accessibilityIdentifier("student-tab-\(index)")
             }
         }
         .padding(.horizontal, 5)
@@ -3081,6 +3105,7 @@ struct V3ExamView: View {
                     .padding(16)
                 }
                 .onChange(of: current) { _ in
+                    V49QuestionSpeech.shared.stop()
                     withAnimation(.easeOut(duration: 0.22)) { proxy.scrollTo("top", anchor: .top) }
                 }
                 .onChange(of: grades.count) { _ in
@@ -3308,10 +3333,9 @@ struct V3ExamView: View {
                         .foregroundStyle(.secondary)
                         .lineSpacing(5)
                         .fixedSize(horizontal: false, vertical: true)
-                    Button { V49QuestionSpeech.shared.speak(serverCorrectAnswer + ". " + serverExplanation) } label: {
-                        Label("استمع إلى الإجابة والشرح", systemImage: "speaker.wave.2.fill")
-                    }
-                    .font(.subheadline)
+                    V498SpeechButton(text: serverCorrectAnswer + ". " + serverExplanation,
+                                     title: "استمع إلى الإجابة والشرح",
+                                     speechID: "exam-answer-\(q.id)")
                 }
             }
         }
@@ -5105,3 +5129,4 @@ private func v3IsValidIraqiPhone(_ value: String) -> Bool {
     let digits = value.filter(\.isNumber)
     return digits.count == 11 && digits.hasPrefix("07")
 }
+
