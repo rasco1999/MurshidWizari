@@ -209,6 +209,54 @@ try {
             WHERE u.role='student' ORDER BY u.id DESC LIMIT 150")->fetchAll(PDO::FETCH_ASSOC);
         mn_reply(['ok'=>true,'items'=>$items]);
     }
+    if($action==='subscription_sources'&&$method==='GET'){
+        // Native admin-only report. A student can appear in several lists if
+        // they have used several methods; these are verified source records,
+        // never guesses based on the subscription amount.
+        mn_owner($pdo,$uid,'subscriptions');
+        mn_owner($pdo,$uid,'users');
+        $source=(string)($_GET['source']??'');
+        if(!in_array($source,['code','offer','paid'],true))mn_fail('نوع الاشتراك غير صحيح.');
+        $offset=min(100000,max(0,(int)($_GET['offset']??0)));
+        $limit=40;
+        $search=mb_substr(trim((string)($_GET['q']??'')),0,80);
+        $from=" FROM users u
+            JOIN subscriptions s ON s.user_id=u.id
+            LEFT JOIN grades g ON g.id=u.grade_id
+            LEFT JOIN subscription_access_codes ac ON ac.id=(
+                SELECT c.id FROM subscription_access_codes c
+                WHERE c.redeemed_by=u.id AND c.status='redeemed'
+                ORDER BY c.redeemed_at DESC,c.id DESC LIMIT 1)
+            LEFT JOIN murshid_free_month_claims fm ON fm.user_id=u.id
+            LEFT JOIN payment_orders po ON po.id=(
+                SELECT p.id FROM payment_orders p
+                WHERE p.user_id=u.id AND p.status='success' AND p.purpose='subscription'
+                ORDER BY p.paid_at DESC,p.id DESC LIMIT 1)";
+        $predicates=['code'=>'ac.id IS NOT NULL','offer'=>'fm.id IS NOT NULL','paid'=>'po.id IS NOT NULL'];
+        $where=" WHERE u.role='student' AND s.status='active'
+            AND (s.expires_at IS NULL OR s.expires_at>NOW())
+            AND ".$predicates[$source];
+        $args=[];
+        if($search!==''){
+            $where.=' AND (u.full_name LIKE ? OR u.email LIKE ? OR u.phone LIKE ?)';
+            $pattern='%'.$search.'%';
+            $args=[$pattern,$pattern,$pattern];
+        }
+        $count=$pdo->prepare('SELECT COUNT(*)'.$from.$where);
+        $count->execute($args);
+        $total=(int)$count->fetchColumn();
+        $fields="SELECT u.id,u.full_name,u.email,u.phone,u.gender,u.status account_status,
+            u.created_at,u.email_verified_at,u.phone_verified_at,g.name grade_name,
+            s.status subscription_status,s.starts_at,s.expires_at,s.amount subscription_amount,
+            ac.id code_id,ac.months code_months,ac.batch_label code_batch,ac.redeemed_at code_redeemed_at,
+            fm.seat_number offer_seat,fm.claimed_at_utc offer_claimed_at_utc,
+            po.id payment_id,po.provider payment_provider,po.amount payment_amount,
+            po.paid_at payment_paid_at";
+        $rows=$pdo->prepare($fields.$from.$where." ORDER BY u.id DESC LIMIT $limit OFFSET $offset");
+        $rows->execute($args);
+        mn_reply(['ok'=>true,'source'=>$source,'items'=>$rows->fetchAll(PDO::FETCH_ASSOC),
+            'total'=>$total,'offset'=>$offset,'has_more'=>$offset+$limit<$total]);
+    }
     if($action==='subscription_set'&&$method==='POST'){
         mn_owner($pdo,$uid,'subscriptions');$id=mn_int($body,'id');$months=mn_int($body,'months');$choice=mn_str($body,'mode',12);
         if(!$id||!in_array($choice,['activate','cancel'],true)||($choice==='activate'&&!in_array($months,[1,3],true)))mn_fail('اختيار اشتراك غير صحيح.');
