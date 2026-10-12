@@ -5,6 +5,7 @@ declare(strict_types=1);
 if (!defined('MURSHID_SKIP_SCHEMA_MAINTENANCE')) define('MURSHID_SKIP_SCHEMA_MAINTENANCE', true);
 require_once __DIR__ . '/../config/config.php';
 header('Content-Type: application/json; charset=utf-8');
+header('X-Murshid-Admin-API-Version: 4.9.5');
 header('Cache-Control: no-store, no-cache, must-revalidate, private');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
