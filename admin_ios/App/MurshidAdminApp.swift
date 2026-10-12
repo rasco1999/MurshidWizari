@@ -786,7 +786,7 @@ private struct FreeMonthCampaignScreen:View {
                         HStack {
                             Text("المتبقي: \(remaining) طالب").foregroundStyle(Ink.faded)
                             Spacer()
-                            Text(campaignState).foregroundStyle(enabled ? .green : .orange)
+                            Text(campaignState).foregroundStyle(s(state.campaign,"state","")=="open" ? Color.green : Color.orange)
                         }.font(.subheadline)
                     }
                 }
@@ -867,6 +867,7 @@ private struct FreeMonthCampaignScreen:View {
         case "open":return "العرض جارٍ"
         case "scheduled":return "مجدول"
         case "full":return "المقاعد مكتملة"
+        case "expired":return "انتهت مدة الحملة"
         case "paused":return "متوقف"
         default:return "غير مهيّأ"
         }
