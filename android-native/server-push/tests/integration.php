@@ -42,6 +42,7 @@ $retry=static fn(array $device,int $id):array=>['ok'=>false,'status'=>429,'retry
 check(android_fcm_dispatch($pdo,40,$retry)['retry']===1,'Retry not recorded');
 $row=$pdo->query('SELECT last_notification_id,attempts,TIMESTAMPDIFF(SECOND,NOW(),next_attempt_at) delay FROM android_fcm_devices')->fetch(PDO::FETCH_ASSOC);
 check((int)$row['last_notification_id']===4 && (int)$row['attempts']===1 && (int)$row['delay']>=1798,'Failure consumed cursor or ignored Retry-After');
+android_fcm_register($pdo,20,$input);
 check(android_fcm_dispatch($pdo,40,$send)['scanned']===0,'Backoff ignored');
 $pdo->exec('UPDATE android_fcm_devices SET next_attempt_at=NOW()');
 check(android_fcm_dispatch($pdo,40,$send)['sent']===1,'Retry failed to recover');

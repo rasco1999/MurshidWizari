@@ -72,8 +72,11 @@ function android_fcm_register(PDO $pdo, int $userId, array $input): void {
         $hash=hash('sha256',$token);
         $pdo->prepare('DELETE FROM android_fcm_devices WHERE token_hash=? AND installation_id<>?')->execute([$hash,$installation]);
         $pdo->prepare('INSERT INTO android_fcm_devices(installation_id,user_id,binding_id,token,token_hash,last_notification_id) VALUES(?,?,?,?,?,?)
-            ON DUPLICATE KEY UPDATE user_id=VALUES(user_id),binding_id=VALUES(binding_id),token=VALUES(token),token_hash=VALUES(token_hash),
-            last_notification_id=VALUES(last_notification_id),updated_at=NOW(),attempts=0,next_attempt_at=NOW()')
+            ON DUPLICATE KEY UPDATE
+            next_attempt_at=IF(user_id=VALUES(user_id) AND binding_id=VALUES(binding_id) AND token_hash=VALUES(token_hash),next_attempt_at,NOW()),
+            attempts=IF(user_id=VALUES(user_id) AND binding_id=VALUES(binding_id) AND token_hash=VALUES(token_hash),attempts,0),
+            user_id=VALUES(user_id),binding_id=VALUES(binding_id),token=VALUES(token),token_hash=VALUES(token_hash),
+            last_notification_id=VALUES(last_notification_id),updated_at=NOW()')
             ->execute([$installation,$userId,$binding,$token,$hash,$cursor]);
         $pdo->commit();
     } catch (Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); throw $e; }

@@ -137,12 +137,14 @@ object StudentPush {
             val p = prefs(context)
             val binding = p.getString("binding", "").orEmpty()
             if (epoch != generation || !allowed(context) || !PushRules.validBinding(binding) || activeCsrf.isBlank()) return@execute
+            if (p.getString("registered_token", null) == token &&
+                System.currentTimeMillis() - p.getLong("registered_at", 0) in 0 until 86_400_000L) return@execute
             try {
                 val result = api.call("mobile/fcm-register.php", JSONObject().put("csrf", activeCsrf)
                     .put("action", "register").put("token", token).put("binding_id", binding)
                     .put("installation_id", p.getString("installation", "")))
                 if (epoch == generation && result.optBoolean("ok"))
-                    p.edit().putString("registered_token", token).apply()
+                    p.edit().putString("registered_token", token).putLong("registered_at", System.currentTimeMillis()).apply()
             } catch (_: Exception) { /* Next resume retries; token is never logged. */ }
         }
     }
