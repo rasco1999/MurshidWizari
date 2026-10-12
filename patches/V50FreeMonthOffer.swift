@@ -11,6 +11,8 @@ struct V50FreeMonthOfferCard: View {
     @State private var alertText = ""
     @State private var showAlert = false
     @State private var showWelcomeOffer = false
+    @State private var requestError = ""
+    @State private var refreshing = false
     @State private var currentClock = Date()
     @State private var lastRemoteRefresh = Date.distantPast
     private let ticker = Timer.publish(every: 15, on: .main, in: .common).autoconnect()
@@ -30,7 +32,9 @@ struct V50FreeMonthOfferCard: View {
     }
 
     var body: some View {
-        Group {
+        // Keep this host view mounted even when the offer is initially unknown.
+        // A conditional/empty Group can lose .task and .sheet presentation.
+        VStack(spacing: 0) {
             if visible {
                 MurshidCard {
                     VStack(alignment: .leading, spacing: 13) {
@@ -84,6 +88,27 @@ struct V50FreeMonthOfferCard: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+            } else if !requestError.isEmpty && !app.subscribed {
+                MurshidCard {
+                    VStack(alignment: .leading, spacing: 9) {
+                        Label("تعذّر التحقق من عرض الشهر المجاني", systemImage: "wifi.exclamationmark")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Color.murshidBlue)
+                        Text(requestError)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button {
+                            Task { await refreshOffer() }
+                        } label: {
+                            Label("إعادة التحقق", systemImage: "arrow.clockwise")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .disabled(refreshing)
+                    }
+                }
+            } else {
+                // The invisible anchor still runs .task and owns the sheet.
+                Color.clear.frame(height: 1)
             }
         }
         .alert("عرض الشهر المجاني", isPresented: $showAlert) {
@@ -127,8 +152,12 @@ struct V50FreeMonthOfferCard: View {
             .padding(24)
             .presentationDetents([.height(485)])
             .presentationDragIndicator(.visible)
+            .onAppear {
+                // Only mark the welcome as shown when the sheet really appears.
+                UserDefaults.standard.set(true, forKey: welcomeKey)
+            }
         }
-        .task { await refreshOffer() }
+        .task(id: app.user?.id) { await refreshOffer() }
         .onReceive(ticker) { tick in
             currentClock = tick
             if !visible { showWelcomeOffer = false }
@@ -152,18 +181,31 @@ struct V50FreeMonthOfferCard: View {
         return formatter.string(from: date) + " (بتوقيت بغداد)"
     }
 
+    private var welcomeKey: String {
+        "murshid_new_student_offer_\(app.user?.id ?? 0)_\(jString(campaign["starts_at_utc"]))"
+    }
+
     private func refreshOffer() async {
-        guard app.v3Authenticated else { return }
+        guard app.v3Authenticated, !refreshing else { return }
+        refreshing = true
+        defer { refreshing = false }
         lastRemoteRefresh = Date()
-        // The server update may not yet be deployed; keep the existing Home
-        // screen unaffected by an unavailable optional campaign endpoint.
-        guard let result = try? await APIClient.shared.request("mobile/free-month-offer.php") else { return }
-        campaign = result["campaign"] as? JSON ?? [:]
-        let key = "murshid_new_student_offer_\(app.user?.id ?? 0)_\(jString(campaign["starts_at_utc"]))"
-        if visible && !UserDefaults.standard.bool(forKey: key) {
-            // One prompt per campaign per account, including after relaunch.
-            // The independent home card stays available after any dismissal.
-            UserDefaults.standard.set(true, forKey: key)
+        do {
+            let result = try await APIClient.shared.request("mobile/free-month-offer.php")
+            guard let status = result["campaign"] as? JSON, !status.isEmpty else {
+                throw APIError(message: "الخادم لم يرسل بيانات الحملة. حاول التحقق مرة أخرى.", status: 503, paymentRequired: false)
+            }
+            campaign = status
+            requestError = ""
+        } catch {
+            // Do not claim the campaign is inactive when the server is simply
+            // unreachable. A visible retry also makes deployment errors clear.
+            campaign = [:]
+            requestError = error.localizedDescription
+            return
+        }
+        if visible && !UserDefaults.standard.bool(forKey: welcomeKey) {
+            // The persistent card remains after the user dismisses the sheet.
             showWelcomeOffer = true
         }
     }
