@@ -105,7 +105,7 @@ struct V31HomeView: View {
     private var welcomeHeader: some View {
         ZStack(alignment: .topTrailing) {
             LinearGradient(
-                colors: [.murshidNavy, Color(red: 0.06, green: 0.26, blue: 0.51), .murshidBlue],
+                colors: [.murshidNavy, .murshidAccentSecondary, .murshidBlue],
                 startPoint: .topTrailing, endPoint: .bottomLeading
             )
             Circle()
@@ -1206,6 +1206,8 @@ private struct V31AccountRow: View {
 struct V31AccountView: View {
     @EnvironmentObject var app: AppSession
     @EnvironmentObject var device: DeviceServices
+    @AppStorage("student_palette") private var paletteID = "royal"
+    @AppStorage("appearance") private var appearance = "system"
     @AppStorage("biometric_lock") private var biometricLock = false
     @AppStorage("study_reminder") private var studyReminder = false
     @AppStorage("study_reminder_hour") private var reminderHour = 19
@@ -1236,6 +1238,7 @@ struct V31AccountView: View {
                 subscriptionCard
                 activationCodeCard
                 servicesSection
+                appearanceSection
                 securitySection
                 logoutSection
                 if !avatarMessage.isEmpty { V3InlineMessage(text: avatarMessage, icon: "person.crop.circle.badge.checkmark", tone: .success) }
@@ -1452,6 +1455,57 @@ struct V31AccountView: View {
                     NavigationLink(destination: SupportView()) { V31AccountRowLabel(title: "خدمة العملاء", subtitle: "محادثة مباشرة مع الدعم", icon: "message.fill") }
                     Divider().padding(.leading, 48)
 
+                }
+            }
+        }
+    }
+
+    private var appearanceSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            V3SectionHeader(title: "الألوان والمظهر", subtitle: "غيّر تصميم تطبيقك وقتما تريد", icon: "paintpalette.fill")
+            MurshidCard {
+                VStack(alignment: .leading, spacing: 15) {
+                    Label("اختر هويتك اللونية", systemImage: "paintbrush.pointed.fill")
+                        .font(.subheadline.bold()).foregroundStyle(Color.murshidBlue)
+                    HStack(spacing: 8) {
+                        ForEach(StudentPalette.allCases) { palette in
+                            Button {
+                                paletteID = palette.rawValue
+                                selectionHaptic()
+                            } label: {
+                                VStack(spacing: 8) {
+                                    Image(systemName: paletteID == palette.rawValue ? "checkmark" : "sparkles")
+                                        .font(.system(size:18,weight:.bold))
+                                        .foregroundStyle(.white)
+                                        .frame(width: 53, height: 53)
+                                        .background(LinearGradient(colors:[palette.accent,palette.secondary],startPoint:.topLeading,endPoint:.bottomTrailing),in:RoundedRectangle(cornerRadius:17,style:.continuous))
+                                    Text(palette.title).font(.subheadline.bold()).foregroundStyle(.primary)
+                                    Text(palette.detail)
+                                        .font(.system(size:10,weight:.medium)).foregroundStyle(.secondary)
+                                        .lineLimit(1).minimumScaleFactor(0.8)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12).padding(.horizontal, 3)
+                                .background(Color.murshidBlue.opacity(paletteID == palette.rawValue ? 0.10 : 0.025),in:RoundedRectangle(cornerRadius:18,style:.continuous))
+                                .overlay(RoundedRectangle(cornerRadius:18,style:.continuous)
+                                    .stroke(paletteID == palette.rawValue ? Color.murshidBlue : Color.murshidBlue.opacity(0.12),lineWidth:paletteID == palette.rawValue ? 2 : 1))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("مظهر \(palette.title): \(palette.detail)")
+                            .accessibilityAddTraits(paletteID == palette.rawValue ? .isSelected : [])
+                        }
+                    }
+                    Divider()
+                    Label("إضاءة التطبيق", systemImage: "circle.lefthalf.filled")
+                        .font(.subheadline.bold()).foregroundStyle(Color.murshidBlue)
+                    Picker("إضاءة التطبيق", selection: $appearance) {
+                        Label("النظام", systemImage: "iphone").tag("system")
+                        Label("فاتح", systemImage: "sun.max.fill").tag("light")
+                        Label("داكن", systemImage: "moon.fill").tag("dark")
+                    }
+                    .pickerStyle(.segmented)
+                    Text("يُحفظ اختيارك على هذا الآيفون، ولا يغيّر بيانات حسابك أو اشتراكك.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
