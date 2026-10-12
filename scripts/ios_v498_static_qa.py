@@ -25,9 +25,11 @@ checks = [
     (api, ".reloadIgnoringLocalCacheData", "Bypass HTTP cache on live ad reads"),
     (auth, ".task(id: adsMonitorKey)", "Cancel/restart polling with scene/account/connectivity"),
     (auth, "V498UnreadAdBadge(count: schoolAds.unreadCount)", "Red badge attached to Ads button"),
+    (auth, "if selection == index && !keyboardVisible { bottomBar }", "Only selected pane exposes tab controls"),
     (home, "V498SocialLinksFooter()", "Compact branded student footer"),
     (home, "StudentPalette.allCases", "Build506 color themes preserved"),
     (workflow, "V498Final.xcresult", "Simulator QA gates the IPA"),
+    (workflow, "Match simulator launch metadata", "QA uses production fullscreen layout"),
 ]
 for source, needle, title in checks:
     assert needle in source, title
@@ -40,3 +42,4 @@ for name in ["Instagram", "Facebook", "Telegram"]:
     ET.parse(directory / manifest["images"][0]["filename"])
     print("PASS bundled vector", name)
 print(f"{len(checks) + 5} local invariants passed; runtime verification remains separate.")
+

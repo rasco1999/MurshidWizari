@@ -18,7 +18,10 @@ final class V498FinalUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["مدرسة الاختبار 98000"].waitForExistence(timeout: 8))
         XCTAssertEqual(adsTab.value as? String ?? "", "")
         screenshot("02-ad-read")
-        app.buttons["student-tab-0"].firstMatch.tap()
+        XCTAssertEqual(app.buttons.matching(identifier: "student-tab-0").count, 1)
+        XCTAssertTrue(app.buttons["student-tab-0"].isHittable)
+        app.buttons["student-tab-0"].tap()
+        XCTAssertEqual(app.buttons.matching(identifier: "student-tab-3").count, 1)
         XCTAssertEqual(app.buttons["student-tab-3"].firstMatch.value as? String ?? "", "")
     }
 
@@ -71,3 +74,4 @@ final class V498FinalUITests: XCTestCase {
         add(image)
     }
 }
+

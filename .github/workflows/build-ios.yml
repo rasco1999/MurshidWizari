@@ -310,6 +310,21 @@ jobs:
           test -d MurshidWizari.xcodeproj
           xcodebuild -project MurshidWizari.xcodeproj -scheme MurshidWizari -showBuildSettings > /tmp/murshid-build-settings.txt
 
+      - name: Match simulator launch metadata to the packaged iPhone app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import plistlib
+          path = Path('source/MurshidWizari/Info.plist')
+          info = plistlib.loads(path.read_bytes())
+          # Apply before both builds, not just to the packaged Release plist.
+          # Missing UILaunchScreen put simulator QA in 320x480 legacy scaling.
+          info['UILaunchScreen'] = {'UIColorName': 'LaunchBackground'}
+          info['UIDeviceFamily'] = [1]
+          info['UISupportedInterfaceOrientations'] = ['UIInterfaceOrientationPortrait']
+          path.write_bytes(plistlib.dumps(info))
+          PY
+
       - name: Build Release for iPhone
         working-directory: source
         run: |
@@ -733,4 +748,5 @@ jobs:
           name: iPhone-v491-build-diagnostics
           path: .build-status/
           retention-days: 14
+
 

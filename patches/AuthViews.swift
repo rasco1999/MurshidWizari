@@ -1742,15 +1742,15 @@ struct MainV3TabView: View {
         ZStack {
             Color.murshidBackground.ignoresSafeArea()
             if visited.contains(0) {
-                tabPane(0) { NavigationStack { tabRoot { V31HomeView() } } }
+                tabPane(0) { NavigationStack { tabRoot(0) { V31HomeView() } } }
             }
             if visited.contains(1) {
-                tabPane(1) { NavigationStack { tabRoot { V3TestsView() } } }
+                tabPane(1) { NavigationStack { tabRoot(1) { V3TestsView() } } }
             }
             if visited.contains(2) {
                 tabPane(2) {
                     NavigationStack {
-                        tabRoot {
+                        tabRoot(2) {
                             if app.subscribed { V44PredictionsView() }
                             else { V31PredictionsLockedView() }
                         }
@@ -1758,10 +1758,10 @@ struct MainV3TabView: View {
                 }
             }
             if visited.contains(3) {
-                tabPane(3) { NavigationStack { tabRoot { V31SchoolAdsView() } } }
+                tabPane(3) { NavigationStack { tabRoot(3) { V31SchoolAdsView() } } }
             }
             if visited.contains(4) {
-                tabPane(4) { NavigationStack { tabRoot { V31AccountView() } } }
+                tabPane(4) { NavigationStack { tabRoot(4) { V31AccountView() } } }
             }
         }
         .tint(.murshidBlue)
@@ -1802,10 +1802,12 @@ struct MainV3TabView: View {
     // Keep the five-tab bar on top-level screens only. A pushed question/detail
     // screen may have its own pinned answer/next buttons; a bar applied outside
     // NavigationStack would cover those controls and the last scroll content.
-    private func tabRoot<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+    private func tabRoot<Content: View>(_ index: Int, @ViewBuilder content: () -> Content) -> some View {
         content()
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if !keyboardVisible { bottomBar }
+                // Retained navigation stacks must not expose duplicate tab
+                // buttons through accessibility while their pane is hidden.
+                if selection == index && !keyboardVisible { bottomBar }
             }
     }
 
@@ -5130,4 +5132,5 @@ private func v3IsValidIraqiPhone(_ value: String) -> Bool {
     let digits = value.filter(\.isNumber)
     return digits.count == 11 && digits.hasPrefix("07")
 }
+
 
