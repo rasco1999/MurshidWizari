@@ -36,7 +36,8 @@ def enroll(out):
         print('ENROLL', texts, flush=True)
         if any('Fingerprint added' in t or 'Fingerprint setup complete' in t for t in texts):
             fixture.screenshot(out, 'fingerprint-enrolled-in-settings')
-            done = ui.find(root, 'Done') or ui.find(root, 'DONE')
+            done = ui.find(root, 'Done')
+            if done is None: done = ui.find(root, 'DONE')
             if done is not None: ui.tap_node(done)
             return
         fields = [n for n in root.iter('node') if n.attrib.get('class') == 'android.widget.EditText']
@@ -106,7 +107,7 @@ def main():
         root, _ = ui.ui_tree()
         assert ui.find(root, fixture.USER['name']) is None and ui.find(root, 'حسابي') is None
         fixture.screenshot(out, 'cancel-keeps-account-locked')
-        fixture.button('فتح بالبصمة'); ui.wait_for('افتح المرشد الوزاري باستخدام البصمة')
+        fixture.button('فتح باستخدام البصمة'); ui.wait_for('افتح المرشد الوزاري باستخدام البصمة')
         touch(1); ui.wait_for('حسابي')
         assert native_preferences().get('biometric_unlock_required') != 'true'
         fixture.screenshot(out, 'account-restored-after-os-success')
