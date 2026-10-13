@@ -224,7 +224,15 @@ class MainActivity : Activity() {
         showAcademicWelcome()
         val minimumWelcomeMs = 3000L // v4.8.18 Build 498 cinematic welcome.
         val readyAt = SystemClock.elapsedRealtime() + minimumWelcomeMs
-        if (api.hasRememberedSession()) {
+        val launchDestination = OfflineStartupRules.destination(
+            hasAnyInternetNetwork(), api.hasRememberedSession(),
+            OfflineCoachAccess(prefs).studentId()
+        )
+        if (launchDestination == OfflineStartupRules.Destination.OFFLINE_COACH) {
+            main.postDelayed({
+                if (activeScreen == "welcome") showOfflineCoachHome()
+            }, minimumWelcomeMs)
+        } else if (launchDestination == OfflineStartupRules.Destination.RESTORE_SERVER_SESSION) {
             main.postDelayed({
                 if (activeScreen == "welcome") {
                     activeScreen = "restoring"
@@ -2396,7 +2404,7 @@ class MainActivity : Activity() {
         student = response.optJSONObject("user") ?: JSONObject()
         subscribed = response.optBoolean("subscribed")
         offlineCoachMode = false
-        OfflineCoachAccess(prefs).remember(student.optInt("id"), api.hasRememberedSession())
+        OfflineCoachAccess(prefs).remember(student.optInt("id"))
         updateSchoolAdsBadge(response)
         StudentPush.attach(this, api, student.optInt("id"), csrf) { configured ->
             if (!isFinishing && !isDestroyed && configured && student.optInt("id") > 0 &&
@@ -2431,7 +2439,7 @@ class MainActivity : Activity() {
     }
 
     private fun canOpenOfflineCoach(): Boolean =
-        OfflineCoachAccess(prefs).studentId(api.hasRememberedSession()) > 0
+        OfflineCoachAccess(prefs).studentId() > 0
 
     /** Offline access never opens server-dependent tests, subscriptions or payments. */
     private fun showOfflineCoachHome() {
@@ -2459,13 +2467,21 @@ class MainActivity : Activity() {
         caption(if (count > 0) "أسئلتك المحفوظة على الجهاز: $count"
             else "لا توجد أسئلة محفوظة بعد. اتصل بالإنترنت وأجب عن أسئلة الاختبارات أولاً.")
         button("العودة إلى الوضع المتصل", secondary = true) {
-            if (!hasAnyInternetNetwork()) message("لا يوجد اتصال الآن. يمكنك متابعة المراجعة دون إنترنت.")
-            else fetch("mobile/bootstrap.php", showError = false) { result ->
-                if (result.optBoolean("ok")) showHome(result)
-                else if (!result.optBoolean("network_error"))
-                    message("تعذر استعادة الجلسة. تحقق من حسابك واتصال الإنترنت.")
+            if (!hasAnyInternetNetwork()) {
+                message("لا يوجد اتصال الآن. يمكنك متابعة المراجعة دون إنترنت.")
+            } else if (!api.hasRememberedSession()) {
+                // The offline notebook is not an authentication token.
+                loginScreen()
+            } else {
+                fetch("mobile/bootstrap.php", showError = false) { result ->
+                    if (result.optBoolean("ok")) showHome(result)
+                    else if (result.optBoolean("network_error"))
+                        message("تعذر الوصول للخادم. المراجعة المحلية ما زالت متاحة.")
+                    else loginScreen()
+                }
             }
         }
+        button("الواجهة العامة", secondary = true) { guestLandingScreen() }
     }
 
     private fun showHome(response: JSONObject) {
