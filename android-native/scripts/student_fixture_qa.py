@@ -245,6 +245,25 @@ def main():
  button('المرشحات');ui.wait_for('مرشح فحص افتراضي');screenshot(args.output,'student-predictions')
  button('عرض الإجابة والتوضيح⌄');ui.wait_for('إجابة المرشح الافتراضي');screenshot(args.output,'student-prediction-answer')
  button('حسابي');ui.wait_for('تفعيل الاشتراك بكود');screenshot(args.output,'student-account')
+ # The owner iPhone has three accent palettes and system/light/dark controls.
+ # Assert choices persist as device preferences, not server mutations.
+ def saved_appearance():
+  return ui.adb('shell','run-as',ui.PACKAGE,'cat','shared_prefs/native_preferences.xml').decode(errors='replace')
+ ui.wait_for('اختر هويتك اللونية')
+ button('اختيار ألوان بنفسجي');ui.wait_for('اختر هويتك اللونية')
+ assert 'accent_style' in saved_appearance() and 'violet' in saved_appearance()
+ screenshot(args.output,'student-account-violet')
+ button('اختيار ألوان أورورا');ui.wait_for('اختر هويتك اللونية')
+ assert 'aurora' in saved_appearance()
+ screenshot(args.output,'student-account-aurora')
+ button('اختيار ألوان ملكي');ui.wait_for('اختر هويتك اللونية')
+ assert 'royal' in saved_appearance()
+ button('إضاءة فاتح');ui.wait_for('اختر هويتك اللونية')
+ assert 'light' in saved_appearance()
+ screenshot(args.output,'student-account-light')
+ button('إضاءة داكن');ui.wait_for('اختر هويتك اللونية')
+ assert 'dark' in saved_appearance()
+ screenshot(args.output,'student-account-dark')
  button('استعادة / تغيير كلمة المرور');ui.wait_for('استعادة آمنة لبيانات حسابك الحالي')
  tree,_=ui.ui_tree()
  assert any('student@example.test' in n.attrib.get('text','') for n in tree.iter('node')),'Account recovery must show the registered email'
