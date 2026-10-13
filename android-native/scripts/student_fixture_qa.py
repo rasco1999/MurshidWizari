@@ -323,8 +323,24 @@ def main():
  assert not any(path=='/api/progress.php' for _,path in STATE['calls']), 'Changing a selection must stay local'
  screenshot(args.output,'student-exam-selected')
  button('إرسال الإجابة');ui.wait_for('إجابة صحيحة');screenshot(args.output,'student-exam-graded')
- button('ملاحظتي الخاصة');ui.wait_for('حفظ');tree,_=ui.ui_tree();field=next(n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText')
- input_text(field,'fixture-note');back();button('حفظ');time.sleep(1)
+ button('ملاحظتي الخاصة');ui.wait_for('حفظ')
+ # API 26 sometimes drops ADB IME injection while the AlertDialog is
+ # settling. Verify the visible note field rather than assuming input worked.
+ for attempt in range(4):
+  tree,_=ui.ui_tree()
+  field=next(n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText')
+  actual=field.attrib.get('text','')
+  if actual=='fixture-note': break
+  if actual: raise AssertionError(f'Note input unexpectedly contained {actual!r}')
+  ui.tap_node(field);time.sleep(.7)
+  ui.adb('shell','input','text','fixture-note');time.sleep(.6)
+ else:
+  raise AssertionError('Native note entry did not accept text on this emulator')
+ hide_keyboard_if_visible()
+ button('حفظ')
+ deadline=time.time()+12
+ while time.time()<deadline and STATE['notes'].get('101')!='fixture-note':
+  time.sleep(.3)
  assert STATE['notes'].get('101')=='fixture-note',STATE['notes']
  button('ملاحظتي الخاصة');ui.wait_for('fixture-note');screenshot(args.output,'student-note-restored');button('إغلاق')
  # Return to top before tapping the fixed exam footer.
