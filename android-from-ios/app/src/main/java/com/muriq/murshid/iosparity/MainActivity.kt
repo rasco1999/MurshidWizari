@@ -76,8 +76,14 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
     }
 
     private val noticeOpenRequest = mutableStateOf<Pair<Int, Int>?>(null)
+    private val schoolAdOpenRequest = mutableStateOf<Int?>(null)
 
     private fun captureNotificationIntent(intent: Intent?) {
+        if (intent?.action == NoticeDelivery.ACTION_OPEN_SCHOOL_ADS) {
+            val studentId = intent.getIntExtra(NoticeDelivery.EXTRA_STUDENT_ID, 0)
+            if (studentId > 0) schoolAdOpenRequest.value = studentId
+            return
+        }
         if (intent?.action != NoticeDelivery.ACTION_OPEN_NOTICES) return
         val studentId = intent.getIntExtra(NoticeDelivery.EXTRA_STUDENT_ID, 0)
         val noticeId = intent.getIntExtra(NoticeDelivery.EXTRA_NOTICE_ID, 0)
@@ -113,6 +119,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         setContent {
             val vm: MurshidViewModel = viewModel()
             val request by noticeOpenRequest
+            val schoolAdRequest by schoolAdOpenRequest
             var requiresUnlock by remember {
                 mutableStateOf(com.muriq.murshid.iosparity.data.BiometricGateRules.requiresUnlock(
                     vm.api.hasSavedSession(), vm.biometricEnabled))
@@ -164,6 +171,13 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 if (target.first == authenticatedStudent && authenticatedStudent > 0) {
                     vm.openNoticeFromSystem(target.first, target.second)
                     noticeOpenRequest.value = null
+                }
+            }
+            LaunchedEffect(schoolAdRequest, authenticatedStudent) {
+                val requestedFor = schoolAdRequest ?: return@LaunchedEffect
+                if (requestedFor == authenticatedStudent && authenticatedStudent > 0) {
+                    vm.selectTab(3)
+                    schoolAdOpenRequest.value = null
                 }
             }
             val systemDark = isSystemInDarkTheme()
