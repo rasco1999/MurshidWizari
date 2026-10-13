@@ -109,6 +109,13 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var predictionsData by mutableStateOf(JSONObject())
         private set
+    var selectedPredictionSubjectId by androidx.compose.runtime.mutableIntStateOf(0)
+        private set
+    var predictionLoading by mutableStateOf(false)
+        private set
+    var predictionError by mutableStateOf("")
+        private set
+    private var latestPredictionRequest = 0
     var paymentUrl by mutableStateOf("")
         private set
     var verification by mutableStateOf(JSONObject())
@@ -620,18 +627,32 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun openPredictions(item: Subject) {
+    fun openPredictions(item: Subject) = selectPredictionSubject(item)
+
+    fun selectPredictionSubject(item: Subject) {
         if (dashboard?.subscribed != true) {
             message = "المرشحات متاحة للمشتركين فقط."; return
         }
-        subject = item
-        feature = Feature.PREDICTIONS
-        screen = Screen.FEATURE
+        if (item.id <= 0) return
+        selectedPredictionSubjectId = item.id
+        val request = ++latestPredictionRequest
+        predictionError = ""
+        predictionLoading = true
+        predictionsData = JSONObject()
         viewModelScope.launch {
-            loading = true
-            try { predictionsData = api.get("mobile/predictions.php?subject_id=${item.id}") }
-            catch (error: Exception) { fail(error) }
-            finally { loading = false }
+            try {
+                val response = api.get("mobile/predictions.php?subject_id=${item.id}")
+                if (request == latestPredictionRequest && selectedPredictionSubjectId == item.id) {
+                    predictionsData = response
+                    predictionError = ""
+                }
+            } catch (error: Exception) {
+                if (request == latestPredictionRequest && selectedPredictionSubjectId == item.id) {
+                    predictionError = error.message ?: "تعذر تحميل المرشحات من الخادم."
+                }
+            } finally {
+                if (request == latestPredictionRequest) predictionLoading = false
+            }
         }
     }
 
@@ -843,7 +864,13 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
                 // Always let the student explicitly clear their own local credentials.
             } finally {
                 updateBiometricEnabled(false)
-                clearNotices(); api.clearSession(); dashboard = null; unreadSchoolAds = 0; featureData = JSONObject()
+                clearNotices(); api.clearSession(); dashboard = null; unreadSchoolAds = 0
+                latestPredictionRequest++
+                selectedPredictionSubjectId = 0
+                predictionLoading = false
+                predictionError = ""
+                predictionsData = JSONObject()
+                featureData = JSONObject()
                 screen = Screen.GUEST; tab = 0; clearMessage()
             }
         }

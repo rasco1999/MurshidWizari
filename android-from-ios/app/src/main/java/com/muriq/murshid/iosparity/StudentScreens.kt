@@ -281,19 +281,157 @@ fun TopicsScreen(vm: MurshidViewModel) {
 @Composable
 fun PredictionsTab(vm: MurshidViewModel) {
     val dash = vm.dashboard
-    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        item { SectionTitle("المرشحات", "المرشحات الوزارية", "قسم خاص بالمشتركين.") }
+    LaunchedEffect(dash?.user?.id, dash?.subscribed) {
+        if (dash?.subscribed == true &&
+            dash.subjects.isNotEmpty() &&
+            dash.subjects.none { it.id == vm.selectedPredictionSubjectId }) {
+            vm.selectPredictionSubject(dash.subjects.first())
+        }
+    }
+    val predictions = vm.predictionsData.array("predictions")
+        .ifEmpty { vm.predictionsData.array("items") }
+    LazyColumn(
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))
+                    .background(androidx.compose.ui.graphics.Brush.linearGradient(
+                        listOf(MurshidNavy, MurshidBlue)
+                    )).padding(22.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.GpsFixed, null, tint = MurshidGold,
+                        modifier = Modifier.size(23.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("الدور الأول • 2027", color = MurshidGold,
+                        fontWeight = FontWeight.Bold)
+                }
+                Text("المرشحات الوزارية",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = Color.White, fontWeight = FontWeight.Bold)
+                Text("مراجعة مرتبة اعتمادًا على السنوات السابقة وتكرار الموضوع وتوثيق الأسئلة.",
+                    color = Color(0xFFE6EEFC),
+                    style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        item {
+            MurshidCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Info, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(10.dp))
+                    Text("المرشحات احتمالات للمراجعة وليست ضمانًا لورود السؤال، ولا تغني عن المنهج.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+        item {
+            Text("اختر المادة", style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold)
+        }
         if (dash?.subscribed != true) {
             item {
                 MurshidCard {
-                    Icon(Icons.Default.Lock, null, tint = MurshidBlue, modifier = Modifier.size(42.dp))
+                    Icon(Icons.Default.Lock, null, tint = MurshidBlue,
+                        modifier = Modifier.size(42.dp))
                     Text("المرشحات متاحة بعد الاشتراك", fontWeight = FontWeight.Bold)
                     PrimaryAction("عرض الاشتراكات") { vm.openFeature(Feature.SUBSCRIPTION) }
                 }
             }
         } else {
-            items(dash.subjects, key = { it.id }) { item ->
-                SubjectListCard(item) { vm.openPredictions(item) }
+            item {
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(9.dp)
+                ) {
+                    dash.subjects.forEach { subject ->
+                        FilterChip(
+                            selected = vm.selectedPredictionSubjectId == subject.id,
+                            onClick = { vm.selectPredictionSubject(subject) },
+                            label = { Text(subject.name, fontWeight = FontWeight.Bold) }
+                        )
+                    }
+                }
+            }
+            when {
+                vm.predictionLoading -> item {
+                    LoadingPanel("جارٍ تحميل مرشحات المادة…")
+                }
+                vm.predictionError.isNotBlank() -> item {
+                    Column(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp))
+                            .background(Color(0xFF221209)).padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.WifiOff, null, tint = Color(0xFFFF9F32))
+                            Spacer(Modifier.width(8.dp))
+                            Text(vm.predictionError, color = Color(0xFFFF9F32))
+                        }
+                        TextButton(onClick = {
+                            dash.subjects.firstOrNull { it.id == vm.selectedPredictionSubjectId }
+                                ?.let(vm::selectPredictionSubject)
+                        }) { Text("إعادة المحاولة") }
+                    }
+                }
+                predictions.isEmpty() -> item {
+                    EmptyPanel("لا توجد مرشحات لهذه المادة حاليًا.")
+                }
+                else -> {
+                    item { Text("المرشحات • ${predictions.size} سؤال",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium) }
+                    items(predictions) { prediction ->
+                        var expanded by remember(prediction.toString()) { mutableStateOf(false) }
+                        MurshidCard {
+                            val chapter = prediction.text("chapter_name",
+                                prediction.text("topic"))
+                            if (chapter.isNotBlank()) {
+                                Text(chapter, color = MurshidBlue,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold)
+                            }
+                            Text(prediction.text("question_text",
+                                prediction.text("question", prediction.text("text"))),
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyLarge)
+                            val score = prediction.text("prediction_score",
+                                prediction.text("probability"))
+                            val confidence = prediction.text("confidence")
+                            val info = listOfNotNull(
+                                score.takeIf(String::isNotBlank)?.let { "درجة الترشيح: $it" },
+                                confidence.takeIf(String::isNotBlank)?.let { "الثقة: $it" }
+                            ).joinToString(" • ")
+                            if (info.isNotBlank()) {
+                                Text(info, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.labelMedium)
+                            }
+                            TextButton(onClick = { expanded = !expanded }) {
+                                Text(if (expanded) "إخفاء الإجابة" else "عرض الإجابة والتوضيح")
+                                Icon(if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    null)
+                            }
+                            if (expanded) {
+                                val answer = prediction.text("correct_answer")
+                                val explanation = prediction.text("explanation")
+                                if (answer.isNotBlank()) {
+                                    Text("الإجابة النموذجية", color = Color(0xFF34C759),
+                                        fontWeight = FontWeight.Bold)
+                                    Text(answer)
+                                }
+                                if (explanation.isNotBlank()) {
+                                    Text("التوضيح", color = MurshidBlue,
+                                        fontWeight = FontWeight.Bold)
+                                    Text(explanation)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
