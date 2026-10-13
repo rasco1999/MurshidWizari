@@ -15,26 +15,35 @@ def run(*args, check=True, timeout=45):
     return subprocess.run(args, check=check, timeout=timeout,
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-def snapshot(name):
-    # Capture UI even if a subsequent verification assertion fails.
+# Capture each screen once; repeating UIAutomator on headless runners may get
+# killed (exit 137) even while the actual student application remains alive.
+_ui_cache = {}
+
+def snapshot(name, force=False):
+    if not force and name in _ui_cache:
+        return _ui_cache[name]
     image = run("adb", "exec-out", "screencap", "-p", timeout=30).stdout
     (ROOT / f"{name}.png").write_bytes(image)
     if not image.startswith(b"\x89PNG\r\n\x1a\n") or len(image) < 3000:
-        raise RuntimeError(f"{name}: invalid screenshot")
-    err = None
-    for _ in range(4):
+        raise RuntimeError(f"{name}: invalid PNG screenshot")
+    last = None
+    for attempt in range(2):
         try:
-            run("adb", "shell", "uiautomator", "dump", "/sdcard/Download/murshid-ui.xml",
-                timeout=45)
-            xml = run("adb", "exec-out", "cat", "/sdcard/Download/murshid-ui.xml",
-                      timeout=25).stdout
+            run("adb", "shell", "uiautomator", "dump", "--compressed",
+                "/sdcard/window.xml", timeout=35)
+            xml = run("adb", "exec-out", "cat", "/sdcard/window.xml",
+                      timeout=18).stdout
             tree = ET.fromstring(xml)
+            if not list(tree.iter("node")):
+                raise ValueError("no accessibility nodes")
             (ROOT / f"{name}.xml").write_bytes(xml)
+            _ui_cache[name] = tree
             return tree
-        except (subprocess.SubprocessError, ET.ParseError, ValueError) as e:
-            err = e
-            time.sleep(1.5)
-    raise RuntimeError(f"{name}: UI hierarchy unavailable: {err}")
+        except (subprocess.SubprocessError, ET.ParseError, ValueError) as error:
+            last = error
+            if attempt == 0:
+                time.sleep(3)
+    raise RuntimeError(f"{name}: accessibility extraction failed: {last}")
 
 def find_node(tree, target):
     for node in tree.iter("node"):
@@ -51,12 +60,14 @@ def find_node(tree, target):
 
 def await_node(target, name, timeout=22):
     start = time.monotonic()
+    attempt = 0
     while time.monotonic() - start < timeout:
-        tree = snapshot(name)
+        tree = snapshot(name, force=attempt > 0)
         pos = find_node(tree, target)
         if pos:
             return pos
-        time.sleep(1.1)
+        attempt += 1
+        time.sleep(3)
     raise AssertionError(f"{name}: no accessible native control labeled {target!r}")
 
 def tap(label, snapshot_name):
