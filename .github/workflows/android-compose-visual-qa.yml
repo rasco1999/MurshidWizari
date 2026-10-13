@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   native-emulator:
-    runs-on: ubuntu-latest
+    runs-on: macos-15
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -27,22 +27,15 @@ jobs:
       - name: Build debug APK for visual launch test
         working-directory: android-from-ios
         run: gradle --no-daemon :app:assembleDebug
-      - name: Enable KVM for visual inspection
-        run: |
-          set -e
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          test -r /dev/kvm && test -w /dev/kvm
       - name: Emulator screenshots and app-launch smoke check
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 34
+          api-level: 30
           arch: x86_64
           profile: pixel_4
           cores: 2
-          ram-size: 3072M
-          heap-size: 384M
+          ram-size: 2560M
+          heap-size: 256M
           emulator-boot-timeout: 780
           target: google_apis
           disable-animations: true
