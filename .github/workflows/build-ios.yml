@@ -252,7 +252,10 @@ jobs:
           swiftc -parse source/MurshidWizari/MainViews.swift
           swiftc -parse source/MurshidWizari/ExamView.swift
 
-      - name: Optimize student navigation transitions\n        run: python3 scripts/ios_navigation_refinements.py --student\n\n      - name: Runtime-check Arabic name normalization on macOS
+      - name: Optimize student navigation transitions
+        run: python3 scripts/ios_navigation_refinements.py --student
+
+      - name: Runtime-check Arabic name normalization on macOS
         shell: bash
         run: |
           cat >/tmp/namecheck.swift <<'SWIFT'
@@ -614,7 +617,10 @@ jobs:
           PY
           sips -s format png -z 1024 1024 /tmp/murshid-admin-icon.png --out admin_ios/App/Assets.xcassets/AppIcon.appiconset/AppIcon.png >/dev/null
 
-      - name: Optimize administration navigation and data freshness\n        run: python3 scripts/ios_navigation_refinements.py --admin\n\n      - name: Generate admin Xcode project
+      - name: Optimize administration navigation and data freshness
+        run: python3 scripts/ios_navigation_refinements.py --admin
+
+      - name: Generate admin Xcode project
         working-directory: admin_ios
         run: |
           set -euo pipefail
