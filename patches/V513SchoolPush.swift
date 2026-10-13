@@ -19,26 +19,38 @@ final class MurshidSchoolAdPush: NSObject, UNUserNotificationCenterDelegate {
     func configure() { UNUserNotificationCenter.current().delegate = self }
 
     func activate() {
-        guard AppSession.shared.v3Authenticated, (AppSession.shared.user?.id ?? 0) > 0 else { return }
+        guard AppSession.shared.v3Authenticated,
+              (AppSession.shared.user?.id ?? 0) > 0 else { return }
         configure()
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            // UserNotifications invokes this callback on its own private queue.
-            // Hop to MainActor before accessing the @MainActor-isolated service
-            // or UIApplication. Swift 6 otherwise traps with dispatch_assert_queue.
-            let status = settings.authorizationStatus
-            Task { @MainActor in
-                switch status {
-                case .authorized, .provisional, .ephemeral:
-                    UIApplication.shared.registerForRemoteNotifications()
-                case .notDetermined:
-                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge]) { approved, _ in
-                        guard approved else { return }
-                        Task { @MainActor in UIApplication.shared.registerForRemoteNotifications() }
-                    }
-                default: break
-                }
+        // Do not create the callback closure in a MainActor-isolated context:
+        // Swift 6 may retain that isolation and trap when UserNotifications
+        // invokes the closure on its own com.apple.usernotifications queue.
+        UNUserNotificationCenter.current().getNotificationSettings(
+            completionHandler: Self.handleSettingsOnNotificationQueue
+        )
+    }
+
+    private nonisolated static func handleSettingsOnNotificationQueue(_ settings: UNNotificationSettings) {
+        // Copy a Sendable primitive instead of capturing the non-Sendable
+        // UNNotificationSettings object across executor boundaries.
+        let statusCode = settings.authorizationStatus.rawValue
+        Task { @MainActor in
+            if statusCode == UNAuthorizationStatus.authorized.rawValue ||
+               statusCode == UNAuthorizationStatus.provisional.rawValue ||
+               statusCode == UNAuthorizationStatus.ephemeral.rawValue {
+                UIApplication.shared.registerForRemoteNotifications()
+            } else if statusCode == UNAuthorizationStatus.notDetermined.rawValue {
+                UNUserNotificationCenter.current().requestAuthorization(
+                    options: [.alert, .badge],
+                    completionHandler: Self.handleAuthorizationOnNotificationQueue
+                )
             }
         }
+    }
+
+    private nonisolated static func handleAuthorizationOnNotificationQueue(_ granted: Bool, _ error: Error?) {
+        guard granted else { return }
+        Task { @MainActor in UIApplication.shared.registerForRemoteNotifications() }
     }
 
     func receivedToken(_ token: Data) {
