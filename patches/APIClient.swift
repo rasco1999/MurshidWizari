@@ -81,10 +81,12 @@ final class AppSession: ObservableObject {
         return Int((Double(jInt(stats["correct_answers"])) / Double(total) * 100).rounded())
     }
 
-    func reset(expired: Bool = false) {
-        // Review cards are tied to the last authenticated student and must not
-        // survive an explicit logout or a server-confirmed expired session.
-        V49StudyStore.shared.eraseOnLogout(userID: user?.id)
+    func reset(expired: Bool = false, eraseOfflineStudy: Bool = false) {
+        // Server cookies may expire on the next launch when "remember me" is
+        // unchecked. That is NOT an explicit logout and must never destroy
+        // the previously verified, device-locked offline review notebook.
+        // Actual logout or password reset explicitly revokes that notebook.
+        if eraseOfflineStudy { V49StudyStore.shared.eraseOnLogout(userID: user?.id) }
         V498SchoolAdsStore.shared.bind(userID: 0)
         authenticated = false
         v3Authenticated = false
@@ -376,7 +378,7 @@ final class APIClient {
             throw APIError(message: parsed.text.isEmpty ? "تعذر تغيير كلمة المرور." : parsed.text, status: response.statusCode, paymentRequired: false)
         }
         if let cookies = HTTPCookieStorage.shared.cookies { cookies.forEach(HTTPCookieStorage.shared.deleteCookie) }
-        AppSession.shared.reset()
+        AppSession.shared.reset(eraseOfflineStudy: true)
         return parsed.text
     }
 
@@ -436,7 +438,7 @@ final class APIClient {
                  body: ["csrf": csrf, "ios_push_token": MurshidSchoolAdPush.shared.tokenHex ?? ""])
         }
         MurshidSchoolAdPush.shared.resetLocalRegistration()
-        AppSession.shared.reset()
+        AppSession.shared.reset(eraseOfflineStudy: true)
         if let cookies = HTTPCookieStorage.shared.cookies { cookies.forEach(HTTPCookieStorage.shared.deleteCookie) }
     }
 
