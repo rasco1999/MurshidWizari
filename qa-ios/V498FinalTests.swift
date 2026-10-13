@@ -50,6 +50,25 @@ final class V498FinalTests: XCTestCase {
         XCTAssertFalse(store.hasOfflineAccount(), "Explicit sign-out must revoke the cached notebook")
     }
 
+    @MainActor
+    func testEquationTutorIncludesMathChemistryPhysicsAndBiology() {
+        let examples: [(String,String,String)] = [
+            ("الرياضيات", "أوجد معادلة المستقيم العمودي على المار بالنقطتين (6,0) و(-2,-3)", "احسب"),
+            ("الفيزياء", "إذا كانت F = ma احسب القوة.", "قانون"),
+            ("الكيمياء", "وازن المعادلة H2 + O2 → H2O", "الكيميائية"),
+            ("الأحياء", "احسب النسبة الوراثية لنتائج التزاوج", "الوراثية"),
+            ("الاقتصاد", "أوجد قيمة المعادلة x = 2y", "المجهول")
+        ]
+        for (subject, prompt, _) in examples {
+            XCTAssertTrue(V515EquationGuide.applies(question: prompt, subject: subject, kind: "text"))
+            let steps = V515EquationGuide.steps(question: prompt, subject: subject, topic: "الفصل الأول")
+            XCTAssertEqual(steps.count, 4)
+            XCTAssertFalse(steps.joined().contains("الإجابة النموذجية"))
+        }
+        XCTAssertTrue(V515EquationGuide.applies(question: "مسألة حسابية", subject: "الفيزياء", kind: "calculation"))
+        XCTAssertFalse(V515EquationGuide.applies(question: "متى ولد الجواهري عام 1899؟", subject: "اللغة العربية", kind: "text"))
+    }
+
     func testInvalidAndDuplicateAdsAreExcluded() {
         let rows = [row(1), row(1), row(0), ["id": 2, "school": "", "text": "A"],
                     ["id": 3, "school": "S", "text": "A", "active": false]]
