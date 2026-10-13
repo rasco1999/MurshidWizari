@@ -20,6 +20,8 @@ jobs:
           find android-from-ios/server-push -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Validate school-ad notification revision semantics
         run: php android-from-ios/server-push/tests/revisions.php
+      - name: Verify FCM account binding and school-ad deep link
+        run: php android-from-ios/server-push/tests/fcm-routing.php
       - name: Prepare FCM server deployment package
         run: |
           cd android-from-ios/server-push
