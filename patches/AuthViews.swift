@@ -3179,7 +3179,7 @@ struct V3ExamView: View {
                         .background(Color.murshidBlue.opacity(0.10), in: Capsule())
                     Spacer()
                 }
-                Text(murshidQuestionDisplayText(q.text))
+                Text(V515MathBidi.display(murshidQuestionDisplayText(q.text)))
                     .font(.title3.weight(.semibold))
                     .lineSpacing(5)
                     .fixedSize(horizontal: false, vertical: true)
@@ -3332,7 +3332,7 @@ struct V3ExamView: View {
                         Text("الإجابة النموذجية")
                             .font(.caption.bold())
                             .foregroundStyle(.secondary)
-                        Text(serverCorrectAnswer)
+                        Text(V515MathBidi.display(serverCorrectAnswer))
                             .font(.body.weight(.semibold))
                             .foregroundStyle(.green)
                     }
@@ -5308,5 +5308,23 @@ struct V515GraphGrid: View {
                 points.append(CGPoint(x: x, y: y))
             })
         }
+    }
+}
+
+
+// Mathematical notation embedded in Arabic needs an explicit left-to-right
+// isolate; otherwise (0,-4) can appear on screen as (4-,0).
+enum V515MathBidi {
+    static func display(_ raw: String) -> String {
+        guard let regex = try? NSRegularExpression(
+            pattern: #"\(\s*[+\-−]?[0-9٠-٩۰-۹]+(?:\.[0-9٠-٩۰-۹]+)?\s*[,،]\s*[+\-−]?[0-9٠-٩۰-۹]+(?:\.[0-9٠-٩۰-۹]+)?\s*\)"#
+        ) else { return raw }
+        var result = raw
+        let matches = regex.matches(in: raw, range: NSRange(raw.startIndex..., in: raw))
+        for match in matches.reversed() {
+            guard let range = Range(match.range, in: result) else { continue }
+            result.replaceSubrange(range, with: "\u{2066}" + result[range] + "\u{2069}")
+        }
+        return result
     }
 }
