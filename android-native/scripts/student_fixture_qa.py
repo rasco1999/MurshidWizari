@@ -241,7 +241,17 @@ def main():
  # Capture the reference iPhone's dark appearance as well as light Android.
  # The toggle is a native accessible header control, not a test-only shortcut.
  button('تبديل المظهر');ui.wait_for('حسابي');screenshot(args.output,'student-home-dark')
+ button('الرئيسية');ui.wait_for('حسابي')
+ # A newly published school advertisement must raise a RED account-scoped
+ # badge without needing an app restart; visiting Ads clears the unread mark.
+ BOOT['ads'].append({'id':9,'school':'مدرسة ثانية افتراضية',
+   'text':'هذا إعلان تم نشره أثناء فتح التطبيق','active':True})
+ ui.wait_for('إعلانات جديدة: 1',seconds=48)
+ screenshot(args.output,'student-new-ad-badge')
  button('الإعلانات');ui.wait_for('مدرسة افتراضية');screenshot(args.output,'student-ads')
+ ui.wait_for('مدرسة ثانية افتراضية')
+ tree,_=ui.ui_tree()
+ assert ui.find(tree,'إعلانات جديدة: 1') is None,'Opening the Ads tab must mark the visible publication as read'
  button('المرشحات');ui.wait_for('مرشح فحص افتراضي');screenshot(args.output,'student-predictions')
  button('عرض الإجابة والتوضيح⌄');ui.wait_for('إجابة المرشح الافتراضي');screenshot(args.output,'student-prediction-answer')
  button('حسابي');ui.wait_for('تفعيل الاشتراك بكود');screenshot(args.output,'student-account')
