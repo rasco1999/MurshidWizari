@@ -48,7 +48,30 @@ import kotlinx.coroutines.isActive
 import com.muriq.murshid.iosparity.ui.*
 import kotlinx.coroutines.delay
 
-class MainActivity : ComponentActivity() {
+class MainActivity : androidx.fragment.app.FragmentActivity() {
+    private fun promptBiometricUnlock(onSuccess: () -> Unit, onFailure: (String) -> Unit) {
+        val executor = androidx.core.content.ContextCompat.getMainExecutor(this)
+        val prompt = androidx.biometric.BiometricPrompt(this, executor,
+            object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
+                    onSuccess()
+                }
+                override fun onAuthenticationError(code: Int, detail: CharSequence) {
+                    onFailure(detail.toString())
+                }
+                override fun onAuthenticationFailed() {
+                    // The OS prompt remains active; do not restart it or show repeated dialogs.
+                }
+            })
+        val info = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+            .setTitle("فتح المرشد الوزاري")
+            .setSubtitle("تحقق بالبصمة أو قفل الجهاز للوصول إلى حسابك المحفوظ")
+            .setAllowedAuthenticators(androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL)
+            .build()
+        prompt.authenticate(info)
+    }
+
     private val noticeOpenRequest = mutableStateOf<Pair<Int, Int>?>(null)
 
     private fun captureNotificationIntent(intent: Intent?) {
@@ -87,6 +110,22 @@ class MainActivity : ComponentActivity() {
         setContent {
             val vm: MurshidViewModel = viewModel()
             val request by noticeOpenRequest
+            var requiresUnlock by remember {
+                mutableStateOf(com.muriq.murshid.iosparity.data.BiometricGateRules.requiresUnlock(
+                    vm.api.hasSavedSession(), vm.biometricEnabled))
+            }
+            var biometricMessage by remember { mutableStateOf("") }
+            LaunchedEffect(requiresUnlock) {
+                if (requiresUnlock) {
+                    promptBiometricUnlock(
+                        onSuccess = {
+                            requiresUnlock = false
+                            vm.unlockRememberedSession()
+                        },
+                        onFailure = { biometricMessage = it }
+                    )
+                }
+            }
             val authenticatedStudent = vm.dashboard?.user?.id ?: 0
             val lifecycleOwner = LocalLifecycleOwner.current
             LaunchedEffect(authenticatedStudent, lifecycleOwner) {
@@ -113,9 +152,53 @@ class MainActivity : ComponentActivity() {
             }
             MurshidTheme(dark, vm.studentPalette) {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                    AppShell(vm)
+                    if (requiresUnlock) {
+                        NativeBiometricGate(
+                            message = biometricMessage,
+                            retry = {
+                                biometricMessage = ""
+                                promptBiometricUnlock(
+                                    onSuccess = {
+                                        requiresUnlock = false
+                                        vm.unlockRememberedSession()
+                                    },
+                                    onFailure = { biometricMessage = it }
+                                )
+                            },
+                            manualLogin = {
+                                // Explicit manual sign-in is the sole escape from the device gate.
+                                vm.api.clearSession()
+                                vm.updateBiometricEnabled(false)
+                                requiresUnlock = false
+                                vm.showLogin()
+                            }
+                        )
+                    } else {
+                        AppShell(vm)
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun NativeBiometricGate(
+    message: String, retry: () -> Unit, manualLogin: () -> Unit
+) {
+    Box(Modifier.fillMaxSize().padding(22.dp), contentAlignment = Alignment.Center) {
+        MurshidCard {
+            Icon(Icons.Default.Lock, contentDescription = null, tint = MurshidBlue,
+                modifier = Modifier.size(48.dp))
+            Text("حماية حساب الطالب", fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleLarge)
+            Text("تحقق بالبصمة أو رمز الجهاز لفتح جلستك المحفوظة.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (message.isNotBlank()) {
+                Text(message, color = MaterialTheme.colorScheme.error)
+            }
+            PrimaryAction("فتح ببصمة الجهاز", retry)
+            SecondaryAction("تسجيل الدخول بكلمة المرور", manualLogin)
         }
     }
 }
