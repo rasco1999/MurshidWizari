@@ -74,15 +74,15 @@ jobs:
             echo "Outdated build: $GITHUB_SHA (branch is $CURRENT_HEAD); skipping release update."
             exit 0
           fi
-          TAG="android-v4.9.14-compose-native-preview"
-          APK="Murshid_Wizari_Android_v4_9_14_NATIVE_PREVIEW.apk"
+          TAG="android-v4.9.15-compose-native-preview"
+          APK="Murshid_Wizari_Android_v4_9_15_NATIVE_PREVIEW.apk"
           cp app/build/outputs/apk/debug/app-debug.apk "$APK"
           sha256sum "$APK" > "$APK.sha256"
-          NOTES="Independent native Android Kotlin Jetpack Compose private testing build. Includes full seven-part guest instructions and eight source benefits, three-step registration, in-app email/phone verification, encrypted remembered session with real biometric gate, selectable iPhone color palettes, five tabs, iPhone-style predictions, answer submission, unread school ad indicator and native account screens. Android can request high refresh rate only where supported; performance and appearance may vary. This preview is debug-signed: do not ship to students as production. Real account and server-side FCM push tests, all complex learning screens, device screenshots and production signing are not yet certified."
+          NOTES="QA-only native Android Kotlin/Compose build based on the owner iPhone UX. Features: complete guest instructions, registration and in-app verification, remembered sessions and OS biometric gate, subject exams, subscriber predictions, school ads, study-plan creation, and three student color palettes. Adds one-time Android 13+ notification permission request plus local WorkManager school ad fallback and ad-tab deep linking when tapped. School ads in the background are checked periodically (minimum 15 minutes; Android may delay), NOT instantaneous FCM push. A production push backend, user-account end-to-end tests, device screenshot parity and release-signing remain unverified. This APK is debug-signed for private testing only, not a final public student release."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$APK" "$APK.sha256" --clobber
           else
-            gh release create "$TAG" "$APK" "$APK.sha256" --target "$GITHUB_SHA" --prerelease --title 'Murshid Android Native 4.9.14 — Private Testing Preview' --notes "$NOTES"
+            gh release create "$TAG" "$APK" "$APK.sha256" --target "$GITHUB_SHA" --prerelease --title 'Murshid Android Native 4.9.15 — Private Testing Preview' --notes "$NOTES"
           fi
       - uses: actions/upload-artifact@v4
         with:
