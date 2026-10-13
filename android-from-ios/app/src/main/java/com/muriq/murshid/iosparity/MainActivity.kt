@@ -392,6 +392,7 @@ private fun LoginScreen(vm: MurshidViewModel) {
 
 @Composable
 private fun RegisterScreen(vm: MurshidViewModel) {
+    var step by rememberSaveable { mutableIntStateOf(1) }
     var name by rememberSaveable { mutableStateOf("") }
     var identifier by rememberSaveable { mutableStateOf("") }
     var contactType by rememberSaveable { mutableStateOf("email") }
@@ -401,66 +402,111 @@ private fun RegisterScreen(vm: MurshidViewModel) {
     var password by rememberSaveable { mutableStateOf("") }
     var confirm by rememberSaveable { mutableStateOf("") }
     var showPassword by rememberSaveable { mutableStateOf(false) }
+    var localError by rememberSaveable { mutableStateOf("") }
+    val labels = listOf("بيانات الطالب", "معلومات التواصل", "حماية الحساب")
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item { AuthHeading("حساب واحد يحفظ تقدمك وإجاباتك على جميع أجهزتك") }
+        item { AuthHeading("أنشئ حسابك بخطوات واضحة كما في تطبيق الآيفون") }
         item {
             MurshidCard {
-                Text("بيانات الطالب", style = MaterialTheme.typography.titleLarge,
+                Text("الخطوة " + step.toString() + " من 3", color = MurshidBlue,
                     fontWeight = FontWeight.Bold)
-                OutlinedTextField(name, { name = it }, label = { Text("الاسم الثلاثي الكامل") },
-                    singleLine = true, modifier = Modifier.fillMaxWidth())
-                Text("الصف الدراسي", fontWeight = FontWeight.SemiBold)
-                Box {
-                    SecondaryAction(vm.grades.firstOrNull { it.first == gradeId }?.second ?: "اختر الصف الدراسي",
-                        { gradeExpanded = true })
-                    DropdownMenu(expanded = gradeExpanded, onDismissRequest = { gradeExpanded = false }) {
-                        vm.grades.forEach { (id, title) ->
-                            DropdownMenuItem(text = { Text(title) }, onClick = {
-                                gradeId = id; gradeExpanded = false
-                            })
+                LinearProgressIndicator(
+                    progress = { step / 3f }, color = MurshidBlue,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                )
+                Text(labels[step - 1], style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold)
+                when (step) {
+                    1 -> {
+                        OutlinedTextField(name, { name = it; localError = "" },
+                            label = { Text("الاسم الثلاثي الكامل") },
+                            singleLine = true, modifier = Modifier.fillMaxWidth())
+                        Text("الصف الدراسي", fontWeight = FontWeight.SemiBold)
+                        Box {
+                            SecondaryAction(vm.grades.firstOrNull { it.first == gradeId }?.second
+                                ?: "اختر الصف الدراسي", { gradeExpanded = true })
+                            DropdownMenu(expanded = gradeExpanded,
+                                onDismissRequest = { gradeExpanded = false }) {
+                                vm.grades.forEach { (id, title) ->
+                                    DropdownMenuItem(text = { Text(title) }, onClick = {
+                                        gradeId = id; gradeExpanded = false; localError = ""
+                                    })
+                                }
+                            }
+                        }
+                        Text("الجنس", fontWeight = FontWeight.SemiBold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            FilterChip(selected = gender == "male", onClick = { gender = "male" },
+                                label = { Text("ذكر") })
+                            FilterChip(selected = gender == "female", onClick = { gender = "female" },
+                                label = { Text("أنثى") })
+                        }
+                    }
+                    2 -> {
+                        Text("وسيلة التواصل", fontWeight = FontWeight.SemiBold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            FilterChip(selected = contactType == "email",
+                                onClick = { contactType = "email"; identifier = ""; localError = "" },
+                                label = { Text("البريد الإلكتروني") })
+                            FilterChip(selected = contactType == "phone",
+                                onClick = { contactType = "phone"; identifier = ""; localError = "" },
+                                label = { Text("رقم الهاتف") })
+                        }
+                        OutlinedTextField(identifier, { identifier = it; localError = "" },
+                            label = { Text(if (contactType == "email") "البريد الإلكتروني"
+                                else "رقم الهاتف العراقي") },
+                            singleLine = true, modifier = Modifier.fillMaxWidth(),
+                            keyboardOptions = KeyboardOptions(keyboardType =
+                                if (contactType == "email") KeyboardType.Email else KeyboardType.Phone))
+                        Text("سيُستخدم هذا العنوان أو الرقم للتحقق واستعادة الحساب.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    else -> {
+                        OutlinedTextField(password, { password = it; localError = "" },
+                            label = { Text("كلمة المرور - 8 أحرف على الأقل") },
+                            singleLine = true, modifier = Modifier.fillMaxWidth(),
+                            visualTransformation = if (showPassword) VisualTransformation.None
+                                else PasswordVisualTransformation())
+                        OutlinedTextField(confirm, { confirm = it; localError = "" },
+                            label = { Text("تأكيد كلمة المرور") },
+                            singleLine = true, modifier = Modifier.fillMaxWidth(),
+                            visualTransformation = if (showPassword) VisualTransformation.None
+                                else PasswordVisualTransformation())
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("إظهار كلمة المرور", modifier = Modifier.weight(1f))
+                            Switch(checked = showPassword,
+                                onCheckedChange = { showPassword = it })
                         }
                     }
                 }
-                Text("الجنس", fontWeight = FontWeight.SemiBold)
-                Row {
-                    FilterChip(selected = gender == "male", onClick = { gender = "male" },
-                        label = { Text("ذكر") })
-                    Spacer(Modifier.width(10.dp))
-                    FilterChip(selected = gender == "female", onClick = { gender = "female" },
-                        label = { Text("أنثى") })
+                if (localError.isNotBlank()) {
+                    Text(localError, color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium)
                 }
-                Text("وسيلة التواصل", fontWeight = FontWeight.SemiBold)
-                Row {
-                    FilterChip(selected = contactType == "email", onClick = { contactType = "email" },
-                        label = { Text("البريد الإلكتروني") })
-                    Spacer(Modifier.width(10.dp))
-                    FilterChip(selected = contactType == "phone", onClick = { contactType = "phone" },
-                        label = { Text("رقم الهاتف") })
-                }
-                OutlinedTextField(identifier, { identifier = it },
-                    label = { Text(if (contactType == "email") "البريد الإلكتروني" else "رقم الهاتف العراقي") },
-                    singleLine = true, modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = if (contactType == "email") KeyboardType.Email else KeyboardType.Phone
-                    ))
-                OutlinedTextField(password, { password = it },
-                    label = { Text("كلمة المرور - 8 أحرف على الأقل") }, singleLine = true,
-                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth(),
-                    trailingIcon = { TextButton(onClick = { showPassword = !showPassword }) { Text(if (showPassword) "إخفاء" else "إظهار") } })
-                OutlinedTextField(confirm, { confirm = it }, label = { Text("تأكيد كلمة المرور") },
-                    singleLine = true, modifier = Modifier.fillMaxWidth(),
-                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation())
-                PrimaryAction("إنشاء الحساب", onClick = {
-                    vm.register(name, identifier, contactType, gradeId, gender, password, confirm)
+                PrimaryAction(if (step == 3) "إنشاء الحساب" else "متابعة", {
+                    val error = when (step) {
+                        1 -> com.muriq.murshid.iosparity.data.RegistrationParityRules.personalError(name, gradeId)
+                        2 -> com.muriq.murshid.iosparity.data.RegistrationParityRules.contactError(identifier, contactType)
+                        else -> com.muriq.murshid.iosparity.data.RegistrationParityRules.passwordError(password, confirm)
+                    }
+                    if (error != null) localError = error
+                    else if (step < 3) { step += 1; localError = "" }
+                    else vm.register(name, identifier, contactType, gradeId, gender, password, confirm)
                 }, enabled = !vm.loading)
+                if (step > 1) {
+                    SecondaryAction("رجوع للخطوة السابقة") { step -= 1; localError = "" }
+                }
             }
         }
-        item { TextButton(onClick = vm::showLogin, modifier = Modifier.fillMaxWidth()) { Text("لديك حساب؟ سجّل الدخول") } }
+        item {
+            TextButton(onClick = vm::showLogin, modifier = Modifier.fillMaxWidth()) {
+                Text("لديك حساب؟ سجّل الدخول")
+            }
+        }
     }
 }
 
