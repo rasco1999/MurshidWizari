@@ -26,6 +26,14 @@ progress with automatic quota enforcement, result summary, favorites, reports, q
 predictions subscription lock, school ads, account/name/delete request, support, stories,
 subscription code and server-created external payment redirect/status.
 
+
+## Android v4.9.14 native preview — verification boundaries
+
+This is an independently compiled Jetpack Compose Android implementation, not WebView or converted IPA.
+The iOS Build511 student UX provides the primary functioning reference, with selected source parity from the newer unverified iOS APNs branch. The Android preview includes: original guest text (eight benefits / seven rules), login and three-step registration, six-digit native verification, session caching, real device biometric prompt for saved accounts, five visible tabs, native subject/topic exams, subscribed predictions, school-ad badge, and royal/aurora/orchid choices.
+
+Source parity must **not** be confused with runtime equivalence. Android screen typography and icon glyphs use platform-native assets, not a copy of Apple's proprietary fonts. On 60 Hz devices no app can force 120 FPS. PHP/Firebase external push configuration has not been validated on production. The APK is debug-signed for owner testing, and updates may require uninstalling an older differently-signed preview. Do not publish it as a finished student release until instrumented device QA, authentication tests with sandbox accounts, push and server integration checks, and production signing are complete.
+
 ## Before production
 
 This is an **initial native implementation, not a pixel-perfect or functionally complete iOS clone**.

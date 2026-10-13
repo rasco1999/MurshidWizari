@@ -61,15 +61,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="android-v4.9.13-compose-native-preview"
-          APK="Murshid_Wizari_Android_v4_9_13_NATIVE_PREVIEW.apk"
+          TAG="android-v4.9.14-compose-native-preview"
+          APK="Murshid_Wizari_Android_v4_9_14_NATIVE_PREVIEW.apk"
           cp app/build/outputs/apk/debug/app-debug.apk "$APK"
           sha256sum "$APK" > "$APK.sha256"
-          NOTES="Independent Android Kotlin Jetpack Compose port of the iPhone 4.9.x student experience. Native guest landing, three-step account creation, code verification, five tabs, subjects/exams, account and subscriptions. Preview only, debug-signed for owner testing; no WebView. Not certified pixel-perfect. Offline school-ad push, comprehensive signed-in device QA and production signing remain separate release gates. This release is NOT suitable for public production deployment."
+          NOTES="Independent native Android Kotlin Jetpack Compose private testing build. Includes full seven-part guest instructions and eight source benefits, three-step registration, in-app email/phone verification, encrypted remembered session with real biometric gate, selectable iPhone color palettes, five tabs, iPhone-style predictions, answer submission, unread school ad indicator and native account screens. Android can request high refresh rate only where supported; performance and appearance may vary. This preview is debug-signed: do not ship to students as production. Real account and server-side FCM push tests, all complex learning screens, device screenshots and production signing are not yet certified."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$APK" "$APK.sha256" --clobber
           else
-            gh release create "$TAG" "$APK" "$APK.sha256" --target "$GITHUB_SHA" --prerelease --title 'Murshid Android Native 4.9.13 — Private Testing Preview' --notes "$NOTES"
+            gh release create "$TAG" "$APK" "$APK.sha256" --target "$GITHUB_SHA" --prerelease --title 'Murshid Android Native 4.9.14 — Private Testing Preview' --notes "$NOTES"
           fi
       - uses: actions/upload-artifact@v4
         with:
