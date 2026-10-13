@@ -1,4 +1,4 @@
-name: Build Murshid Student iPhone v4.9.11 Remove Voice and Hints
+name: Build Murshid Student iPhone v4.9.12 Remove Voice and Hints
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ permissions:
 jobs:
   build:
     if: ${{ true }}
-    name: Build v4.9.11 Build 510 unsigned student IPA
+    name: Build v4.9.12 Build 511 unsigned student IPA
     runs-on: macos-15
     timeout-minutes: 35
 
@@ -84,7 +84,7 @@ jobs:
               if line == '        PRODUCT_NAME: MurshidWizari':
                   out.extend([
                       '        TARGETED_DEVICE_FAMILY: "1"',
-                      '        MARKETING_VERSION: "4.9.11"',
+                      '        MARKETING_VERSION: "4.9.12"',
                       '        CURRENT_PROJECT_VERSION: "510"',
                       '        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon',
                       '        CODE_SIGN_ENTITLEMENTS: MurshidWizari/MurshidWizari.entitlements',
@@ -252,7 +252,7 @@ jobs:
           swiftc -parse source/MurshidWizari/MainViews.swift
           swiftc -parse source/MurshidWizari/ExamView.swift
 
-      - name: Runtime-check Arabic name normalization on macOS
+      - name: Optimize student navigation transitions\n        run: python3 scripts/ios_navigation_refinements.py --student\n\n      - name: Runtime-check Arabic name normalization on macOS
         shell: bash
         run: |
           cat >/tmp/namecheck.swift <<'SWIFT'
@@ -339,8 +339,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \
-            MARKETING_VERSION='4.9.11' \
-            CURRENT_PROJECT_VERSION='510' \
+            MARKETING_VERSION='4.9.12' \
+            CURRENT_PROJECT_VERSION='511' \
             clean build
 
       - name: Compile Apple asset catalog
@@ -370,8 +370,8 @@ jobs:
           info.update(partial)
           info['CFBundleDisplayName'] = 'المرشد الوزاري'
           info['CFBundleName'] = 'منصة المرشد الوزاري'
-          info['CFBundleShortVersionString'] = '4.9.11'
-          info['CFBundleVersion'] = '510'
+          info['CFBundleShortVersionString'] = '4.9.12'
+          info['CFBundleVersion'] = '511'
           info['NSFaceIDUsageDescription'] = 'يستخدم المرشد الوزاري Face ID لحماية حسابك عند العودة إلى التطبيق.'
           info['UISupportedInterfaceOrientations'] = ['UIInterfaceOrientationPortrait']
           info['UILaunchScreen'] = {'UIColorName': 'LaunchBackground'}
@@ -426,7 +426,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: iPhone-Build510-Final-QA
+          name: iPhone-Build511-Final-QA
           path: |
             qa-output/simulator-tests.log
             qa-output/summary.json
@@ -450,15 +450,15 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid'
           /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string المرشد الوزاري' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleName منصة المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleName string منصة المرشد الوزاري' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 4.9.11' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 4.9.12' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 510' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Delete :UIDeviceFamily' "$APP/Info.plist" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily array' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily:0 integer 1' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" | grep -Fx 'المرشد الوزاري'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$APP/Info.plist" | grep -Fx 'منصة المرشد الوزاري'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.9.11'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '510'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.9.12'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '511'
           /usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist" | grep -Fx '1'
           test -f "$APP/Assets.car"
           test -f "$APP/PrivacyInfo.xcprivacy"
@@ -548,12 +548,12 @@ jobs:
             echo 'ERROR: Web wrapper marker found unexpectedly.' >&2
             exit 1
           fi
-          rm -rf Payload Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.ipa
+          rm -rf Payload Murshid_Wizari_iOS_v4_9_12_BUILD511_unsigned.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.ipa Payload
-          test -s Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.ipa
-          shasum -a 256 Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.ipa | tee Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.sha256
+          /usr/bin/zip -qry Murshid_Wizari_iOS_v4_9_12_BUILD511_unsigned.ipa Payload
+          test -s Murshid_Wizari_iOS_v4_9_12_BUILD511_unsigned.ipa
+          shasum -a 256 Murshid_Wizari_iOS_v4_9_12_BUILD511_unsigned.ipa | tee Murshid_Wizari_iOS_v4_9_12_BUILD511_unsigned.sha256
 
       - name: Publish iPhone IPA preview release
         continue-on-error: true
@@ -564,19 +564,19 @@ jobs:
         run: |
           set -euo pipefail
           cd source
-          TAG="v4.9.11-build510-no-voice-no-hints-ios-preview"
-          TITLE="Murshid Wizari iPhone v4.9.11 Build 510 (Unsigned Preview)"
+          TAG="v4.9.12-build511-no-voice-fast-navigation-ios-preview"
+          TITLE="Murshid Wizari iPhone v4.9.12 Build 511 (Unsigned Preview)"
           RELEASE_FLAGS=(--prerelease)
           NOTES="Removes speech UI and TTS from the student IPA, keeps written answers and explanations, retains ad badges and social icons. Site-side French removal and administrator-managed predictions require separately deploying the supplied public_html package. Unsigned; sign and test on device."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" \
-              Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.ipa \
-              Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.sha256 \
+              Murshid_Wizari_iOS_v4_9_12_BUILD511_unsigned.ipa \
+              Murshid_Wizari_iOS_v4_9_12_BUILD511_unsigned.sha256 \
               --clobber
           else
             gh release create "$TAG" \
-              Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.ipa \
-              Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.sha256 \
+              Murshid_Wizari_iOS_v4_9_12_BUILD511_unsigned.ipa \
+              Murshid_Wizari_iOS_v4_9_12_BUILD511_unsigned.sha256 \
               --target "$GITHUB_SHA" \
               "${RELEASE_FLAGS[@]}" \
               --title "$TITLE" \
@@ -586,16 +586,16 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Wizari-iPhone-v4.9.11-Build510-Unsigned
+          name: Murshid-Wizari-iPhone-v4.9.12-Build511-Unsigned
           path: |
-            source/Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.ipa
-            source/Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.sha256
+            source/Murshid_Wizari_iOS_v4_9_12_BUILD511_unsigned.ipa
+            source/Murshid_Wizari_iOS_v4_9_12_BUILD511_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
 
   admin_build:
     if: ${{ true }}
-    name: Build v4.9.7 Build 506 unsigned iPhone admin IPA
+    name: Build v4.9.8 Build 507 unsigned iPhone admin IPA
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -614,7 +614,7 @@ jobs:
           PY
           sips -s format png -z 1024 1024 /tmp/murshid-admin-icon.png --out admin_ios/App/Assets.xcassets/AppIcon.appiconset/AppIcon.png >/dev/null
 
-      - name: Generate admin Xcode project
+      - name: Optimize administration navigation and data freshness\n        run: python3 scripts/ios_navigation_refinements.py --admin\n\n      - name: Generate admin Xcode project
         working-directory: admin_ios
         run: |
           set -euo pipefail
@@ -634,8 +634,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \
-            MARKETING_VERSION='4.9.7' \
-            CURRENT_PROJECT_VERSION='506' \
+            MARKETING_VERSION='4.9.8' \
+            CURRENT_PROJECT_VERSION='507' \
             clean build
 
       - name: Validate and package admin IPA
@@ -647,11 +647,11 @@ jobs:
           test -n "$APP"
           test -f "$APP/MurshidAdmin"
           test -f "$APP/Assets.car"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 4.9.7' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 4.9.8' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 506' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid.admin'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.9.7'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '506'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.9.8'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '507'
           grep -Fq 'FreeMonthCampaignScreen' App/MurshidAdminApp.swift
           grep -Fq 'promo_save' App/MurshidAdminApp.swift
           grep -Fq 'SubscriptionSourcesHome' App/MurshidAdminApp.swift
@@ -662,9 +662,9 @@ jobs:
           grep -Fq 'AdminPalette' App/MurshidAdminApp.swift
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.ipa Payload
-          test -s Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.ipa
-          shasum -a 256 Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.ipa | tee Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.sha256
+          /usr/bin/zip -qry Murshid_Admin_iOS_v4_9_8_BUILD507_unsigned.ipa Payload
+          test -s Murshid_Admin_iOS_v4_9_8_BUILD507_unsigned.ipa
+          shasum -a 256 Murshid_Admin_iOS_v4_9_8_BUILD507_unsigned.ipa | tee Murshid_Admin_iOS_v4_9_8_BUILD507_unsigned.sha256
 
       - name: Publish admin IPA preview
         continue-on-error: true
@@ -673,21 +673,21 @@ jobs:
         run: |
           set -euo pipefail
           cd admin_ios
-          TAG='v4.9.7-build506-predictions-classic-icon-admin-preview'
+          TAG='v4.9.8-build507-predictions-fast-admin-preview'
           NOTES='Unsigned native iPhone admin IPA. Premium redesigned dashboard and login, three selectable color themes saved on-device, existing campaign/subscriptions/student features, idle-lock prevention and session refresh. Install the updated admin/native-api.php on hosting to enable subscriber-source lists.'
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.ipa Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.sha256 --clobber
+            gh release upload "$TAG" Murshid_Admin_iOS_v4_9_8_BUILD507_unsigned.ipa Murshid_Admin_iOS_v4_9_8_BUILD507_unsigned.sha256 --clobber
           else
-            gh release create "$TAG" Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.ipa Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.sha256 --target "$GITHUB_SHA" --prerelease --title 'Murshid Admin iPhone v4.9.7 Build 506 — Predictions and Classic Icon' --notes "$NOTES"
+            gh release create "$TAG" Murshid_Admin_iOS_v4_9_8_BUILD507_unsigned.ipa Murshid_Admin_iOS_v4_9_8_BUILD507_unsigned.sha256 --target "$GITHUB_SHA" --prerelease --title 'Murshid Admin iPhone v4.9.8 Build 507 — Predictions and Classic Icon' --notes "$NOTES"
           fi
 
       - name: Upload admin IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Admin-iPhone-v4.9.7-Build506-Unsigned
+          name: Murshid-Admin-iPhone-v4.9.8-Build507-Unsigned
           path: |
-            admin_ios/Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.ipa
-            admin_ios/Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.sha256
+            admin_ios/Murshid_Admin_iOS_v4_9_8_BUILD507_unsigned.ipa
+            admin_ios/Murshid_Admin_iOS_v4_9_8_BUILD507_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
 
@@ -730,8 +730,8 @@ jobs:
         run: |
           set -u
           mkdir -p .build-status
-          STATUS_FILE=".build-status/v4.9.7-build506-status.txt"
-          LOG_FILE=".build-status/v4.9.7-build506-failed.log"
+          STATUS_FILE=".build-status/v4.9.8-build506-status.txt"
+          LOG_FILE=".build-status/v4.9.8-build506-failed.log"
           {
             echo "run_id=$GITHUB_RUN_ID"
             echo "run_attempt=$GITHUB_RUN_ATTEMPT"
