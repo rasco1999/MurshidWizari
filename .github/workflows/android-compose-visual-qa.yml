@@ -34,7 +34,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -no-audio -gpu swiftshader_indirect -no-snapshot -no-boot-anim
           script: |
-            set -euo pipefail
+            set -eu
             adb install -r android-from-ios/app/build/outputs/apk/debug/app-debug.apk
             python3 android-from-ios/qa/native_visual_smoke.py
       - name: Save screenshot and semantic view tree
