@@ -35,6 +35,14 @@ android {
             versionNameSuffix = "-qa"
             buildConfigField("String", "API_ORIGIN", "\"http://127.0.0.1:8765/\"")
         }
+        // Install alongside Build 498 even when the owner's original signing key differs.
+        // This private preview uses the real API; QA uses the local synthetic fixture.
+        create("preview") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".preview"
+            versionNameSuffix = "-preview"
+            buildConfigField("String", "API_ORIGIN", "\"https://www.mur-iq.com/\"")
+        }
         create("candidate") {
             initWith(getByName("release"))
             signingConfig = null
