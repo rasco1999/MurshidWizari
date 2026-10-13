@@ -98,6 +98,27 @@ jobs:
           else
             gh release create "$TAG" "$APK" "$APK.sha256" --target "$GITHUB_SHA" --prerelease --title 'Murshid Android Native 4.9.16 — Private Testing Preview' --notes "$NOTES"
           fi
+      - name: Publish optional FCM server patch for both Android package IDs
+        if: github.ref == 'refs/heads/android-from-ios-compose'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          CURRENT_HEAD="$(gh api "repos/$GITHUB_REPOSITORY/branches/android-from-ios-compose" --jq '.commit.sha')"
+          if [ "$CURRENT_HEAD" != "$GITHUB_SHA" ]; then
+            echo "Skipping older FCM package build."
+            exit 0
+          fi
+          TAG="android-fcm-server-v4.9.16-both-apps-preview"
+          FILE="Murshid_Android_FCM_Compatible_iOS_Parity_Server_v4_9_16.zip"
+          zip -rq "$FILE" android-from-ios/server-fcm/public_html android-from-ios/server-fcm/INSTALL_AR.md android-from-ios/server-fcm/tests
+          sha256sum "$FILE" > "$FILE.sha256"
+          NOTES="Optional PHP server package for Firebase Cloud Messaging. Accepts existing legacy Android package and new Compose application ID separately, using one authorized Firebase project. Includes no Firebase keys. Static PHP syntax and synthetic selection test run in CI. NOT deployed to live hosting; BACK UP and compare existing server files before applying. Old logout endpoints must NOT be overwritten from previous bundles. School-ad real-time dispatch still requires a production server publication hook and live FCM delivery test."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$FILE" "$FILE.sha256" --clobber
+          else
+            gh release create "$TAG" "$FILE" "$FILE.sha256" --target "$GITHUB_SHA" --prerelease --title "Murshid Android FCM server compatibility package" --notes "$NOTES"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: Murshid-Android-From-iOS-Compose
