@@ -39,7 +39,12 @@ def main() -> None:
         (auth, "V49StudyStore.shared.rememberGraded", "Official exam saves reviewed questions"),
         (api, "V49StudyStore.shared.bind(to: user)", "Cache bound to authenticated student"),
         (api, "V49StudyStore.shared.eraseOnLogout", "Logout erases cached review"),
-        (app, "showingOfflineReview", "Offline entry available without bootstrap success"),
+        (app, "showingPublicOfflineLanding", "Guest access during an offline launch"),
+        (app, "if !device.isOnline", "No waiting for a server when already offline"),
+        (app, "bootstrapTask?.cancel()", "Cancels bootstrap when network disappears"),
+        (app, "V49StudyStore.shared.hasOfflineAccount()", "Offline access does not depend on remember-me"),
+        (study, "func hasOfflineAccount()", "Cached verified identity works before first answered question"),
+        (study, 'guard userID > 0, let saved = read(userID: userID) else', "Empty notebook still opens"),
         (home, "NavigationLink(destination: V49StudyHubView())", "Home/account route to coach"),
     ]
     for path, needle, label in checks:
