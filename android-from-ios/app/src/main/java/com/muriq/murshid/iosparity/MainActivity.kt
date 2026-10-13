@@ -520,16 +520,17 @@ private fun GuestLandingScreen(onLogin: () -> Unit, onRegister: () -> Unit) {
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { open("https://www.instagram.com/murshid.iq/") }) {
-                        Icon(Icons.Default.CameraAlt, contentDescription = "إنستغرام",
-                            tint = MurshidBlue, modifier = Modifier.size(19.dp))
+                        Icon(painterResource(R.drawable.murshid_social_instagram),
+                            contentDescription = "إنستغرام",
+                            tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp))
                     }
                     IconButton(onClick = { open("https://www.facebook.com/Murshidiq/") }) {
-                        Icon(Icons.Default.Group, contentDescription = "فيسبوك",
-                            tint = MurshidBlue, modifier = Modifier.size(19.dp))
+                        Image(painterResource(R.drawable.murshid_social_facebook),
+                            contentDescription = "فيسبوك", modifier = Modifier.size(22.dp))
                     }
                     IconButton(onClick = { open("https://t.me/El_Murshed_iq") }) {
-                        Icon(Icons.Default.Send, contentDescription = "تلغرام",
-                            tint = MurshidBlue, modifier = Modifier.size(19.dp))
+                        Image(painterResource(R.drawable.murshid_social_telegram),
+                            contentDescription = "تلغرام", modifier = Modifier.size(22.dp))
                     }
                 }
                 Text("الثالث المتوسط · السادس العلمي · السادس الأدبي",

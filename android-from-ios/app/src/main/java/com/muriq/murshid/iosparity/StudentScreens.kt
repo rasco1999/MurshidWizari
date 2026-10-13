@@ -1,9 +1,13 @@
 package com.muriq.murshid.iosparity
 
+import android.content.Intent
+import android.net.Uri
+
 import androidx.compose.foundation.*
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -574,6 +578,31 @@ fun AccountTab(vm: MurshidViewModel) {
                         FilterChip(selected = vm.appearance == mode,
                             onClick = { vm.changeAppearance(mode) },
                             label = { Text(text, fontSize = 12.sp) })
+                    }
+                }
+            }
+        }
+        item {
+            val ctx = LocalContext.current
+            MurshidCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("تابعنا", fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://www.instagram.com/murshid.iq/"))) }) {
+                        Icon(painterResource(R.drawable.murshid_social_instagram), "إنستغرام",
+                            tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp))
+                    }
+                    IconButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://www.facebook.com/Murshidiq/"))) }) {
+                        Image(painterResource(R.drawable.murshid_social_facebook), "فيسبوك",
+                            modifier = Modifier.size(22.dp))
+                    }
+                    IconButton(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://t.me/El_Murshed_iq"))) }) {
+                        Image(painterResource(R.drawable.murshid_social_telegram), "تلغرام",
+                            modifier = Modifier.size(22.dp))
                     }
                 }
             }
