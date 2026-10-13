@@ -50,11 +50,21 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Verify exam rules and build native APK
-        run: gradle --no-daemon testDebugUnitTest assembleDebug assembleQa assembleCandidate --stacktrace
+        run: gradle --no-daemon testDebugUnitTest assembleDebug assembleQa assemblePreview assembleCandidate --stacktrace
+      - name: Verify side-by-side preview application ID
+        run: |
+          test -s app/build/outputs/apk/preview/app-preview.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging app/build/outputs/apk/preview/app-preview.apk | grep -F "name='com.murshidwizari.student.preview'"
       - uses: actions/upload-artifact@v4
         with:
           name: MurshidWizari-Native-Android-debug
           path: android-native/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MurshidWizari-Student-Build498-Preview-Android
+          path: android-native/app/build/outputs/apk/preview/app-preview.apk
           if-no-files-found: error
 
       - name: Collect unsigned candidate and signing verifier
