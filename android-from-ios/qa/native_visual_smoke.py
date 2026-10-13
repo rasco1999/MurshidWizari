@@ -58,20 +58,30 @@ def find_node(tree, target):
                         return (x1+x2)//2, (y1+y2)//2
     return None
 
-def await_node(target, name, timeout=22):
+def await_node(target, name, timeout=35, may_scroll=False):
     start = time.monotonic()
     attempt = 0
     while time.monotonic() - start < timeout:
-        tree = snapshot(name, force=attempt > 0)
+        # Preserve the first frame for screenshot comparison, rather than
+        # replacing it with a scrolled/retried frame.
+        stage = name if attempt == 0 else f"{name}_retry{attempt}"
+        tree = snapshot(stage, force=True)
         pos = find_node(tree, target)
         if pos:
             return pos
         attempt += 1
-        time.sleep(3)
+        # LazyColumn does not expose off-screen content in UIAutomator trees.
+        # Swipe only for controls known to be below the fold; never scroll
+        # automatically on the initial page or into a different screen.
+        if may_scroll and attempt in (2, 4):
+            run("adb", "shell", "input", "swipe", "550", "1600", "550", "500", "420")
+            time.sleep(1.5)
+        else:
+            time.sleep(1.5)
     raise AssertionError(f"{name}: no accessible native control labeled {target!r}")
 
-def tap(label, snapshot_name):
-    x, y = await_node(label, snapshot_name)
+def tap(label, snapshot_name, may_scroll=False):
+    x, y = await_node(label, snapshot_name, may_scroll=may_scroll)
     run("adb", "shell", "input", "tap", str(x), str(y))
     time.sleep(1.2)
 
@@ -91,10 +101,21 @@ def main():
     try:
         tap("دخول", "guest")
         await_node("تسجيل الدخول", "login")
-        tap("إنشاء حساب طالب جديد", "login")
+        tap("إنشاء حساب طالب جديد", "login", may_scroll=True)
         await_node("بيانات الطالب", "register")
         await_node("الاسم الثلاثي الكامل", "register")
         no_crash()
+        # Verify that all captured images have valid device dimensions.
+        import struct
+        import json
+        screens = {}
+        for stage in ("guest", "login", "register"):
+            data = (ROOT / f"{stage}.png").read_bytes()
+            width, height = struct.unpack(">II", data[16:24])
+            if width < 400 or height < 700:
+                raise AssertionError(f"{stage}: suspicious emulator size {width}x{height}")
+            screens[stage] = {"width": width, "height": height, "bytes": len(data)}
+        (ROOT / "visual-metrics.json").write_text(json.dumps(screens, ensure_ascii=False, indent=2))
         (ROOT / "result.txt").write_text(
             "PASS: native guest -> login -> registration; screenshot PNGs; live process; no fatal AndroidRuntime crash.\n"
         )
