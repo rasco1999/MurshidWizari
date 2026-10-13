@@ -65,7 +65,7 @@ jobs:
             file="android-from-ios/visual-qa/$page.png"
             [ -s "$file" ] || continue
             path="visual-qa/$page.png"
-            encoded="$(base64 < "$file" | tr -d '\\n')"
+            encoded="$(base64 < "$file" | tr -d '\n')"
             old="$(gh api "repos/$GITHUB_REPOSITORY/contents/$path?ref=$QA_BRANCH" --jq .sha 2>/dev/null || true)"
             if [ -n "$old" ]; then
               gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/$path" \
