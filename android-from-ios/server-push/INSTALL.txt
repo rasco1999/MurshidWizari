@@ -11,16 +11,16 @@ with the current public_html only after backup. It contains NO real credentials.
    Never include the service account in the APK or GitHub repository.
 3. Back up production database and site. Add PHP includes/android_fcm.php,
    includes/android_school_fcm.php, mobile/android-push-config.php,
-   mobile/fcm-register.php, system/android-fcm.php from the public_html folder.
+   mobile/fcm-register.php, mobile/logout.php, system/android-fcm.php from the public_html folder.
    If another Android FCM module already exists, do not overwrite it:
    a dual-package compatibility migration must be planned first.
 4. CLI setup: php system/android-fcm.php --install
    CLI check: php system/android-fcm.php --check
 5. Configure cron once per minute:
    php /ABSOLUTE/PATH/public_html/system/android-fcm.php --dispatch
-6. The preexisting site logout endpoint must be merged to revoke devices
-   with android_fcm_revoke() after authenticated CSRF validation. This file
-   is NOT included because it could overwrite more recent changes.
+6. The bundled mobile/logout.php is based on the current v11(2) site snapshot;
+   it preserves the existing single-session release and adds authenticated
+   token revocation. Compare with production before replacing if changed.
 7. Send a NEW school announcement with a verified test account, wait for
    cron and inspect mobile/notifications.php plus Android notifications.
    This has not been live-tested. The independent WorkManager fallback remains.
