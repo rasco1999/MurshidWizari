@@ -85,7 +85,7 @@ jobs:
                   out.extend([
                       '        TARGETED_DEVICE_FAMILY: "1"',
                       '        MARKETING_VERSION: "4.9.11"',
-                      '        CURRENT_PROJECT_VERSION: "509"',
+                      '        CURRENT_PROJECT_VERSION: "510"',
                       '        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon',
                       '        CODE_SIGN_ENTITLEMENTS: MurshidWizari/MurshidWizari.entitlements',
                   ])
@@ -451,7 +451,7 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string المرشد الوزاري' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleName منصة المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleName string منصة المرشد الوزاري' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 4.9.11' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 509' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 510' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Delete :UIDeviceFamily' "$APP/Info.plist" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily array' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily:0 integer 1' "$APP/Info.plist"
@@ -548,12 +548,12 @@ jobs:
             echo 'ERROR: Web wrapper marker found unexpectedly.' >&2
             exit 1
           fi
-          rm -rf Payload Murshid_Wizari_iOS_v4_9_11_BUILD509_unsigned.ipa
+          rm -rf Payload Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Murshid_Wizari_iOS_v4_9_11_BUILD509_unsigned.ipa Payload
-          test -s Murshid_Wizari_iOS_v4_9_11_BUILD509_unsigned.ipa
-          shasum -a 256 Murshid_Wizari_iOS_v4_9_11_BUILD509_unsigned.ipa | tee Murshid_Wizari_iOS_v4_9_11_BUILD509_unsigned.sha256
+          /usr/bin/zip -qry Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.ipa Payload
+          test -s Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.ipa
+          shasum -a 256 Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.ipa | tee Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.sha256
 
       - name: Publish iPhone IPA preview release
         continue-on-error: true
@@ -570,13 +570,13 @@ jobs:
           NOTES="Removes speech UI and TTS from the student IPA, keeps written answers and explanations, retains ad badges and social icons. Site-side French removal and administrator-managed predictions require separately deploying the supplied public_html package. Unsigned; sign and test on device."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" \
-              Murshid_Wizari_iOS_v4_9_11_BUILD509_unsigned.ipa \
-              Murshid_Wizari_iOS_v4_9_11_BUILD509_unsigned.sha256 \
+              Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.ipa \
+              Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.sha256 \
               --clobber
           else
             gh release create "$TAG" \
-              Murshid_Wizari_iOS_v4_9_11_BUILD509_unsigned.ipa \
-              Murshid_Wizari_iOS_v4_9_11_BUILD509_unsigned.sha256 \
+              Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.ipa \
+              Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.sha256 \
               --target "$GITHUB_SHA" \
               "${RELEASE_FLAGS[@]}" \
               --title "$TITLE" \
@@ -588,8 +588,8 @@ jobs:
         with:
           name: Murshid-Wizari-iPhone-v4.9.11-Build510-Unsigned
           path: |
-            source/Murshid_Wizari_iOS_v4_9_11_BUILD509_unsigned.ipa
-            source/Murshid_Wizari_iOS_v4_9_11_BUILD509_unsigned.sha256
+            source/Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.ipa
+            source/Murshid_Wizari_iOS_v4_9_11_BUILD510_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
 
