@@ -51,6 +51,15 @@ jobs:
         with:
           path: ~/.android/debug.keystore
           key: murshid-native-compose-qa-debug-signing-v1
+      - name: Validate Firebase configuration for both native Android packages (offline)
+        run: |
+          set -euo pipefail
+          php -l android-from-ios/server-fcm/public_html/includes/android_fcm.php
+          php -l android-from-ios/server-fcm/public_html/mobile/android-push-config.php
+          php -l android-from-ios/server-fcm/public_html/mobile/fcm-register.php
+          php -l android-from-ios/server-fcm/public_html/system/android-fcm.php
+          php -l android-from-ios/server-fcm/tests/config_parity.php
+          php android-from-ios/server-fcm/tests/config_parity.php
       - name: Build fresh native Compose app
         working-directory: android-from-ios
         run: gradle --no-daemon --stacktrace :app:assembleDebug
