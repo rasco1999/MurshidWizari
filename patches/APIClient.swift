@@ -85,7 +85,6 @@ final class AppSession: ObservableObject {
         // Review cards are tied to the last authenticated student and must not
         // survive an explicit logout or a server-confirmed expired session.
         V49StudyStore.shared.eraseOnLogout(userID: user?.id)
-        V49QuestionSpeech.shared.stop()
         V498SchoolAdsStore.shared.bind(userID: 0)
         authenticated = false
         v3Authenticated = false

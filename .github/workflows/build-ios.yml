@@ -647,6 +647,8 @@ jobs:
           test -n "$APP"
           test -f "$APP/MurshidAdmin"
           test -f "$APP/Assets.car"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 4.9.7' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 506' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid.admin'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.9.7'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '506'
@@ -660,9 +662,9 @@ jobs:
           grep -Fq 'AdminPalette' App/MurshidAdminApp.swift
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.ipa Payload
-          test -s Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.ipa
-          shasum -a 256 Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.ipa | tee Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.sha256
+          /usr/bin/zip -qry Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.ipa Payload
+          test -s Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.ipa
+          shasum -a 256 Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.ipa | tee Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.sha256
 
       - name: Publish admin IPA preview
         continue-on-error: true
@@ -671,12 +673,12 @@ jobs:
         run: |
           set -euo pipefail
           cd admin_ios
-          TAG='v4.9.7-build506-free100-admin-preview'
+          TAG='v4.9.7-build506-predictions-classic-icon-admin-preview'
           NOTES='Unsigned native iPhone admin IPA. Premium redesigned dashboard and login, three selectable color themes saved on-device, existing campaign/subscriptions/student features, idle-lock prevention and session refresh. Install the updated admin/native-api.php on hosting to enable subscriber-source lists.'
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.ipa Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.sha256 --clobber
+            gh release upload "$TAG" Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.ipa Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.sha256 --clobber
           else
-            gh release create "$TAG" Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.ipa Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.sha256 --target "$GITHUB_SHA" --prerelease --title 'Murshid Admin iPhone v4.9.7 Build 506 — Premium Themes' --notes "$NOTES"
+            gh release create "$TAG" Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.ipa Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.sha256 --target "$GITHUB_SHA" --prerelease --title 'Murshid Admin iPhone v4.9.7 Build 506 — Predictions and Classic Icon' --notes "$NOTES"
           fi
 
       - name: Upload admin IPA artifact
@@ -684,8 +686,8 @@ jobs:
         with:
           name: Murshid-Admin-iPhone-v4.9.7-Build506-Unsigned
           path: |
-            admin_ios/Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.ipa
-            admin_ios/Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.sha256
+            admin_ios/Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.ipa
+            admin_ios/Murshid_Admin_iOS_v4_9_7_BUILD506_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
 
