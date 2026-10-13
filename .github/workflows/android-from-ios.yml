@@ -39,6 +39,13 @@ jobs:
           grep -Fq 'IosPortRules.visibleTabs' app/src/main/java/com/muriq/murshid/iosparity/MainActivity.kt
           grep -Fq 'Five tabs stay visible' app/src/main/java/com/muriq/murshid/iosparity/data/IosPortRules.kt
           ! grep -R -nE 'android.speech.tts|TextToSpeech' app/src/main/java
+      # QA build only. Reuse this non-production signing key across workflow runs so
+      # an installed preview can be upgraded without signature mismatch.
+      - name: Reuse QA debug signing key between builds
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: murshid-native-compose-qa-debug-signing-v1
       - name: Build fresh native Compose app
         working-directory: android-from-ios
         run: gradle --no-daemon --stacktrace :app:assembleDebug
