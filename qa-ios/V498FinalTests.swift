@@ -76,6 +76,7 @@ final class V498FinalTests: XCTestCase {
         }
         XCTAssertTrue(V515EquationGuide.applies(question: "مسألة حسابية", subject: "الفيزياء", kind: "calculation"))
         XCTAssertFalse(V515EquationGuide.applies(question: "متى ولد الجواهري عام 1899؟", subject: "اللغة العربية", kind: "text"))
+        XCTAssertFalse(V515EquationGuide.applies(question: "How did the canary sing? Because it was hungry.", subject: "اللغة الإنكليزية", kind: "text"))
     }
 
     func testInvalidAndDuplicateAdsAreExcluded() {
