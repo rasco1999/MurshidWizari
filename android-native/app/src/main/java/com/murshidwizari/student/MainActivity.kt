@@ -2456,6 +2456,15 @@ class MainActivity : Activity() {
         root.addView(homeMetricHolder, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(4) })
         populateHomeMetrics()
 
+        // Exact iPhone Build 498 home placement: below the four progress metrics
+        // and above the ministerial exam simulator. Offline recall makes no
+        // network requests and never decrements the student's answer quota.
+        addUiCard(uiRow(
+            "مدربي الذكي · مراجعة دون إنترنت",
+            "بعد أول سؤال مصحّح سيُبنى لك دفتر مراجعة شخصيًا.",
+            "brain"
+        ) { coachScreen() }, bottom = 16)
+
         homeMockExamHost = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(homeMockExamHost, LinearLayout.LayoutParams(-1, -2))
         renderHomeMockExam()
@@ -2544,6 +2553,139 @@ class MainActivity : Activity() {
     /** iOS AppSession.featureEnabled uses `features[code].enabled`, defaulting to true. */
     private fun homeFeatureEnabled(code: String): Boolean =
         homeFeatureFlags.optJSONObject(code)?.optBoolean("enabled", true) ?: true
+
+    /** The coach keeps an on-device notebook, separate from the server's review_schedule.
+     *  Reading and rating these cards is offline and does not submit an exam answer.
+     */
+    private fun coachScreen() {
+        activeScreen = "coach"
+        base("مدربي الذكي", true)
+        val userId = student.optInt("id")
+        val notebook = OfflineCoachNotebook(prefs)
+        val cards = notebook.cards(userId)
+        val now = System.currentTimeMillis()
+        val due = cards.count { it.optLong("due_at", 0L) <= now }
+
+        val heading = uiCard()
+        heading.addView(uiText("مدربي الذكي", 23f, true, blue))
+        heading.addView(uiText("مراجعة دون إنترنت", 16f, true),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+        heading.addView(uiText(
+            "دفتر خاص على جهازك: راجع إجاباتك المصححة في أي وقت، دون صوت أو اتصال بالخادم.",
+            13f, tint = mutedText),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        addUiCard(heading, bottom = 14)
+
+        val status = uiCard()
+        status.addView(uiText("مراجعة اليوم", 20f, true))
+        status.addView(uiText(
+            if (cards.isEmpty()) "بعد أول سؤال مصحّح سيُبنى لك دفتر مراجعة شخصيًا."
+            else if (due > 0) "لديك " + due + " سؤال للمراجعة الآن من أصل " + cards.size + " محفوظة."
+            else "أحسنت! لا توجد مراجعات مستحقة الآن. يمكنك التدريب على أسئلتك المحفوظة.",
+            14f, tint = mutedText),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
+        addUiCard(status)
+
+        if (cards.isNotEmpty()) {
+            button(if (due > 0) "ابدأ مراجعة اليوم" else "استعرض دفتر المراجعة") {
+                val next = cards.firstOrNull { it.optLong("due_at", 0L) <= now } ?: cards.first()
+                coachQuestionScreen(next.optInt("id"))
+            }
+            sectionHeader("أسئلتي المحفوظة", "تُعرض من ذاكرة الجهاز حتى دون إنترنت", "brain")
+            cards.take(18).forEach { card ->
+                val label = card.optString("question").replace("\n", " ").take(95)
+                val subtitle = card.optString("subject").ifBlank { "سؤال تمت مراجعته" }
+                addUiCard(uiRow(label, subtitle, "book") {
+                    coachQuestionScreen(card.optInt("id"))
+                })
+            }
+        }
+
+        val disclaimer = uiCard()
+        disclaimer.addView(uiText(
+            "هذه مراجعة محلية مستقلة. تقييم إتقانك هنا لا يرسل إجابات جديدة ولا يخصم سؤالًا مجانيًا، ولا يُحدّث جدول المدرب الموجود على الموقع.",
+            12f, tint = mutedText))
+        addUiCard(disclaimer)
+        button("تحديث أخطائي المحفوظة من الخادم", secondary = true) {
+            fetch("mobile/review.php", showError = false) { response ->
+                if (activeScreen != "coach") return@fetch
+                if (!response.optBoolean("ok")) {
+                    message("تعذر التحديث. دفتر المراجعة المحلي ما زال متاحًا دون إنترنت.")
+                    return@fetch
+                }
+                val mistakes = response.optJSONArray("mistakes") ?: JSONArray()
+                var imported = 0
+                for (i in 0 until mistakes.length()) {
+                    val item = mistakes.optJSONObject(i) ?: continue
+                    if (notebook.remember(
+                        userId = userId,
+                        questionId = item.optInt("question_id"),
+                        question = item.optString("question_text"),
+                        correctAnswer = item.optString("correct_answer"),
+                        explanation = item.optString("explanation"),
+                        subject = item.optString("subject_name") + " · " + item.optString("chapter_name"),
+                        wasCorrect = false
+                    )) imported++
+                }
+                message("تم تحديث " + imported + " سؤالًا من سجل أخطائك.")
+                coachScreen()
+            }
+        }
+    }
+
+    private fun coachQuestionScreen(questionId: Int) {
+        val userId = student.optInt("id")
+        val notebook = OfflineCoachNotebook(prefs)
+        val card = notebook.cards(userId).firstOrNull { it.optInt("id") == questionId }
+        if (card == null) {
+            coachScreen()
+            return
+        }
+        activeScreen = "coach_question"
+        base("جلسة مراجعة", true)
+        sectionHeader("راجع وتذكّر", card.optString("subject"), "brain")
+        val prompt = uiCard()
+        prompt.addView(uiText(card.optString("question"), 20f, true))
+        addUiCard(prompt, bottom = 15)
+
+        val revealed = uiCard()
+        revealed.addView(uiText("الإجابة الصحيحة", 15f, true, blue))
+        revealed.addView(uiText(card.optString("correct_answer"), 19f, true),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
+        if (card.optString("explanation").isNotBlank()) {
+            revealed.addView(uiText("التوضيح", 14f, true, blue),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(17) })
+            revealed.addView(uiText(card.optString("explanation"), 15f),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        }
+        revealed.visibility = View.GONE
+        val success = button("أتقنت هذا السؤال") {
+            notebook.review(userId, questionId, mastered = true)
+            coachScreen()
+        }
+        val retry = button("أحتاج إلى مراجعته مجددًا", secondary = true) {
+            notebook.review(userId, questionId, mastered = false)
+            coachScreen()
+        }
+        success.visibility = View.GONE
+        retry.visibility = View.GONE
+        // Place the answer immediately below the prompt, before the self-rating
+        // controls. No TextToSpeech, audio controls or network calls are involved.
+        root.addView(revealed, root.indexOfChild(success), LinearLayout.LayoutParams(-1, -2).apply {
+            bottomMargin = dp(13)
+        })
+        val reveal = button("أظهر الإجابة", secondary = true) {
+            revealed.visibility = View.VISIBLE
+            success.visibility = View.VISIBLE
+            retry.visibility = View.VISIBLE
+        }
+        // Keep the reveal action above the answer. The revealed answer is
+        // still hidden until the student explicitly asks to see it.
+        root.removeView(reveal)
+        root.addView(reveal, root.indexOfChild(revealed),
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+        caption("تقييمك هنا للمراجعة الذاتية فقط، وليس إرسالاً لإجابة امتحانية.")
+    }
 
     private fun renderHomeMockExam() {
         val host = homeMockExamHost ?: return
@@ -4070,6 +4212,19 @@ class MainActivity : Activity() {
             val correctAnswer = grade.optString("correct_answer").ifBlank { question.optString("correct_answer") }
             question.put("explanation", explanation)
             question.put("correct_answer", correctAnswer)
+            // Cache only AFTER the server acknowledges grading. Merely
+            // selecting an option must never populate the offline notebook.
+            runCatching {
+                OfflineCoachNotebook(prefs).remember(
+                    userId = student.optInt("id"),
+                    questionId = id,
+                    question = question.optString("question_text").ifBlank { question.optString("question") },
+                    correctAnswer = correctAnswer,
+                    explanation = explanation,
+                    subject = chapterName,
+                    wasCorrect = ExamRules.knownBoolean(grade.opt("is_correct"))
+                )
+            }
             if (activeScreen == "exam" && sentChapterId == chapterId && questionIndex == sentIndex) {
                 // iOS presents the graded answer and explanation inline. The
                 // extra Android modal duplicated this card and blocked Next.
@@ -6478,6 +6633,8 @@ class MainActivity : Activity() {
             return
         }
         when (activeScreen) {
+            "coach_question" -> coachScreen()
+            "coach" -> showHome(homepage)
             "bound_recovery" -> accountScreen()
             "contest_instructions" -> loadContest()
             "phone_reset" -> if (recoverReturnScreen == "account") boundRecoveryScreen() else recoverScreen()
