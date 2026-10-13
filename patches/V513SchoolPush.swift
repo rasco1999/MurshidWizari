@@ -22,15 +22,21 @@ final class MurshidSchoolAdPush: NSObject, UNUserNotificationCenterDelegate {
         guard AppSession.shared.v3Authenticated, (AppSession.shared.user?.id ?? 0) > 0 else { return }
         configure()
         UNUserNotificationCenter.current().getNotificationSettings { settings in
-            switch settings.authorizationStatus {
-            case .authorized, .provisional, .ephemeral:
-                Task { @MainActor in UIApplication.shared.registerForRemoteNotifications() }
-            case .notDetermined:
-                UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge]) { approved, _ in
-                    guard approved else { return }
-                    Task { @MainActor in UIApplication.shared.registerForRemoteNotifications() }
+            // UserNotifications invokes this callback on its own private queue.
+            // Hop to MainActor before accessing the @MainActor-isolated service
+            // or UIApplication. Swift 6 otherwise traps with dispatch_assert_queue.
+            let status = settings.authorizationStatus
+            Task { @MainActor in
+                switch status {
+                case .authorized, .provisional, .ephemeral:
+                    UIApplication.shared.registerForRemoteNotifications()
+                case .notDetermined:
+                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge]) { approved, _ in
+                        guard approved else { return }
+                        Task { @MainActor in UIApplication.shared.registerForRemoteNotifications() }
+                    }
+                default: break
                 }
-            default: break
             }
         }
     }
