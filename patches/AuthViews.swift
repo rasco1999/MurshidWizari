@@ -3184,6 +3184,7 @@ struct V3ExamView: View {
                     .lineSpacing(5)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
+                V515EquationSteps(question: q.text, subject: subject.name, topic: topic.name, kind: q.type)
                 let meta = [q.examYear, q.examRound].filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
                 if !meta.isEmpty {
                     Label(meta.joined(separator: " • "), systemImage: "calendar")
@@ -3235,6 +3236,9 @@ struct V3ExamView: View {
                         .padding(10)
                         .scrollContentBackground(.hidden)
                         .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    if V515EquationGuide.applies(question: q.text, subject: subject.name, kind: q.type) {
+                        V515MathKeypad(answer: bindingAnswer(q.id))
+                    }
                 }
 
                 if !isAnswered(q) && options.isEmpty {
@@ -5136,3 +5140,173 @@ private func v3IsValidIraqiPhone(_ value: String) -> Bool {
 }
 
 
+
+
+// MARK: - v5.15: accessible formula guidance and native equation tools
+// These steps do not reveal the model answer and never mutate server grades.
+enum V515EquationGuide {
+    static func applies(question: String, subject: String, kind: String) -> Bool {
+        if kind == "calculation" { return true }
+        let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        if q.count < 7 { return false }
+        if ["=", "×", "÷", "√", "∑", "∫", "∆", "Δ", "→", "⇌", "²", "³", "^", "mol", "sin", "cos", "tan"].contains(where: { q.localizedCaseInsensitiveContains($0) }) { return true }
+        let quantitative = ["رياضيات", "فيزياء", "كيمياء", "أحياء", "اقتصاد", "جغرافية", "علوم"].contains { subject.contains($0) }
+        let words = ["احسب", "أوجد", "جد قيمة", "معادلة", "قانون", "الميل", "العمودي", "المحيط", "مساحة", "الكتلة المولية", "حجم الغاز", "التخفيف", "التركيز", "النسبة الوراثية"]
+        return quantitative && words.contains { q.contains($0) }
+    }
+    static func steps(question: String, subject: String, topic: String) -> [String] {
+        let context = question + " " + topic
+        if ["المستقيم", "الميل", "عمودي", "إحداثيات"].contains(where: { context.contains($0) }) {
+            return ["حدّد المطلوب: الميل أو معادلة المستقيم أو الإحداثيات.",
+                    "افصل النقطتين واكتب السينات والصادات مع إشاراتها.",
+                    "اكتب قانون الميل، واستخدم علاقة التعامد أو التوازي عند الحاجة.",
+                    "عوّض بصيغة المستقيم ثم تحقّق من الحل باستخدام نقطة معطاة."]
+        }
+        if subject.contains("كيمياء") {
+            return ["حدّد نوع المسألة: تفاعل، مولات، تركيز، أم اتزان.",
+                    "اكتب المعطيات ووحداتها والمجهول المطلوب.",
+                    "اكتب القانون أو المعادلة الكيميائية الموزونة قبل التعويض.",
+                    "احسب بالترتيب وتحقّق من الوحدات وتوازن الذرات."]
+        }
+        if subject.contains("فيزياء") {
+            return ["حدّد الكمية الفيزيائية المطلوبة.",
+                    "افصل المعطيات ورموزها وحوّل الوحدات عند الحاجة.",
+                    "اختر القانون الذي يربط المجهول بالمعطيات ورتّبه.",
+                    "عوّض بالأرقام، ثم تحقّق من وحدة القياس والنتيجة."]
+        }
+        if subject.contains("أحياء") || context.contains("وراث") || context.contains("جين") {
+            return ["حدّد العلاقة الوراثية أو النسبة المطلوب حسابها.",
+                    "رمز إلى الصفات والأليلات وافصل المعطيات.",
+                    "رتّب جدول التزاوج أو الاحتمالات ثم احسب النسب.",
+                    "تأكّد من مجموع الاحتمالات ومطابقة الناتج للسؤال."]
+        }
+        return ["حدّد المطلوب والمجهول بدقة.",
+                "افصل المعطيات والرموز والإشارات ووحدات القياس.",
+                "اكتب القانون أو الخاصية الرياضية قبل التعويض.",
+                "نفّذ الحسابات بالترتيب ثم تحقّق من الناتج بالتعويض."]
+    }
+}
+struct V515EquationSteps: View {
+    let question: String
+    let subject: String
+    let topic: String
+    let kind: String
+    @State private var expanded = true
+    var body: some View {
+        if V515EquationGuide.applies(question: question, subject: subject, kind: kind) {
+            VStack(alignment: .leading, spacing: 10) {
+                Button { withAnimation { expanded.toggle() } } label: {
+                    HStack {
+                        Label("طريقة الحل خطوة بخطوة", systemImage: "list.number")
+                            .font(.subheadline.bold())
+                        Spacer()
+                        Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.murshidBlue)
+                if expanded {
+                    ForEach(Array(V515EquationGuide.steps(question: question, subject: subject, topic: topic).enumerated()), id: \.offset) { item in
+                        HStack(alignment: .top, spacing: 10) {
+                            Text("\(item.offset + 1)")
+                                .font(.caption.bold().monospacedDigit())
+                                .frame(width: 25, height: 25)
+                                .background(Color.murshidBlue.opacity(0.1), in: Circle())
+                            Text(item.element)
+                                .font(.subheadline)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Text("خطوات تساعدك على التفكير ولا تكشف الإجابة النموذجية.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            .padding(12)
+            .background(Color.murshidBlue.opacity(0.055), in: RoundedRectangle(cornerRadius: 13))
+        }
+    }
+}
+struct V515MathKeypad: View {
+    @Binding var answer: String
+    @State private var showGrid = false
+    @State private var points: [CGPoint] = []
+    private let symbols: [(String,String)] = [("−","-"),("+","+"),("×","*"),("÷","/"),("=","="),("( )","()"),
+                                             ("x","x"),("y","y"),("²","^2"),("√","sqrt("),("π","pi"),("/","/")]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text("لوحة المعادلات").font(.caption.bold()).foregroundStyle(.secondary)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 6), spacing: 6) {
+                ForEach(Array(symbols.enumerated()), id: \.offset) { item in
+                    Button(item.element.0) { answer += item.element.1 }
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                        .background(Color.murshidBlue.opacity(0.09), in: RoundedRectangle(cornerRadius: 9))
+                        .buttonStyle(.plain)
+                }
+            }
+            HStack {
+                Button { if !answer.isEmpty { answer.removeLast() } } label: {
+                    Label("حذف", systemImage: "delete.left")
+                }
+                Spacer()
+                Button { withAnimation { showGrid.toggle() } } label: {
+                    Label(showGrid ? "إخفاء الشبكة" : "شبكة الإحداثيات", systemImage: "square.grid.3x3")
+                }
+            }
+            .font(.caption.bold()).buttonStyle(.bordered)
+            if showGrid {
+                V515GraphGrid(points: $points)
+                    .frame(height: 230)
+                HStack {
+                    Button("مسح النقاط") { points = [] }.disabled(points.isEmpty)
+                    Spacer()
+                    Button("إدراج الإحداثيات") {
+                        let coordinates = points.map { "(\(Int($0.x)),\(Int($0.y)))" }.joined(separator: "، ")
+                        if !coordinates.isEmpty { answer += (answer.isEmpty ? "" : " ") + coordinates }
+                    }.disabled(points.isEmpty)
+                }
+                .font(.caption.bold()).buttonStyle(.bordered)
+                Text("استخدم الشبكة للمساعدة، وتُصحّح الإجابة المكتوبة فقط بعد إرسالها.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+struct V515GraphGrid: View {
+    @Binding var points: [CGPoint]
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                Canvas { context, size in
+                    for n in 0...10 {
+                        let x = CGFloat(n) * size.width / 10
+                        let y = CGFloat(n) * size.height / 10
+                        var vertical = Path()
+                        vertical.move(to: CGPoint(x: x, y: 0))
+                        vertical.addLine(to: CGPoint(x: x, y: size.height))
+                        var horizontal = Path()
+                        horizontal.move(to: CGPoint(x: 0, y: y))
+                        horizontal.addLine(to: CGPoint(x: size.width, y: y))
+                        let tint: Color = n == 5 ? .secondary.opacity(0.8) : .secondary.opacity(0.18)
+                        context.stroke(vertical, with: .color(tint), lineWidth: n == 5 ? 1.5 : 1)
+                        context.stroke(horizontal, with: .color(tint), lineWidth: n == 5 ? 1.5 : 1)
+                    }
+                }
+                ForEach(Array(points.enumerated()), id: \.offset) { item in
+                    Circle().fill(Color.murshidBlue).frame(width: 11, height: 11)
+                        .position(x: (item.element.x + 5) / 10 * proxy.size.width,
+                                  y: (5 - item.element.y) / 10 * proxy.size.height)
+                }
+            }
+            .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0).onEnded { gesture in
+                guard proxy.size.width > 0, proxy.size.height > 0 else { return }
+                let x = max(-5, min(5, Int((gesture.location.x / proxy.size.width * 10 - 5).rounded())))
+                let y = max(-5, min(5, Int((5 - gesture.location.y / proxy.size.height * 10).rounded())))
+                if points.count >= 6 { points.removeFirst() }
+                points.append(CGPoint(x: x, y: y))
+            })
+        }
+    }
+}
