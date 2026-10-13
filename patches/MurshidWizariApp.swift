@@ -227,7 +227,10 @@ struct RootView: View {
                     .padding(.vertical, 12)
                     .background(Color.murshidBlue.opacity(0.08))
 
-                    if V49StudyStore.shared.hasOfflineAccount() && !showingPublicOfflineLanding {
+                    if V49OfflineLaunchRules.showLocalCoach(
+                        networkUnavailable: app.bootstrapNetworkFailed,
+                        hasVerifiedArchive: V49StudyStore.shared.hasOfflineAccount()
+                    ) && !showingPublicOfflineLanding {
                         // Account data is only visible after iOS owner authentication.
                         // Offline review needs neither remembered cookies nor subscriptions.
                         V49OfflineAccessView()
