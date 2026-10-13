@@ -594,22 +594,22 @@ jobs:
           retention-days: 14
 
   admin_build:
-    if: ${{ false }}
-    name: Build v4.9.6 Build 505 unsigned iPhone admin IPA
+    if: ${{ true }}
+    name: Build v4.9.7 Build 506 unsigned iPhone admin IPA
     runs-on: macos-15
     timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore matching v4.8.18 icon for admin
+      - name: Restore supplied classic administration icon
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import base64,hashlib,pathlib
-          raw=base64.b64decode(pathlib.Path('patches/v498-icon-152.png.b64').read_text().strip())
-          assert hashlib.sha256(raw).hexdigest() == 'ae8a5f68a2a33f704f4af340f0b9bbf4d86ffdbb011bdb3e67a1c4cd23347665'
+          raw=base64.b64decode(pathlib.Path('patches/admin-restored-icon.png.b64').read_text().strip())
+          assert hashlib.sha256(raw).hexdigest() == '0a73073922a893d10c3699d5a8879e0ece5d81ceaa1c1fa75df0ae6417aed570'
           pathlib.Path('/tmp/murshid-admin-icon.png').write_bytes(raw)
           PY
           sips -s format png -z 1024 1024 /tmp/murshid-admin-icon.png --out admin_ios/App/Assets.xcassets/AppIcon.appiconset/AppIcon.png >/dev/null
@@ -634,8 +634,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \
-            MARKETING_VERSION='4.9.6' \
-            CURRENT_PROJECT_VERSION='505' \
+            MARKETING_VERSION='4.9.7' \
+            CURRENT_PROJECT_VERSION='506' \
             clean build
 
       - name: Validate and package admin IPA
@@ -648,8 +648,8 @@ jobs:
           test -f "$APP/MurshidAdmin"
           test -f "$APP/Assets.car"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid.admin'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.9.6'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '505'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.9.7'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '506'
           grep -Fq 'FreeMonthCampaignScreen' App/MurshidAdminApp.swift
           grep -Fq 'promo_save' App/MurshidAdminApp.swift
           grep -Fq 'SubscriptionSourcesHome' App/MurshidAdminApp.swift
@@ -660,9 +660,9 @@ jobs:
           grep -Fq 'AdminPalette' App/MurshidAdminApp.swift
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Murshid_Admin_iOS_v4_9_6_BUILD505_unsigned.ipa Payload
-          test -s Murshid_Admin_iOS_v4_9_6_BUILD505_unsigned.ipa
-          shasum -a 256 Murshid_Admin_iOS_v4_9_6_BUILD505_unsigned.ipa | tee Murshid_Admin_iOS_v4_9_6_BUILD505_unsigned.sha256
+          /usr/bin/zip -qry Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.ipa Payload
+          test -s Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.ipa
+          shasum -a 256 Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.ipa | tee Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.sha256
 
       - name: Publish admin IPA preview
         continue-on-error: true
@@ -671,21 +671,21 @@ jobs:
         run: |
           set -euo pipefail
           cd admin_ios
-          TAG='v4.9.6-build505-free100-admin-preview'
+          TAG='v4.9.7-build506-free100-admin-preview'
           NOTES='Unsigned native iPhone admin IPA. Premium redesigned dashboard and login, three selectable color themes saved on-device, existing campaign/subscriptions/student features, idle-lock prevention and session refresh. Install the updated admin/native-api.php on hosting to enable subscriber-source lists.'
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" Murshid_Admin_iOS_v4_9_6_BUILD505_unsigned.ipa Murshid_Admin_iOS_v4_9_6_BUILD505_unsigned.sha256 --clobber
+            gh release upload "$TAG" Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.ipa Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.sha256 --clobber
           else
-            gh release create "$TAG" Murshid_Admin_iOS_v4_9_6_BUILD505_unsigned.ipa Murshid_Admin_iOS_v4_9_6_BUILD505_unsigned.sha256 --target "$GITHUB_SHA" --prerelease --title 'Murshid Admin iPhone v4.9.6 Build 505 — Premium Themes' --notes "$NOTES"
+            gh release create "$TAG" Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.ipa Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.sha256 --target "$GITHUB_SHA" --prerelease --title 'Murshid Admin iPhone v4.9.7 Build 506 — Premium Themes' --notes "$NOTES"
           fi
 
       - name: Upload admin IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Admin-iPhone-v4.9.6-Build505-Unsigned
+          name: Murshid-Admin-iPhone-v4.9.7-Build506-Unsigned
           path: |
-            admin_ios/Murshid_Admin_iOS_v4_9_6_BUILD505_unsigned.ipa
-            admin_ios/Murshid_Admin_iOS_v4_9_6_BUILD505_unsigned.sha256
+            admin_ios/Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.ipa
+            admin_ios/Murshid_Admin_iOS_v4_9_6_BUILD506_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
 
@@ -728,8 +728,8 @@ jobs:
         run: |
           set -u
           mkdir -p .build-status
-          STATUS_FILE=".build-status/v4.9.6-build505-status.txt"
-          LOG_FILE=".build-status/v4.9.6-build505-failed.log"
+          STATUS_FILE=".build-status/v4.9.7-build506-status.txt"
+          LOG_FILE=".build-status/v4.9.7-build506-failed.log"
           {
             echo "run_id=$GITHUB_RUN_ID"
             echo "run_attempt=$GITHUB_RUN_ATTEMPT"

@@ -102,6 +102,9 @@ enum LoginStage {case loading, signin, otp, ready}
     @Published var subscriptions:[J] = []
     @Published var questions:[J] = []
     @Published var curriculum:J = [:]
+    @Published var predictionSubjects:[J] = []
+    @Published var predictionRows:[J] = []
+    @Published var predictionMode = "automatic"
     private var appIsActive=false
     private var keepAliveTask:Task<Void,Never>?
     private let session:URLSession = {
@@ -273,9 +276,20 @@ enum LoginStage {case loading, signin, otp, ready}
             case "subscriptions": subscriptions=list(result)
             case "questions": questions=list(result)
             case "curriculum": curriculum=result
+            case "predictions_subjects": predictionSubjects=list(result)
             default: break
             }
         } catch { self.error=error.localizedDescription }
+    }
+    func refreshPredictions(subjectID:Int) async {
+        guard subjectID>0 else {predictionRows=[];return}
+        busy=true;error=""
+        defer{busy=false}
+        do {
+            let result=try await call("predictions",extras:[URLQueryItem(name:"subject_id",value:String(subjectID))])
+            predictionRows=list(result)
+            predictionMode=s(result,"mode","automatic")
+        } catch {self.error=error.localizedDescription}
     }
     func mutation(_ action:String,_ payload:J,refresh area:String) async -> J? {
         busy=true;error="";notice=""
@@ -908,6 +922,8 @@ private struct MoreScreen:View {
                             Divider().overlay(Ink.blue2)
                             NavigationLink{QuestionsScreen(state:state)}label:{entry("بنك الأسئلة","doc.text.fill")}
                             Divider().overlay(Ink.blue2)
+                            NavigationLink{PredictionsAdminScreen(state:state)}label:{entry("إدارة المرشحات","scope")}
+                            Divider().overlay(Ink.blue2)
                             NavigationLink{CurriculumScreen(state:state)}label:{entry("المواد والفصول","books.vertical.fill")}
                         }
                     }
@@ -1489,6 +1505,175 @@ private struct CurriculumEditor:View {
             .navigationTitle(row == nil ? "إضافة":"تعديل")
             .onAppear{
                 if let row{name=s(row,"name","");parent=num(row,kind=="subject" ? "grade_id":"subject_id");visible=num(row,"status")==1}
+            }
+            .toolbar{ToolbarItem(placement:.topBarLeading){Button("إغلاق"){dismiss()}}}
+        }
+    }
+}
+
+
+private struct PredictionsAdminScreen: View {
+    @ObservedObject var state: AdminState
+    @State private var selectedSubject = 0
+    @State private var manual = false
+    @State private var showEditor = false
+    @State private var editingRow: J?
+    @State private var deletion: Int?
+    var body: some View {
+        ScrollView {
+            VStack(alignment:.leading,spacing:15) {
+                ScreenTitle(text:"إدارة المرشحات",detail:"إضافة وتعديل وحذف وإيقاف المرشحات لكل مادة")
+                Note(state:state)
+                GlassBox {
+                    VStack(alignment:.leading,spacing:12) {
+                        Picker("الصف والمادة",selection:$selectedSubject) {
+                            Text("اختر مادة").tag(0)
+                            ForEach(state.predictionSubjects){ row in
+                                Text(s(row,"grade_name")+" — "+s(row,"name")).tag(num(row,"id"))
+                            }
+                        }
+                        .onChange(of:selectedSubject){ id in
+                            Task {
+                                await state.refreshPredictions(subjectID:id)
+                                manual=state.predictionMode=="manual"
+                            }
+                        }
+                        Toggle("عرض المرشحات التي تحددها الإدارة فقط",isOn:$manual)
+                        Button("حفظ طريقة العرض") {
+                            Task {
+                                if await state.mutation("prediction_mode",["subject_id":selectedSubject,"mode":manual ? "manual" : "automatic"],refresh:"") != nil {
+                                    await state.refreshPredictions(subjectID:selectedSubject)
+                                }
+                            }
+                        }
+                        .buttonStyle(.borderedProminent).disabled(selectedSubject == 0 || state.busy)
+                    }
+                }
+                Button {
+                    editingRow=nil
+                    showEditor=true
+                } label: { Label("إضافة مرشح",systemImage:"plus.circle.fill") }
+                .buttonStyle(.borderedProminent).disabled(selectedSubject==0)
+                ForEach(state.predictionRows){ row in
+                    GlassBox {
+                        VStack(alignment:.leading,spacing:10) {
+                            Text(s(row,"question_text")).font(.headline).fixedSize(horizontal:false,vertical:true)
+                            Text(s(row,"correct_answer")).font(.subheadline).foregroundStyle(Ink.faded)
+                            Text("الترتيب: "+s(row,"sort_order")+" · الدرجة: "+s(row,"prediction_score")+" · "+(num(row,"is_enabled")==1 ? "ظاهر" : "موقوف"))
+                                .font(.caption).foregroundStyle(Ink.faded)
+                            HStack {
+                                Button("تعديل") {
+                                    editingRow=row
+                                    showEditor=true
+                                }.buttonStyle(.bordered)
+                                Button(num(row,"is_enabled")==1 ? "إيقاف" : "تفعيل") {
+                                    Task {
+                                        if await state.mutation("prediction_toggle",["subject_id":selectedSubject,"id":num(row,"id")],refresh:"") != nil {
+                                            await state.refreshPredictions(subjectID:selectedSubject)
+                                        }
+                                    }
+                                }.buttonStyle(.bordered)
+                                Button("حذف",role:.destructive) {deletion=num(row,"id")}.buttonStyle(.bordered)
+                            }
+                        }
+                    }
+                }
+                if state.predictionRows.isEmpty {
+                    Text("لا توجد مرشحات مضافة من الإدارة لهذه المادة.")
+                        .foregroundStyle(Ink.faded).font(.footnote)
+                }
+            }.padding(16)
+        }
+        .adminBG()
+        .navigationTitle("المرشحات")
+        .task {
+            await state.refresh("predictions_subjects")
+            if selectedSubject==0 {selectedSubject=num(state.predictionSubjects.first ?? [:],"id")}
+            await state.refreshPredictions(subjectID:selectedSubject)
+            manual=state.predictionMode=="manual"
+        }
+        .refreshable {
+            await state.refreshPredictions(subjectID:selectedSubject)
+            manual=state.predictionMode=="manual"
+        }
+        .sheet(isPresented:$showEditor) {
+            PredictionEditor(state:state,subjectID:selectedSubject,row:editingRow)
+        }
+        .alert("حذف المرشح؟",isPresented:Binding(get:{deletion != nil},set:{if !$0{deletion=nil}})) {
+            Button("حذف",role:.destructive) {
+                guard let id=deletion else {return}
+                deletion=nil
+                Task {
+                    if await state.mutation("prediction_delete",["subject_id":selectedSubject,"id":id],refresh:"") != nil {
+                        await state.refreshPredictions(subjectID:selectedSubject)
+                    }
+                }
+            }
+            Button("إلغاء",role:.cancel){deletion=nil}
+        } message: {Text("سيُحذف المرشح المحدد من هذه المادة.")}
+    }
+}
+private struct PredictionEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var state:AdminState
+    let subjectID:Int
+    let row:J?
+    @State private var question=""
+    @State private var answer=""
+    @State private var explanation=""
+    @State private var topic=""
+    @State private var reason=""
+    @State private var questionID=0
+    @State private var score=70
+    @State private var order=0
+    @State private var enabled=true
+    var body:some View {
+        NavigationStack {
+            Form {
+                Section("نص المرشح") {
+                    TextField("نص السؤال",text:$question,axis:.vertical).lineLimit(3...8)
+                    TextField("الإجابة الصحيحة",text:$answer,axis:.vertical).lineLimit(2...8)
+                    TextField("شرح الإجابة",text:$explanation,axis:.vertical).lineLimit(2...8)
+                    TextField("اسم الموضوع",text:$topic)
+                    TextField("سبب الترشيح",text:$reason,axis:.vertical)
+                }
+                Section("الإعدادات") {
+                    TextField("معرّف السؤال في البنك، اختياري",value:$questionID,format:.number).keyboardType(.numberPad)
+                    TextField("درجة الترشيح (0–100)",value:$score,format:.number).keyboardType(.numberPad)
+                    TextField("الترتيب",value:$order,format:.number).keyboardType(.numbersAndPunctuation)
+                    Toggle("المرشح مفعّل",isOn:$enabled)
+                }
+                Section {
+                    Primary(title:"حفظ المرشح",symbol:"square.and.arrow.down",busy:state.busy) {
+                        Task {
+                            let data:J=["subject_id":subjectID,"id":num(row ?? [:],"id"),
+                              "question_id":questionID,"question_text":question,
+                              "correct_answer":answer,"explanation":explanation,
+                              "chapter_name":topic,"reason":reason,
+                              "prediction_score":score,"sort_order":order,"is_enabled":enabled]
+                            if await state.mutation("prediction_save",data,refresh:"") != nil {
+                                await state.refreshPredictions(subjectID:subjectID)
+                                dismiss()
+                            }
+                        }
+                    }
+                    Note(state:state)
+                }
+            }
+            .scrollContentBackground(.hidden).background(Ink.navy)
+            .navigationTitle(row == nil ? "مرشح جديد" : "تعديل المرشح")
+            .onAppear {
+                if let row {
+                    question=s(row,"question_text","")
+                    answer=s(row,"correct_answer","")
+                    explanation=s(row,"explanation","")
+                    topic=s(row,"chapter_name","")
+                    reason=s(row,"reason","")
+                    questionID=num(row,"question_id")
+                    score=num(row,"prediction_score")
+                    order=num(row,"sort_order")
+                    enabled=num(row,"is_enabled")==1
+                }
             }
             .toolbar{ToolbarItem(placement:.topBarLeading){Button("إغلاق"){dismiss()}}}
         }
