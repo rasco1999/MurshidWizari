@@ -185,9 +185,24 @@ class MainActivity : Activity() {
     private var practiceTicker: Runnable? = null
     private val prefs by lazy { getSharedPreferences("native_preferences", MODE_PRIVATE) }
     // Identical brand palette to the SwiftUI ThemeV34 definitions.
-    private val gold = Color.rgb(245,184,61)
-    private val navy = Color.rgb(11,31,51)
-    private val blue = Color.rgb(45,108,223)
+    // These three palettes mirror the iPhone's account personalization choices.
+    private var accentStyle = AppearanceRules.ROYAL
+    private var appearanceMode = AppearanceRules.SYSTEM
+    private val gold get() = when (accentStyle) {
+        AppearanceRules.VIOLET -> Color.rgb(229, 130, 207)
+        AppearanceRules.AURORA -> Color.rgb(74, 213, 195)
+        else -> Color.rgb(245, 184, 61)
+    }
+    private val navy get() = when (accentStyle) {
+        AppearanceRules.VIOLET -> Color.rgb(42, 25, 76)
+        AppearanceRules.AURORA -> Color.rgb(7, 60, 72)
+        else -> Color.rgb(11, 31, 51)
+    }
+    private val blue get() = when (accentStyle) {
+        AppearanceRules.VIOLET -> Color.rgb(185, 88, 220)
+        AppearanceRules.AURORA -> Color.rgb(29, 154, 215)
+        else -> Color.rgb(45, 108, 223)
+    }
     // UIKit's systemGroupedBackground / secondarySystemGroupedBackground light and dark tokens.
     private val appColor get() = if (night) Color.BLACK else Color.rgb(242,242,247)
     private val textColor get() = if (night) Color.WHITE else Color.rgb(28,28,30)
@@ -200,8 +215,10 @@ class MainActivity : Activity() {
         api = ApiClient(this)
         val systemNight = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
             Configuration.UI_MODE_NIGHT_YES
-        night = VisualRules.initialNight(if (prefs.contains("night")) prefs.getBoolean("night", false) else null,
-            systemNight)
+        accentStyle = AppearanceRules.normalizeAccent(prefs.getString("accent_style", null))
+        appearanceMode = AppearanceRules.normalizeMode(prefs.getString("appearance_mode", null),
+            if (prefs.contains("night")) prefs.getBoolean("night", false) else null)
+        night = AppearanceRules.isDark(appearanceMode, systemNight)
         setTheme(if (night) R.style.MurshidDark else R.style.MurshidLight)
         showAcademicWelcome()
         val minimumWelcomeMs = 3000L // v4.8.18 Build 498 cinematic welcome.
@@ -525,8 +542,9 @@ class MainActivity : Activity() {
         else row.addView(Space(this), LinearLayout.LayoutParams(dp(42), dp(44)))
         row.addView(uiText(title, 18f, true).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(0, -2, 1f))
         if (tab == "home") row.addView(headerIcon(if (night) "sun" else "moon", "تبديل المظهر") {
+            appearanceMode = if (night) AppearanceRules.LIGHT else AppearanceRules.DARK
             night = !night
-            prefs.edit().putBoolean("night", night).apply()
+            prefs.edit().putString("appearance_mode", appearanceMode).remove("night").apply()
             setTheme(if (night) R.style.MurshidDark else R.style.MurshidLight)
             showHome(homepage)
         }, LinearLayout.LayoutParams(dp(42), dp(44)))
@@ -4539,6 +4557,111 @@ class MainActivity : Activity() {
         return toggle
     }
 
+    private fun accountAppearanceSection() {
+        sectionHeader("الألوان والمظهر", "غيّر تصميم تطبيقك وقتما تريد", "sparkles")
+        val card = uiCard()
+        card.addView(uiText("اختر هويتك اللونية", 17f, true, blue),
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(13) })
+        val palettes = listOf(
+            Triple(AppearanceRules.ROYAL, "ملكي", "أزرق وذهبي"),
+            Triple(AppearanceRules.VIOLET, "بنفسجي", "بنفسجي ووردي"),
+            Triple(AppearanceRules.AURORA, "أورورا", "فيروزي وأزرق")
+        )
+        val choices = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        palettes.forEachIndexed { index, (mode, name, description) ->
+            val selected = accentStyle == mode
+            val colors = when (mode) {
+                AppearanceRules.VIOLET -> intArrayOf(Color.rgb(244,146,196), Color.rgb(177, 98, 216))
+                AppearanceRules.AURORA -> intArrayOf(Color.rgb(78,224,200), Color.rgb(39,175,226))
+                else -> intArrayOf(Color.rgb(246,188,81), Color.rgb(55,112,212))
+            }
+            val option = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(4), dp(13), dp(4), dp(13))
+                background = GradientDrawable().apply {
+                    setColor(if (selected) (if (night) Color.rgb(30, 39, 57) else Color.rgb(236, 241, 251))
+                        else surface)
+                    cornerRadius = dp(18).toFloat()
+                    setStroke(dp(if (selected) 2 else 1), if (selected) blue
+                        else if (night) Color.rgb(40, 49, 66) else Color.rgb(226,230,236))
+                }
+                minimumHeight = dp(128)
+            }
+            val swatch = FrameLayout(this).apply {
+                background = GradientDrawable(GradientDrawable.Orientation.TL_BR, colors).apply {
+                    cornerRadius = dp(17).toFloat()
+                }
+                addView(IosGlyphView(this@MainActivity, if (selected) "check" else "sparkles", Color.WHITE),
+                    FrameLayout.LayoutParams(dp(29), dp(29), Gravity.CENTER))
+            }
+            option.addView(swatch, LinearLayout.LayoutParams(dp(54), dp(54)))
+            option.addView(uiText(name, 15f, true).apply { gravity = Gravity.CENTER },
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
+            option.addView(uiText(description, 10f, tint = mutedText).apply {
+                gravity = Gravity.CENTER
+                maxLines = 2
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
+            choices.addView(tappable(option, "اختيار ألوان $name") {
+                if (accentStyle != mode) {
+                    accentStyle = mode
+                    prefs.edit().putString("accent_style", mode).apply()
+                    accountScreen()
+                }
+            }, LinearLayout.LayoutParams(0, -2, 1f).apply {
+                if (index < palettes.lastIndex) marginEnd = dp(6)
+            })
+        }
+        card.addView(choices)
+        card.addView(View(this).apply {
+            setBackgroundColor(if (night) Color.rgb(48,48,52) else Color.rgb(229,231,235))
+        }, LinearLayout.LayoutParams(-1, dp(1)).apply {
+            topMargin = dp(15); bottomMargin = dp(13)
+        })
+        card.addView(uiText("إضاءة التطبيق", 17f, true, blue),
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+        val segment = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            setPadding(dp(3), dp(3), dp(3), dp(3))
+            background = shape(if (night) Color.rgb(45,45,48) else Color.rgb(232,232,237),
+                dp(13).toFloat())
+        }
+        for ((mode, label) in listOf(
+            AppearanceRules.SYSTEM to "النظام",
+            AppearanceRules.LIGHT to "فاتح",
+            AppearanceRules.DARK to "داكن"
+        )) {
+            val selected = appearanceMode == mode
+            val choice = uiText(label, 14f, selected, if (selected) textColor else mutedText).apply {
+                gravity = Gravity.CENTER
+                minimumHeight = dp(39)
+                background = if (selected) shape(if (night) Color.rgb(98,98,103)
+                    else Color.WHITE, dp(11).toFloat()) else null
+            }
+            segment.addView(tappable(choice, "إضاءة $label") {
+                if (appearanceMode != mode) {
+                    appearanceMode = mode
+                    val systemDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                        Configuration.UI_MODE_NIGHT_YES
+                    night = AppearanceRules.isDark(mode, systemDark)
+                    prefs.edit().putString("appearance_mode", mode).remove("night").apply()
+                    setTheme(if (night) R.style.MurshidDark else R.style.MurshidLight)
+                    accountScreen()
+                }
+            }, LinearLayout.LayoutParams(0, dp(39), 1f))
+        }
+        card.addView(segment)
+        card.addView(uiText("يُحفظ اختيارك على هذا الجهاز، ولا يغيّر بيانات حسابك أو اشتراكك.",
+            12f, tint = mutedText).apply { gravity = Gravity.CENTER },
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14) })
+        addUiCard(card, bottom = 16)
+    }
+
     private fun accountScreen() {
         activeScreen = "account"
         base("حسابي", tab = "account")
@@ -4641,6 +4764,8 @@ class MainActivity : Activity() {
                         else "لا توجد إشعارات جديدة"
                 }
             }
+
+            accountAppearanceSection()
 
             sectionHeader("الأمان والتذكير", "خيارات خاصة بجهازك", "lock")
             val security = uiCard()
