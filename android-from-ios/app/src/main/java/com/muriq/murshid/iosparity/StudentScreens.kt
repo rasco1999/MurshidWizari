@@ -546,6 +546,29 @@ fun AccountTab(vm: MurshidViewModel) {
                 else if (!vm.api.hasSavedSession()) Text("فعّل «تذكرني على هذا الجهاز» عند تسجيل الدخول أولاً.")
             }
         }
+        item {
+            val context = LocalContext.current
+            val notificationsEnabled = androidx.core.app.NotificationManagerCompat.from(context)
+                .areNotificationsEnabled() &&
+                (android.os.Build.VERSION.SDK_INT < 33 ||
+                    androidx.core.content.ContextCompat.checkSelfPermission(
+                        context, android.Manifest.permission.POST_NOTIFICATIONS
+                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED)
+            MurshidCard {
+                Text("إشعارات الجهاز", fontWeight = FontWeight.Bold)
+                Text(if (notificationsEnabled) "الإشعارات مفعّلة على هذا الجهاز."
+                    else "الإشعارات متوقفة. يمكنك تفعيلها من إعدادات Android.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (!notificationsEnabled) {
+                    SecondaryAction("فتح إعدادات الإشعارات") {
+                        val intent = android.content.Intent(
+                            android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS
+                        ).putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        runCatching { context.startActivity(intent) }
+                    }
+                }
+            }
+        }
         item { SectionTitle("خدمات الطالب", "أدوات حسابك") }
         items(
             listOf(
