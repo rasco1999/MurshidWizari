@@ -4218,7 +4218,7 @@ class MainActivity : Activity() {
                 OfflineCoachNotebook(prefs).remember(
                     userId = student.optInt("id"),
                     questionId = id,
-                    question = question.optString("question_text").ifBlank { question.optString("question") },
+                    question = question.optString("text").ifBlank { question.optString("question_text") },
                     correctAnswer = correctAnswer,
                     explanation = explanation,
                     subject = chapterName,
