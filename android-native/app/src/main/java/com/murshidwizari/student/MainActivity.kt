@@ -578,10 +578,10 @@ class MainActivity : Activity() {
                 }
             }
             if (name == "account" && !selected) {
-                // iOS shows the gold avatar on inactive tabs, but switches to
-                // a blue filled person-circle when Account is selected.
+                // A neutral profile silhouette is the appropriate fallback.
+                // Keep the exact Build498 golden icon for the launcher only.
                 val tabAvatar = ImageView(this@MainActivity).apply {
-                    setImageResource(R.drawable.ic_ios_v4818)
+                    setImageResource(R.drawable.ic_account_placeholder)
                     scaleType = ImageView.ScaleType.CENTER_CROP
                     background = GradientDrawable().apply {
                         shape = GradientDrawable.OVAL
@@ -758,7 +758,8 @@ class MainActivity : Activity() {
         isClickable = true
         isFocusable = true
         contentDescription = description
-        foreground = RippleDrawable(ColorStateList.valueOf(Color.argb(25, 45, 108, 223)), null, shape(Color.WHITE))
+        foreground = RippleDrawable(ColorStateList.valueOf(Color.argb(25, Color.red(blue),
+            Color.green(blue), Color.blue(blue))), null, shape(Color.WHITE))
         setOnClickListener { action() }
     }
 
@@ -1054,7 +1055,7 @@ class MainActivity : Activity() {
             scaleType = ImageView.ScaleType.CENTER_CROP
             contentDescription = "الصورة الشخصية"
         }
-        view.setImageResource(R.drawable.ic_ios_v4818)
+        view.setImageResource(R.drawable.ic_account_placeholder)
         root.addView(view, LinearLayout.LayoutParams(dp(88), dp(88)).apply {
             gravity = Gravity.CENTER_HORIZONTAL
             bottomMargin = dp(12)
@@ -2582,7 +2583,9 @@ class MainActivity : Activity() {
             layoutDirection = View.LAYOUT_DIRECTION_RTL
             setPadding(dp(18), dp(19), dp(18), dp(19))
             background = GradientDrawable(GradientDrawable.Orientation.TR_BL,
-                intArrayOf(navy, Color.rgb(35, 89, 180), blue)).apply {
+                intArrayOf(navy, Color.rgb((Color.red(navy) + Color.red(blue)) / 2,
+                    (Color.green(navy) + Color.green(blue)) / 2,
+                    (Color.blue(navy) + Color.blue(blue)) / 2), blue)).apply {
                 cornerRadius = dp(28).toFloat()
             }
             elevation = dp(3).toFloat()
@@ -2594,7 +2597,7 @@ class MainActivity : Activity() {
         }
         val avatar = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            setImageResource(R.drawable.ic_ios_v4818)
+            setImageResource(R.drawable.ic_account_placeholder)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Color.WHITE)
