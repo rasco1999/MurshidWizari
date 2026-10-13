@@ -76,7 +76,12 @@ struct MurshidWizariApp: App {
                     device.didEnterBackground()
                 case .active:
                     Task { @MainActor in
-                        if bootstrapNeedsNetworkRetry { beginBootstrap() }
+                        // Never interrupt a previously verified offline student
+                        // merely because the app returned from the background.
+                        // They can choose "إعادة الاتصال" when they finish reviewing.
+                        if bootstrapNeedsNetworkRetry && !V49StudyStore.shared.hasOfflineAccount() {
+                            beginBootstrap()
+                        }
                         await device.didBecomeActive()
                         if app.v3Authenticated {
                             MurshidSchoolAdPush.shared.activate()
