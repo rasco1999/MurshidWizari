@@ -3155,6 +3155,7 @@ class MainActivity : Activity() {
             for (i in 0 until subjects.length()) {
                 val subject = subjects.optJSONObject(i) ?: continue
                 val name = subject.optString("name")
+                if (EquationStudyRules.isFrenchSubject(subject.optInt("id"),name)) continue
                 if (!name.contains(text.trim(), ignoreCase = true)) continue
                 shown++
                 val number = i + 1
@@ -3658,12 +3659,17 @@ class MainActivity : Activity() {
             val obj = subjects.optJSONObject(i) ?: continue
             val subjectId = obj.optInt("id")
             val name = obj.optString("name")
+            if (EquationStudyRules.isFrenchSubject(subjectId,name)) continue
             button(name) { if (predictions) predictionsScreen(subjectId, name) else topicsScreen(subjectId, name) }
         }
         if (subjects.length() == 0) line("لا توجد مواد متاحة حالياً.")
     }
 
     private fun topicsScreen(subjectId: Int, subjectName: String) {
+        if (EquationStudyRules.isFrenchSubject(subjectId,subjectName)) {
+            message("هذه المادة غير متاحة في المنهج الحالي.")
+            return
+        }
         if (activeScreen != "exam" && activeScreen != "topics") topicsReturnScreen = activeScreen
         topicsSubjectId = subjectId; topicsSubjectName = subjectName
         val expectedScreenGeneration = screenGeneration
@@ -3940,8 +3946,28 @@ class MainActivity : Activity() {
                 LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(8) })
         }
         card.addView(eyebrow)
-        card.addView(uiText(question.optString("text"), 20f, true),
-            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(11) })
+        card.addView(uiText(question.optString("text"), 20f, true).apply {
+            // Keep signed coordinates in mathematical order inside Arabic RTL.
+            textDirection = View.TEXT_DIRECTION_FIRST_STRONG
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(11) })
+        val questionText = question.optString("text")
+        if (EquationStudyRules.applies(questionText, topicsSubjectName, question.optString("type"))) {
+            val guide = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(12), dp(12), dp(12), dp(12))
+                background = shape(if (night) Color.rgb(32,42,58) else Color.rgb(235,242,254),
+                    dp(12).toFloat())
+                addView(uiText("طريقة الحل خطوة بخطوة", 15f, true, blue))
+                EquationStudyRules.steps(questionText, topicsSubjectName, chapterName)
+                    .forEachIndexed { index, instruction ->
+                        addView(uiText("${index + 1}- $instruction", 14f),
+                            LinearLayout.LayoutParams(-1,-2).apply { topMargin = dp(8) })
+                    }
+                addView(uiText("إرشادات للفهم وليست الإجابة النموذجية.", 11f, tint = mutedText),
+                    LinearLayout.LayoutParams(-1,-2).apply { topMargin = dp(10) })
+            }
+            card.addView(guide, LinearLayout.LayoutParams(-1,-2).apply { topMargin = dp(12) })
+        }
         addUiCard(card, bottom = 16)
     }
 
@@ -4192,6 +4218,9 @@ class MainActivity : Activity() {
                         }
                         override fun afterTextChanged(s: Editable?) = Unit
                     })
+                    if (EquationStudyRules.applies(question.optString("text"), topicsSubjectName, question.optString("type"))) {
+                        addEquationTools(field, answersCard, question)
+                    }
                     answersCard.addView(submit, LinearLayout.LayoutParams(-1, -2))
                     addUiCard(answersCard, bottom = 16)
                 }
@@ -4308,6 +4337,48 @@ class MainActivity : Activity() {
                 // extra Android modal duplicated this card and blocked Next.
                 renderQuestion()
             }
+        }
+    }
+
+
+    /** Inserts a mathematical symbol at the caret; only the text goes to the server. */
+    private fun addEquationTools(field: EditText, parent: LinearLayout, question: JSONObject) {
+        parent.addView(uiText("لوحة المعادلات", 13f, true, blue),
+            LinearLayout.LayoutParams(-1,-2).apply { topMargin=dp(12); bottomMargin=dp(8) })
+        val keys = listOf("−" to "-", "+" to "+", "×" to "*", "÷" to "/",
+            "=" to "=", "(" to "(", ")" to ")", "س" to "x", "ص" to "y",
+            "²" to "^2", "³" to "^3", "√" to "sqrt(", "π" to "pi", "/" to "/")
+        keys.chunked(7).forEach { rowKeys ->
+            val row = LinearLayout(this).apply {
+                orientation=LinearLayout.HORIZONTAL
+                layoutDirection=View.LAYOUT_DIRECTION_RTL
+            }
+            rowKeys.forEach { (shown,insert) ->
+                val key = Button(this).apply {
+                    text=shown
+                    textSize=16f
+                    isAllCaps=false
+                    setOnClickListener {
+                        val position=field.selectionStart.coerceAtLeast(0).coerceAtMost(field.text.length)
+                        field.text.insert(position,insert)
+                    }
+                    contentDescription="إدراج الرمز $shown"
+                }
+                row.addView(key,LinearLayout.LayoutParams(0,dp(45),1f))
+            }
+            parent.addView(row)
+        }
+        if (EquationStudyRules.coordinateQuestion(question.optString("text"),chapterName)) {
+            parent.addView(uiText("ارسم نقاطك ثم أدرج إحداثياتها في الإجابة.",12f,tint=mutedText),
+                LinearLayout.LayoutParams(-1,-2).apply { topMargin=dp(10) })
+            val graph=NativeCoordinateGrid(this)
+            parent.addView(graph,LinearLayout.LayoutParams(-1,dp(240)).apply { topMargin=dp(6) })
+            parent.addView(makeButton("إدراج النقاط المرسومة") {
+                val encoded=graph.coordinates()
+                if(encoded.isNotBlank()) field.text.insert(field.selectionStart.coerceAtLeast(0)
+                    .coerceAtMost(field.text.length),encoded)
+            })
+            parent.addView(makeButton("مسح الشبكة") { graph.reset() })
         }
     }
 
