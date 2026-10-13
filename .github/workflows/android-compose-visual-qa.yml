@@ -8,9 +8,11 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+# Each source revision has its own immutable visual-QA run. New app updates
+# must not discard screenshots from a run that is already booting a simulator.
 concurrency:
-  group: murshid-android-emulator-${{ github.ref }}
-  cancel-in-progress: true
+  group: murshid-android-emulator-${{ github.sha }}
+  cancel-in-progress: false
 jobs:
   native-emulator:
     runs-on: macos-15
