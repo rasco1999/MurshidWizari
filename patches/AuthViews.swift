@@ -1779,6 +1779,13 @@ struct MainV3TabView: View {
         .onDisappear { schoolAds.setViewingAds(false) }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardVisible = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardVisible = false }
+        .onReceive(NotificationCenter.default.publisher(for: .murshidSchoolAdOpened)) { _ in
+            selection = 3
+            _ = MurshidSchoolAdPush.shared.takePendingSchoolAd()
+        }
+        .onAppear {
+            if MurshidSchoolAdPush.shared.takePendingSchoolAd() { selection = 3 }
+        }
         .task { await keepSessionAlive() }
         .onOpenURL { url in
             switch (url.host ?? url.path.replacingOccurrences(of: "/", with: "")).lowercased() {

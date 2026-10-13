@@ -57,12 +57,17 @@ struct MurshidWizariApp: App {
                 guard !completedInitialWelcome else { return }
                 // Restore the account independently: never make the splash longer
                 // than three seconds because of a slow network call.
+                MurshidSchoolAdPush.shared.configure()
                 beginBootstrap()
                 try? await Task.sleep(nanoseconds: 2_700_000_000)
                 withAnimation(.easeInOut(duration: 0.30)) {
                     showAcademicWelcome = false
                 }
                 completedInitialWelcome = true
+            }
+            .onChange(of: app.v3Authenticated) { loggedIn in
+                if loggedIn { MurshidSchoolAdPush.shared.activate() }
+                else { MurshidSchoolAdPush.shared.resetLocalRegistration() }
             }
             .onChange(of: scenePhase) { phase in
                 switch phase {
@@ -73,7 +78,10 @@ struct MurshidWizariApp: App {
                     Task { @MainActor in
                         if bootstrapNeedsNetworkRetry { beginBootstrap() }
                         await device.didBecomeActive()
-                        if app.v3Authenticated { Task { try? await APIClient.shared.heartbeat() } }
+                        if app.v3Authenticated {
+                            MurshidSchoolAdPush.shared.activate()
+                            Task { try? await APIClient.shared.heartbeat() }
+                        }
                         // A brief system interruption should not replay the greeting.
                         guard completedInitialWelcome,
                               let left = backgroundedAt else { return }

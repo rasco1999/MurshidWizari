@@ -431,7 +431,11 @@ final class APIClient {
 
     func logout() async throws {
         let csrf = AppSession.shared.csrf
-        if !csrf.isEmpty { _ = try await request("mobile/logout.php", method: "POST", body: ["csrf": csrf]) }
+        if !csrf.isEmpty {
+            _ = try await request("mobile/logout.php", method: "POST",
+                 body: ["csrf": csrf, "ios_push_token": MurshidSchoolAdPush.shared.tokenHex ?? ""])
+        }
+        MurshidSchoolAdPush.shared.resetLocalRegistration()
         AppSession.shared.reset()
         if let cookies = HTTPCookieStorage.shared.cookies { cookies.forEach(HTTPCookieStorage.shared.deleteCookie) }
     }
