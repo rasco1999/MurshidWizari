@@ -5,6 +5,28 @@ final class V498FinalTests: XCTestCase {
     private func row(_ id: Int, text: String = "إعلان جديد") -> JSON {
         ["id": id, "school": "مدرسة الأمل", "text": text]
     }
+    @MainActor
+    func testOfflineLaunchDoesNotRequireRememberedSession() {
+        // Only the previous online verification and protected local archive
+        // matter: neither a cookie nor an active plan is an input.
+        XCTAssertTrue(V49OfflineLaunchRules.showLocalCoach(
+            networkUnavailable: true, hasVerifiedArchive: true))
+        XCTAssertFalse(V49OfflineLaunchRules.showLocalCoach(
+            networkUnavailable: false, hasVerifiedArchive: true))
+        XCTAssertFalse(V49OfflineLaunchRules.showLocalCoach(
+            networkUnavailable: true, hasVerifiedArchive: false))
+    }
+
+    @MainActor
+    func testFirstInstallOpensPublicGuestWithoutInternet() {
+        XCTAssertTrue(V49OfflineLaunchRules.showPublicGuest(
+            networkUnavailable: true, hasVerifiedArchive: false))
+        XCTAssertFalse(V49OfflineLaunchRules.showPublicGuest(
+            networkUnavailable: true, hasVerifiedArchive: true))
+        XCTAssertFalse(V49OfflineLaunchRules.showPublicGuest(
+            networkUnavailable: false, hasVerifiedArchive: false))
+    }
+
     func testInvalidAndDuplicateAdsAreExcluded() {
         let rows = [row(1), row(1), row(0), ["id": 2, "school": "", "text": "A"],
                     ["id": 3, "school": "S", "text": "A", "active": false]]
