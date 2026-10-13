@@ -22,9 +22,24 @@ BOUNDS = re.compile(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]")
 
 
 def adb(*args: str) -> bytes:
-    result = subprocess.run(["adb", *args], stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE, check=True, timeout=30)
-    return result.stdout
+    # API 26 cold-boot devices can take longer than 30 seconds to install an
+    # APK while the virtual disk is being initialized. This is emulator-side
+    # slowness, not an app launch failure.
+    installation = bool(args) and args[0] == "install"
+    timeout = 150 if installation else 30
+    attempts = 2 if installation else 1
+    for attempt in range(attempts):
+        try:
+            result = subprocess.run(["adb", *args], stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, check=True, timeout=timeout)
+            return result.stdout
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
+            if attempt + 1 == attempts:
+                raise
+            print("RETRY emulator APK install after device readiness check", flush=True)
+            subprocess.run(["adb", "wait-for-device"], check=True, timeout=60)
+            time.sleep(4)
+    raise AssertionError("APK installation retry unexpectedly exhausted")
 
 
 def ui_tree() -> tuple[ET.Element, bytes]:
