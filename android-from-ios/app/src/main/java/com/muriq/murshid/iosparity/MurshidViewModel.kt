@@ -226,7 +226,6 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
                     val bootstrap = api.get("mobile/bootstrap.php")
                     dashboard = StudentDashboard.from(bootstrap)
                     bindNoticesToStudent()
-                reconcileSchoolAds()
                     reconcileSchoolAds()
                     loadAccount()
                     tab = 0; screen = Screen.MAIN
@@ -249,7 +248,6 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
                     api.setRemember(pendingVerificationRemember)
                     dashboard = StudentDashboard.from(result)
                     bindNoticesToStudent()
-                reconcileSchoolAds()
                     reconcileSchoolAds()
                     tab = 0; screen = Screen.MAIN
                     loadAccount()
