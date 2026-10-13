@@ -105,15 +105,22 @@ final class V49StudyStore: ObservableObject {
         save()
     }
 
+    // Identity comes from a successful online bootstrap, independently of
+    // the "remember me" setting. Zero saved questions must not block launch.
+    func hasOfflineAccount() -> Bool {
+        let userID = UserDefaults.standard.integer(forKey: recentUserKey)
+        return userID > 0 && read(userID: userID) != nil
+    }
+
     func hasOfflineReview() -> Bool {
         let userID = UserDefaults.standard.integer(forKey: recentUserKey)
         return userID > 0 && !(read(userID: userID)?.records.isEmpty ?? true)
     }
 
-    // Called only after device authentication on the disconnected launch screen.
+    // Called only after iOS device-owner authentication.
     @discardableResult func openOfflineReview() -> Bool {
         let userID = UserDefaults.standard.integer(forKey: recentUserKey)
-        guard userID > 0, let saved = read(userID: userID), !saved.records.isEmpty else { return false }
+        guard userID > 0, let saved = read(userID: userID) else { return false }
         archive = saved
         return true
     }
@@ -457,7 +464,7 @@ struct V49OfflineAccessView: View {
                     Image(systemName: "books.vertical.circle.fill")
                         .font(.system(size: 50)).foregroundStyle(Color.murshidBlue)
                     Text("مراجعاتك محفوظة على الآيفون").font(.title3.bold())
-                    Text("افتح الأسئلة التي سبق تصحيحها بعد التحقق ببصمة الوجه أو رمز قفل الجهاز.")
+                    Text("افتح مدربي الذكي ومراجعاتك على هذا الجهاز بعد التحقق ببصمة الوجه أو رمز قفل الجهاز. لا يشترط تفعيل «تذكّرني».")
                         .font(.subheadline).multilineTextAlignment(.center).foregroundStyle(.secondary)
                     Button { authenticate() } label: {
                         HStack {
