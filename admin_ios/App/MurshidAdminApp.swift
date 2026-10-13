@@ -1524,64 +1524,14 @@ private struct PredictionsAdminScreen: View {
             VStack(alignment:.leading,spacing:15) {
                 ScreenTitle(text:"إدارة المرشحات",detail:"إضافة وتعديل وحذف وإيقاف المرشحات لكل مادة")
                 Note(state:state)
-                GlassBox {
-                    VStack(alignment:.leading,spacing:12) {
-                        Picker("الصف والمادة",selection:$selectedSubject) {
-                            Text("اختر مادة").tag(0)
-                            ForEach(state.predictionSubjects){ row in
-                                Text(s(row,"grade_name")+" — "+s(row,"name")).tag(num(row,"id"))
-                            }
-                        }
-                        .onChange(of:selectedSubject){ id in
-                            Task {
-                                await state.refreshPredictions(subjectID:id)
-                                manual=state.predictionMode=="manual"
-                            }
-                        }
-                        Toggle("عرض المرشحات التي تحددها الإدارة فقط",isOn:$manual)
-                        Button("حفظ طريقة العرض") {
-                            Task {
-                                if await state.mutation("prediction_mode",["subject_id":selectedSubject,"mode":manual ? "manual" : "automatic"],refresh:"") != nil {
-                                    await state.refreshPredictions(subjectID:selectedSubject)
-                                }
-                            }
-                        }
-                        .buttonStyle(.borderedProminent).disabled(selectedSubject == 0 || state.busy)
-                    }
-                }
+                subjectControls
                 Button {
                     editingRow=nil
                     showEditor=true
                 } label: { Label("إضافة مرشح",systemImage:"plus.circle.fill") }
-                .buttonStyle(.borderedProminent).disabled(selectedSubject==0)
-                ForEach(state.predictionRows){ row in
-                    GlassBox {
-                        VStack(alignment:.leading,spacing:10) {
-                            Text(s(row,"question_text")).font(.headline).fixedSize(horizontal:false,vertical:true)
-                            Text(s(row,"correct_answer")).font(.subheadline).foregroundStyle(Ink.faded)
-                            Text("الترتيب: "+s(row,"sort_order")+" · الدرجة: "+s(row,"prediction_score")+" · "+(num(row,"is_enabled")==1 ? "ظاهر" : "موقوف"))
-                                .font(.caption).foregroundStyle(Ink.faded)
-                            HStack {
-                                Button("تعديل") {
-                                    editingRow=row
-                                    showEditor=true
-                                }.buttonStyle(.bordered)
-                                Button(num(row,"is_enabled")==1 ? "إيقاف" : "تفعيل") {
-                                    Task {
-                                        if await state.mutation("prediction_toggle",["subject_id":selectedSubject,"id":num(row,"id")],refresh:"") != nil {
-                                            await state.refreshPredictions(subjectID:selectedSubject)
-                                        }
-                                    }
-                                }.buttonStyle(.bordered)
-                                Button("حذف",role:.destructive) {deletion=num(row,"id")}.buttonStyle(.bordered)
-                            }
-                        }
-                    }
-                }
-                if state.predictionRows.isEmpty {
-                    Text("لا توجد مرشحات مضافة من الإدارة لهذه المادة.")
-                        .foregroundStyle(Ink.faded).font(.footnote)
-                }
+                .buttonStyle(.borderedProminent)
+                .disabled(selectedSubject==0)
+                predictionsList
             }.padding(16)
         }
         .adminBG()
@@ -1611,6 +1561,80 @@ private struct PredictionsAdminScreen: View {
             }
             Button("إلغاء",role:.cancel){deletion=nil}
         } message: {Text("سيُحذف المرشح المحدد من هذه المادة.")}
+    }
+    private var subjectControls: some View {
+        GlassBox {
+            VStack(alignment:.leading,spacing:12) {
+                Picker("الصف والمادة",selection:$selectedSubject) {
+                    Text("اختر مادة").tag(0)
+                    ForEach(state.predictionSubjects) { row in
+                        Text(s(row,"grade_name")+" — "+s(row,"name")).tag(num(row,"id"))
+                    }
+                }
+                .onChange(of:selectedSubject){ id in
+                    Task {
+                        await state.refreshPredictions(subjectID:id)
+                        manual=state.predictionMode=="manual"
+                    }
+                }
+                Toggle("عرض المرشحات التي تحددها الإدارة فقط",isOn:$manual)
+                Button("حفظ طريقة العرض") {
+                    Task {
+                        let payload:J = ["subject_id":selectedSubject,"mode":manual ? "manual" : "automatic"]
+                        if await state.mutation("prediction_mode",payload,refresh:"") != nil {
+                            await state.refreshPredictions(subjectID:selectedSubject)
+                        }
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(selectedSubject == 0 || state.busy)
+            }
+        }
+    }
+    private var predictionsList: some View {
+        VStack(alignment:.leading,spacing:12) {
+            ForEach(state.predictionRows) { row in
+                PredictionAdminRow(row:row,edit:{
+                    editingRow=row
+                    showEditor=true
+                },toggle:{
+                    Task {
+                        let payload:J=["subject_id":selectedSubject,"id":num(row,"id")]
+                        if await state.mutation("prediction_toggle",payload,refresh:"") != nil {
+                            await state.refreshPredictions(subjectID:selectedSubject)
+                        }
+                    }
+                },delete:{ deletion=num(row,"id") })
+            }
+            if state.predictionRows.isEmpty {
+                Text("لا توجد مرشحات مضافة من الإدارة لهذه المادة.")
+                    .foregroundStyle(Ink.faded).font(.footnote)
+            }
+        }
+    }
+}
+private struct PredictionAdminRow:View {
+    let row:J
+    let edit:()->Void
+    let toggle:()->Void
+    let delete:()->Void
+    private var statusText:String {
+        "الترتيب: "+s(row,"sort_order")+" · الدرجة: "+s(row,"prediction_score")+" · "+(num(row,"is_enabled")==1 ? "ظاهر" : "موقوف")
+    }
+    var body:some View {
+        GlassBox {
+            VStack(alignment:.leading,spacing:10) {
+                Text(s(row,"question_text")).font(.headline)
+                    .fixedSize(horizontal:false,vertical:true)
+                Text(s(row,"correct_answer")).font(.subheadline).foregroundStyle(Ink.faded)
+                Text(statusText).font(.caption).foregroundStyle(Ink.faded)
+                HStack {
+                    Button("تعديل",action:edit).buttonStyle(.bordered)
+                    Button(num(row,"is_enabled")==1 ? "إيقاف" : "تفعيل",action:toggle).buttonStyle(.bordered)
+                    Button("حذف",role:.destructive,action:delete).buttonStyle(.bordered)
+                }
+            }
+        }
     }
 }
 private struct PredictionEditor: View {
