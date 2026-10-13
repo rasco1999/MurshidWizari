@@ -12,6 +12,7 @@ import com.muriq.murshid.iosparity.net.MurshidApi
 import com.muriq.murshid.iosparity.net.PasswordRecovery
 import com.muriq.murshid.iosparity.notifications.NoticeDelivery
 import com.muriq.murshid.iosparity.notifications.NoticeInbox
+import com.muriq.murshid.iosparity.notifications.SchoolFirebasePush
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -498,10 +499,12 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
             noticeError = ""
         }
         noticeDelivery.bind(id, api.hasSavedSession())
+        SchoolFirebasePush.attach(getApplication(), api, id, dashboard?.csrf.orEmpty())
         syncNotices(silent = true)
     }
 
     private fun clearNotices() {
+        SchoolFirebasePush.detach(getApplication())
         noticeDelivery.clear()
         noticeBoundStudentId = 0
         noticeInbox = NoticeInbox(0, emptyList())
@@ -883,7 +886,8 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val token = dashboard?.csrf.orEmpty()
-                if (token.isNotBlank()) api.post("mobile/logout.php", JSONObject().put("csrf", token))
+                if (token.isNotBlank()) api.post("mobile/logout.php",
+                    SchoolFirebasePush.logoutPayload(getApplication(), token))
             } catch (_: Exception) {
                 // Always let the student explicitly clear their own local credentials.
             } finally {
