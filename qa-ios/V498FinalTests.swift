@@ -27,6 +27,28 @@ final class V498FinalTests: XCTestCase {
             networkUnavailable: false, hasVerifiedArchive: false))
     }
 
+    @MainActor
+    func testSessionExpiryDoesNotEraseLocallySavedStudentWhenRememberOff() {
+        // Simulates a student who previously authenticated but did not
+        // persist a web login session: local study is independent of cookies.
+        let id = 98765012
+        let user = UserSummary(id: id, name: "طالب اختبار محلي", grade: "الثالث المتوسط", gradeID: 1)
+        let store = V49StudyStore.shared
+        store.eraseOnLogout(userID: id)
+        defer { store.eraseOnLogout(userID: id) }
+        store.bind(to: user)
+        XCTAssertTrue(store.hasOfflineAccount())
+
+        let session = AppSession.shared
+        session.user = user
+        session.reset(expired: true)
+        XCTAssertTrue(store.hasOfflineAccount(), "A server cookie expiring must not delete cached review")
+
+        session.user = user
+        session.reset(eraseOfflineStudy: true)
+        XCTAssertFalse(store.hasOfflineAccount(), "Explicit sign-out must revoke the cached notebook")
+    }
+
     func testInvalidAndDuplicateAdsAreExcluded() {
         let rows = [row(1), row(1), row(0), ["id": 2, "school": "", "text": "A"],
                     ["id": 3, "school": "S", "text": "A", "active": false]]
