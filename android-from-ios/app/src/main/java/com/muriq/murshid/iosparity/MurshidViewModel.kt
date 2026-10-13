@@ -677,6 +677,33 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun createStudyPlan(title: String, days: Int, target: Int) {
+        val issue = com.muriq.murshid.iosparity.data.StudyPlanRules.error(title, days, target)
+        if (issue != null) { message = issue; return }
+        val csrf = dashboard?.csrf.orEmpty()
+        if (csrf.isBlank() || loading) { message = "يجب تسجيل الدخول أولًا."; return }
+        viewModelScope.launch {
+            loading = true
+            try {
+                val response = api.post("mobile/study-plan.php", JSONObject()
+                    .put("csrf", csrf)
+                    .put("title", title.trim())
+                    .put("days", days)
+                    .put("target", target))
+                if (response.optJSONArray("plans") != null) featureData = response
+                else {
+                    // The backend owns the canonical plan list; reload instead of guessing.
+                    featureData = api.get("mobile/study-plan.php")
+                }
+                message = "تم إنشاء الخطة."
+            } catch (error: Exception) {
+                if (error is ApiProblem && error.code == -1) {
+                    message = "حالة إنشاء الخطة غير مؤكدة. حدّث خططك قبل إعادة الإرسال."
+                } else fail(error)
+            } finally { loading = false }
+        }
+    }
+
     fun clearPaymentUrl() { paymentUrl = "" }
 
     fun checkout(planId: String, phone: String) {

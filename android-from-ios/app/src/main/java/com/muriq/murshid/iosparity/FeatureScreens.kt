@@ -24,6 +24,7 @@ import org.json.JSONObject
 @Composable
 fun FeatureScreen(vm: MurshidViewModel) {
     when (vm.feature) {
+        Feature.STUDY_PLAN -> StudyPlanScreen(vm)
         Feature.SUBSCRIPTION -> SubscriptionScreen(vm)
         Feature.ACCOUNT -> AccountDetailsScreen(vm)
         Feature.SUPPORT -> SupportScreen(vm)
@@ -255,6 +256,75 @@ private fun QuestionRequestScreen(vm: MurshidViewModel) {
                     enabled = vm.topic != null && !vm.loading)
             }
         }
+    }
+}
+
+@Composable
+private fun StudyPlanScreen(vm: MurshidViewModel) {
+    var name by remember { mutableStateOf("خطتي الوزارية") }
+    var days by remember { mutableStateOf("30") }
+    var dailyTarget by remember { mutableStateOf("20") }
+    var validationError by remember { mutableStateOf("") }
+    val plans = vm.featureData.array("plans")
+    LazyColumn(
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item { SectionTitle("المتابعة", "خطة الدراسة",
+            "أنشئ خطة يومية لتقسيم الأسئلة ومتابعة إنجازك.") }
+        item {
+            MurshidCard {
+                Text("خطة جديدة", fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleLarge)
+                OutlinedTextField(
+                    value = name, onValueChange = { name = it; validationError = "" },
+                    label = { Text("اسم الخطة") }, modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = days, onValueChange = { days = it.filter(Char::isDigit).take(3); validationError = "" },
+                    label = { Text("المدة (يوم) — من 1 إلى 365") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                    ), modifier = Modifier.fillMaxWidth(), singleLine = true
+                )
+                OutlinedTextField(
+                    value = dailyTarget, onValueChange = {
+                        dailyTarget = it.filter(Char::isDigit).take(3)
+                        validationError = ""
+                    },
+                    label = { Text("الهدف اليومي (سؤال) — من 5 إلى 500") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                    ), modifier = Modifier.fillMaxWidth(), singleLine = true
+                )
+                if (validationError.isNotBlank()) {
+                    Text(validationError, color = MaterialTheme.colorScheme.error)
+                }
+                PrimaryAction("إنشاء الخطة", {
+                    val duration = days.toIntOrNull() ?: 0
+                    val target = dailyTarget.toIntOrNull() ?: 0
+                    val issue = com.muriq.murshid.iosparity.data.StudyPlanRules.error(
+                        name, duration, target)
+                    if (issue != null) validationError = issue
+                    else vm.createStudyPlan(name, duration, target)
+                }, enabled = !vm.loading)
+            }
+        }
+        item { SectionTitle("خططي", "الخطط الدراسية المحفوظة") }
+        if (plans.isEmpty()) {
+            item { EmptyPanel("لم تُنشأ أي خطة دراسية بعد.") }
+        } else {
+            items(plans) { plan ->
+                MurshidCard {
+                    Text(plan.text("title"), fontWeight = FontWeight.Bold)
+                    Text(plan.text("start_date") + " ← " + plan.text("end_date"),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${plan.num("daily_target")} سؤال/يوم", color = MurshidBlue)
+                }
+            }
+        }
+        item { SecondaryAction("تحديث الخطط", vm::loadFeature) }
     }
 }
 
