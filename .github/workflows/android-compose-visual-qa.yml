@@ -1,0 +1,58 @@
+name: Native Android guest-screen emulator visual QA
+on:
+  push:
+    branches: [android-from-ios-compose]
+    paths:
+      - 'android-from-ios/**'
+      - '.github/workflows/android-compose-visual-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Build debug APK for visual launch test
+        working-directory: android-from-ios
+        run: gradle --no-daemon :app:assembleDebug
+      - name: Emulator screenshots and app-launch smoke check
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -no-audio -gpu swiftshader_indirect -no-snapshot -no-boot-anim
+          script: |
+            set -euo pipefail
+            adb install -r android-from-ios/app/build/outputs/apk/debug/app-debug.apk
+            adb shell am start -W -n com.muriq.murshid.iosparity/.MainActivity
+            sleep 9
+            mkdir -p android-from-ios/visual-qa
+            adb shell screencap -p /sdcard/Download/guest.png
+            adb pull /sdcard/Download/guest.png android-from-ios/visual-qa/guest.png
+            adb shell uiautomator dump /sdcard/Download/ui.xml >/dev/null
+            adb pull /sdcard/Download/ui.xml android-from-ios/visual-qa/ui.xml
+            adb shell pidof com.muriq.murshid.iosparity
+            if adb logcat -d -s AndroidRuntime:E | grep -E 'FATAL EXCEPTION|Process: com.muriq.murshid.iosparity'; then
+              echo 'Android runtime crash detected'
+              exit 1
+            fi
+      - name: Save screenshot and semantic view tree
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Native-Android-Guest-Visual-QA
+          path: android-from-ios/visual-qa/
+          retention-days: 30
+          if-no-files-found: warn
