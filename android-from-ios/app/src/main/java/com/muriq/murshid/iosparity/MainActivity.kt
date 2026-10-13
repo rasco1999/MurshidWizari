@@ -440,6 +440,18 @@ private fun GuestLandingScreen(onLogin: () -> Unit, onRegister: () -> Unit) {
         LandingItem("خدمة العملاء",
             "عند وجود مشكلة في الحساب أو الاشتراك أو استخدام الموقع، استخدم زر خدمة العملاء الموجود داخل المنصة بعد الدخول لإرسال طلب الدعم.")
     )
+    // Visually paired with the eight SF Symbols and seven instruction icons
+    // in the iOS GuestLandingView. Icons are decorative, labels stay accessible.
+    val featureIcons = listOf(
+        Icons.Default.ListAlt, Icons.Default.Psychology, Icons.Default.Security,
+        Icons.Default.CardGiftcard, Icons.Default.CreditCard, Icons.Default.BarChart,
+        Icons.Default.Sync, Icons.Default.SupportAgent
+    )
+    val instructionIcons = listOf(
+        Icons.Default.VerifiedUser, Icons.Default.FactCheck, Icons.Default.CardGiftcard,
+        Icons.Default.TrendingUp, Icons.Default.EmojiEvents, Icons.Default.Security,
+        Icons.Default.HeadsetMic
+    )
     fun open(url: String) {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     }
@@ -513,21 +525,68 @@ private fun GuestLandingScreen(onLogin: () -> Unit, onRegister: () -> Unit) {
         }
         item { SectionTitle("لماذا المرشد؟", "كل ما تحتاجه للمراجعة",
             "تعلم خطوة بخطوة وراجع تقدمك بوضوح.") }
-        items(features) { feature ->
+        items(features.size) { index ->
+            val feature = features[index]
             MurshidCard {
-                Text(feature.title, fontWeight = FontWeight.Bold)
-                Text(feature.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(13.dp)
+                ) {
+                    Box(
+                        modifier = Modifier.size(34.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MurshidBlue.copy(alpha = 0.10f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            featureIcons[index],
+                            contentDescription = null,
+                            tint = MurshidBlue,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Text(feature.title, fontWeight = FontWeight.Bold)
+                        Text(feature.description,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
         }
         item { SectionTitle("تعليمات الاستخدام", "كيف تبدأ وتستفيد من المنصة") }
         items(rules.size) { index ->
             val rule = rules[index]
             MurshidCard {
-                Row(verticalAlignment = Alignment.Top) {
-                    Text((index + 1).toString(), color = MurshidBlue,
-                        fontWeight = FontWeight.Bold, modifier = Modifier.width(30.dp))
-                    Column {
-                        Text(rule.title, fontWeight = FontWeight.Bold)
+                Row(
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(13.dp)
+                ) {
+                    Box(
+                        Modifier.size(46.dp).clip(RoundedCornerShape(12.dp))
+                            .background(MurshidBlue.copy(alpha = 0.10f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            (index + 1).toString().padStart(2, '0'),
+                            fontWeight = FontWeight.Bold,
+                            color = MurshidBlue
+                        )
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(7.dp)
+                        ) {
+                            Icon(instructionIcons[index], contentDescription = null,
+                                tint = MurshidBlue, modifier = Modifier.size(18.dp))
+                            Text(rule.title, fontWeight = FontWeight.Bold)
+                        }
                         Text(rule.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
