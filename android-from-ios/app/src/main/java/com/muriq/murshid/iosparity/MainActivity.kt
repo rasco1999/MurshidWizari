@@ -7,6 +7,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -64,6 +66,23 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Request up to 120Hz only where the device supports that refresh mode
+        // at the same physical resolution. Android ultimately controls frame pacing.
+        if (android.os.Build.VERSION.SDK_INT >= 23) {
+            val display = windowManager.defaultDisplay
+            val current = display.mode
+            val best = display.supportedModes.filter { mode ->
+                mode.physicalWidth == current.physicalWidth &&
+                    mode.physicalHeight == current.physicalHeight
+            }.maxByOrNull { mode ->
+                com.muriq.murshid.iosparity.data.DisplayRefreshRules.priority(mode.refreshRate)
+            }
+            if (best != null &&
+                com.muriq.murshid.iosparity.data.DisplayRefreshRules.priority(best.refreshRate) >
+                com.muriq.murshid.iosparity.data.DisplayRefreshRules.priority(current.refreshRate)) {
+                window.attributes = window.attributes.apply { preferredDisplayModeId = best.modeId }
+            }
+        }
         captureNotificationIntent(intent)
         setContent {
             val vm: MurshidViewModel = viewModel()
@@ -205,12 +224,17 @@ fun AppShell(vm: MurshidViewModel) {
                 Screen.REGISTER -> RegisterScreen(vm)
                 Screen.RECOVER -> RecoveryScreen(vm)
                 Screen.VERIFY -> VerificationScreen(vm)
-                Screen.MAIN -> when (vm.tab) {
-                    0 -> DashboardScreen(vm)
-                    1 -> TestsScreen(vm)
-                    2 -> PredictionsTab(vm)
-                    3 -> AdvertisementsTab(vm)
-                    else -> AccountTab(vm)
+                Screen.MAIN -> Crossfade(
+                    targetState = vm.tab, animationSpec = tween(durationMillis = 120),
+                    label = "student-tab-transition"
+                ) { index ->
+                    when (index) {
+                        0 -> DashboardScreen(vm)
+                        1 -> TestsScreen(vm)
+                        2 -> PredictionsTab(vm)
+                        3 -> AdvertisementsTab(vm)
+                        else -> AccountTab(vm)
+                    }
                 }
                 Screen.TOPICS -> TopicsScreen(vm)
                 Screen.EXAM -> ExamScreen(vm)
