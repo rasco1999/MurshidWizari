@@ -1,0 +1,52 @@
+name: Android Live Endpoint Read-Only Smoke
+on:
+  workflow_dispatch:
+  push:
+    branches: [android-native]
+    paths:
+      - '.github/workflows/android-live-endpoint-smoke.yml'
+permissions:
+  contents: read
+jobs:
+  public-reachability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify TLS and public homepage, without authentication or account writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          HOST="www.mur-iq.com"
+          echo "Resolving ${HOST}"
+          getent ahostsv4 "$HOST" | head -n 3
+          curl --fail --location --silent --show-error \
+            --connect-timeout 12 --max-time 30 --retry 2 --retry-all-errors \
+            --output /tmp/murshid-home.html \
+            --write-out 'Homepage HTTP %{http_code}, TLS verify=%{ssl_verify_result}, total=%{time_total}s\n' \
+            "https://$HOST/"
+          test -s /tmp/murshid-home.html
+          echo "Homepage responded with content."
+      - name: Inspect unauthenticated mobile endpoints (GET only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in mobile/bootstrap.php mobile/app-config.php; do
+            url="https://www.mur-iq.com/$path"
+            code=$(curl --location --silent --show-error \
+              --connect-timeout 12 --max-time 30 \
+              --output /tmp/murshid-endpoint.json --write-out '%{http_code}' "$url")
+            echo "$path returned HTTP $code"
+            case "$code" in
+              200)
+                test -s /tmp/murshid-endpoint.json
+                # The unauthenticated endpoint may return JSON or an HTML
+                # login screen; we do not assume access to a student account.
+                ;;
+              401|403)
+                echo "Authentication required or access denied; no credentials sent."
+                ;;
+              *)
+                echo "::warning::$path unexpected status $code. Do not treat this as authenticated API acceptance."
+                ;;
+            esac
+          done
