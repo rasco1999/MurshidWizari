@@ -635,7 +635,7 @@ private fun RegisterScreen(vm: MurshidViewModel) {
         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item { AuthHeading("أنشئ حسابك بخطوات واضحة كما في تطبيق الآيفون") }
+        item { AuthHeading("أنشئ حساب الطالب وابدأ المراجعة") }
         item {
             MurshidCard {
                 Text("الخطوة " + step.toString() + " من 3", color = MurshidBlue,
