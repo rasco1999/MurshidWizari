@@ -397,7 +397,7 @@ fun AccountTab(vm: MurshidViewModel) {
                     Switch(
                         checked = vm.biometricEnabled,
                         enabled = supported && vm.api.hasSavedSession(),
-                        onCheckedChange = vm::setBiometricEnabled
+                        onCheckedChange = vm::updateBiometricEnabled
                     )
                 }
                 if (!supported) Text("هذا الجهاز لا يدعم طريقة تحقق آمنة مفعّلة حالياً.")

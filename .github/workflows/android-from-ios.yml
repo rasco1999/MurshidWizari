@@ -33,6 +33,12 @@ jobs:
           grep -q 'android:allowBackup="false"' app/src/main/AndroidManifest.xml
           grep -q 'https://www.mur-iq.com/' app/src/main/java/com/muriq/murshid/iosparity/net/MurshidApi.kt
           test -f app/src/main/java/com/muriq/murshid/iosparity/data/QuestionPresentation.kt
+      - name: Latest iPhone compatibility invariants
+        working-directory: android-from-ios
+        run: |
+          grep -Fq 'IosPortRules.visibleTabs' app/src/main/java/com/muriq/murshid/iosparity/MainActivity.kt
+          grep -Fq 'Five tabs stay visible' app/src/main/java/com/muriq/murshid/iosparity/data/IosPortRules.kt
+          ! grep -R -nE 'android.speech.tts|TextToSpeech' app/src/main/java
       - name: Build fresh native Compose app
         working-directory: android-from-ios
         run: gradle --no-daemon --stacktrace :app:assembleDebug

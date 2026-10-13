@@ -159,8 +159,7 @@ fun AppShell(vm: MurshidViewModel) {
                         Icons.Default.Home, Icons.Default.Checklist, Icons.Default.GpsFixed,
                         Icons.Default.Campaign, Icons.Default.Person
                     )
-                    val visibleTabs = if (vm.dashboard?.subscribed == true)
-                        listOf(0, 1, 2, 3, 4) else listOf(0, 1, 3, 4)
+                    val visibleTabs = com.muriq.murshid.iosparity.data.IosPortRules.visibleTabs(vm.dashboard?.subscribed == true)
                     visibleTabs.forEach { index ->
                         val label = tabTitles[index]
                         NavigationBarItem(
