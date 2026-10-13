@@ -20,6 +20,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.muriq.murshid.iosparity.MainActivity
+import com.muriq.murshid.iosparity.R
 import com.muriq.murshid.iosparity.data.SchoolAdReadRules
 import com.muriq.murshid.iosparity.data.StudentDashboard
 import org.json.JSONObject
@@ -135,7 +136,7 @@ class NoticeDelivery(private val context: Context) {
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
                 val notification = NotificationCompat.Builder(context, CHANNEL)
-                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setSmallIcon(R.drawable.ic_murshid_status)
                     .setContentTitle("إعلان مدرسة جديد")
                     .setContentText(schoolName.ifBlank { "افتح الإعلانات للاطلاع على التفاصيل." })
                     .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
@@ -176,7 +177,7 @@ class NoticeDelivery(private val context: Context) {
         )
         val content = notice.body.ifBlank { "لديك إشعار جديد في حسابك." }
         val notification = NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_murshid_status)
             .setContentTitle(notice.title.ifBlank { "المرشد الوزاري" })
             .setContentText(content)
             .setStyle(NotificationCompat.BigTextStyle().bigText(content))

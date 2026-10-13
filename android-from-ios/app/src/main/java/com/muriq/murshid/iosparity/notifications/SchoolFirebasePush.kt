@@ -16,6 +16,7 @@ import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.muriq.murshid.iosparity.MainActivity
+import com.muriq.murshid.iosparity.R
 import com.muriq.murshid.iosparity.net.MurshidApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -195,7 +196,7 @@ object SchoolFirebasePush {
         val pending = PendingIntent.getActivity(app, 8120, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(app, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_murshid_status)
             .setContentTitle(if (school) "إعلان مدرسة جديد" else "إشعار جديد من المرشد الوزاري")
             .setContentText("افتح التطبيق للاطلاع على التفاصيل.")
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)

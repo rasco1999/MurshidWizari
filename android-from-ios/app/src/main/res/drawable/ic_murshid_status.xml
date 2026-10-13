@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <!-- Monochrome schoolhouse silhouette; Android status-bar small icons must be alpha-only. -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M12,2 L22,8 L12,14 L2,8 Z M4,11 L4,20 L20,20 L20,11 L12,16 Z"/>
+</vector>

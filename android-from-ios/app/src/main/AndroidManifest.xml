@@ -6,8 +6,8 @@
     <application
         android:name=".MurshidNativeApplication"
         android:label="منصة المرشد الوزاري"
-        android:icon="@drawable/murshid_original"
-        android:roundIcon="@drawable/murshid_original"
+        android:icon="@mipmap/ic_murshid_adaptive"
+        android:roundIcon="@mipmap/ic_murshid_adaptive"
         android:allowBackup="false"
         android:usesCleartextTraffic="false"
         android:supportsRtl="true"
