@@ -761,7 +761,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
             } catch (_: Exception) {
                 // Always let the student explicitly clear their own local credentials.
             } finally {
-                setBiometricEnabled(false)
+                updateBiometricEnabled(false)
                 clearNotices(); api.clearSession(); dashboard = null; featureData = JSONObject()
                 screen = Screen.GUEST; tab = 0; clearMessage()
             }
