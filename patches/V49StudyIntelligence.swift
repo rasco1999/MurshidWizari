@@ -4,6 +4,18 @@ import LocalAuthentication
 
 // MARK: - iPhone-only v4.9: previously graded questions, never an offline paid exam
 
+// Offline access is not derived from a remembered web session or subscription.
+enum V49OfflineLaunchRules {
+    static func showLocalCoach(networkUnavailable: Bool, hasVerifiedArchive: Bool) -> Bool {
+        networkUnavailable && hasVerifiedArchive
+    }
+
+    static func showPublicGuest(networkUnavailable: Bool, hasVerifiedArchive: Bool) -> Bool {
+        networkUnavailable && !hasVerifiedArchive
+    }
+}
+
+
 struct V49StudyRecord: Identifiable, Codable, Hashable {
     let id: Int
     let subjectID: Int
