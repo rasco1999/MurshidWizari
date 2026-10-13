@@ -95,14 +95,3 @@ final class MurshidSchoolAdPush: NSObject, UNUserNotificationCenterDelegate {
     }
 }
 
-// Preserve all existing application delegate behavior; add APNs callbacks only.
-extension MurshidAppDelegate {
-    func application(_ application: UIApplication,
-                     didRegisterForRemoteNotificationsWithDeviceToken token: Data) {
-        Task { @MainActor in MurshidSchoolAdPush.shared.receivedToken(token) }
-    }
-    func application(_ application: UIApplication,
-                     didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        // App remains functional with no APNs entitlement or on the simulator.
-    }
-}

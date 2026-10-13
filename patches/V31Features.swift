@@ -1671,54 +1671,31 @@ extension APIClient {
     }
 }
 
-// MARK: - APNs client registration (server endpoint is included in the matching website patch)
+// MARK: - APNs registration for school advertisements.
 
 final class MurshidAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-        UNUserNotificationCenter.current().delegate = self
-        #if !V498_QA
-        Task {
-            let center = UNUserNotificationCenter.current()
-            let granted = (try? await center.requestAuthorization(options: [.alert, .badge, .sound])) ?? false
-            if granted { await MainActor.run { UIApplication.shared.registerForRemoteNotifications() } }
-        }
-        #endif
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        Task { @MainActor in MurshidSchoolAdPush.shared.configure() }
         return true
     }
-
-    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        let token = deviceToken.map { String(format: "%02x", $0) }.joined()
-        UserDefaults.standard.set(token, forKey: "apns_device_token")
-        Task { await V31PushRegistrar.syncIfPossible() }
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken token: Data) {
+        Task { @MainActor in MurshidSchoolAdPush.shared.receivedToken(token) }
     }
-
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        UserDefaults.standard.set(error.localizedDescription, forKey: "apns_last_error")
+        // The app still displays school ads in-app if the signing profile has no APNs entitlement.
     }
-
-    nonisolated func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-    ) {
-        completionHandler([.banner, .sound, .badge])
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([])
     }
 }
 
 @MainActor
 enum V31PushRegistrar {
     static func syncIfPossible() async {
-        let token = UserDefaults.standard.string(forKey: "apns_device_token") ?? ""
-        let csrf = AppSession.shared.csrf
-        guard !token.isEmpty, !csrf.isEmpty, AppSession.shared.v3Authenticated else { return }
-        do {
-            _ = try await APIClient.shared.request("mobile/apns-register.php", method: "POST", body: [
-                "csrf": csrf,
-                "token": token,
-                "bundle_id": "com.muriq.murshid",
-                "platform": "ios"
-            ])
-        } catch { }
+        MurshidSchoolAdPush.shared.activate()
     }
 }
 
