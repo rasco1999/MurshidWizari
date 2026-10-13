@@ -18,26 +18,49 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 // Derived from the iOS patches/ThemeV34.swift rather than a prior Android application.
-val MurshidNavy = Color(0xFF0B1F33)
-val MurshidBlue = Color(0xFF2D6CDF)
-val MurshidGold = Color(0xFFF5B83D)
+data class MurshidPalette(val navy: Color, val primary: Color, val accent: Color, val secondary: Color)
+
+/** Exact iPhone palette alternatives from patches/ThemeV34.swift, rounded to 8-bit sRGB. */
+object MurshidPaletteOptions {
+    val names = listOf("royal", "aurora", "orchid")
+    fun forName(value: String): MurshidPalette = when (value) {
+        "aurora" -> MurshidPalette(Color(0xFF062734), Color(0xFF097275),
+            Color(0xFF5EE8C7), Color(0xFF38ABE8))
+        "orchid" -> MurshidPalette(Color(0xFF20153D), Color(0xFF6C48A6),
+            Color(0xFFFDA3D1), Color(0xFFBA6EE0))
+        else -> MurshidPalette(Color(0xFF0B1F33), Color(0xFF2D6CDF),
+            Color(0xFFF5B83D), Color(0xFF1748AE))
+    }
+}
+
+private val LocalMurshidPalette = androidx.compose.runtime.staticCompositionLocalOf {
+    MurshidPaletteOptions.forName("royal")
+}
+val MurshidNavy: Color @Composable get() = LocalMurshidPalette.current.navy
+val MurshidBlue: Color @Composable get() = LocalMurshidPalette.current.primary
+val MurshidGold: Color @Composable get() = LocalMurshidPalette.current.accent
+val MurshidAccentSecondary: Color @Composable get() = LocalMurshidPalette.current.secondary
+
 private val DarkSurface = Color(0xFF17283D)
 private val LightBackground = Color(0xFFF2F4F8)
 
 @Composable
-fun MurshidTheme(dark: Boolean, content: @Composable () -> Unit) {
+fun MurshidTheme(dark: Boolean, palette: String, content: @Composable () -> Unit) {
+    val chosen = MurshidPaletteOptions.forName(palette)
     val colors = if (dark) darkColorScheme(
-        primary = Color(0xFF8AB3FF), onPrimary = MurshidNavy,
+        primary = chosen.primary, onPrimary = Color.White,
         background = Color(0xFF0D1724), onBackground = Color(0xFFF2F6FB),
         surface = DarkSurface, onSurface = Color(0xFFF2F6FB),
         surfaceVariant = Color(0xFF22354C), onSurfaceVariant = Color(0xFFC0D0E1)
     ) else lightColorScheme(
-        primary = MurshidBlue, onPrimary = Color.White,
-        background = LightBackground, onBackground = MurshidNavy,
-        surface = Color.White, onSurface = MurshidNavy,
+        primary = chosen.primary, onPrimary = Color.White,
+        background = LightBackground, onBackground = chosen.navy,
+        surface = Color.White, onSurface = chosen.navy,
         surfaceVariant = Color(0xFFEEF2FA), onSurfaceVariant = Color(0xFF52657A)
     )
-    MaterialTheme(colorScheme = colors, content = content)
+    androidx.compose.runtime.CompositionLocalProvider(LocalMurshidPalette provides chosen) {
+        MaterialTheme(colorScheme = colors, content = content)
+    }
 }
 
 @Composable
@@ -69,7 +92,7 @@ fun PrimaryAction(
         contentPadding = PaddingValues(horizontal = 16.dp),
         modifier = modifier.fillMaxWidth().heightIn(min = 52.dp)
             .clip(RoundedCornerShape(17.dp))
-            .background(Brush.linearGradient(listOf(MurshidBlue, Color(0xFF1748AE)))),
+            .background(Brush.linearGradient(listOf(MurshidBlue, MurshidAccentSecondary))),
         colors = ButtonDefaults.buttonColors(
             containerColor = Color.Transparent,
             contentColor = Color.White,
@@ -137,14 +160,15 @@ fun SectionTitle(kicker: String, title: String, subtitle: String = "") {
 }
 
 @Composable
-fun SmallPill(text: String, color: Color = MurshidBlue) {
+fun SmallPill(text: String, color: Color? = null) {
+    val pillColor = color ?: MurshidBlue
     Box(
         Modifier.clip(RoundedCornerShape(50))
-            .background(color.copy(alpha = 0.11f))
+            .background(pillColor.copy(alpha = 0.11f))
             .padding(horizontal = 10.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(text, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = color)
+        Text(text, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = pillColor)
     }
 }
 
@@ -161,7 +185,7 @@ fun HeroPanel(
             .clip(RoundedCornerShape(28.dp))
             .background(
                 Brush.linearGradient(
-                    listOf(MurshidNavy, Color(0xFF0D3B85), MurshidBlue)
+                    listOf(MurshidNavy, MurshidAccentSecondary, MurshidBlue)
                 )
             )
             .padding(20.dp),

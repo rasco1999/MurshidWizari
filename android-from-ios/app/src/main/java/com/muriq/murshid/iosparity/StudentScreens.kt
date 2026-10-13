@@ -415,6 +415,21 @@ fun AccountTab(vm: MurshidViewModel) {
         }
         item {
             MurshidCard {
+                Text("ألوان التطبيق", fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("royal" to "ملكي", "aurora" to "أورورا", "orchid" to "بنفسجي")
+                        .forEach { (id, label) ->
+                            FilterChip(
+                                selected = vm.studentPalette == id,
+                                onClick = { vm.changeStudentPalette(id) },
+                                label = { Text(label, fontSize = 12.sp) }
+                            )
+                        }
+                }
+            }
+        }
+        item {
+            MurshidCard {
                 Text("المظهر", fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("light" to "فاتح", "dark" to "داكن", "system" to "النظام").forEach { (mode, text) ->

@@ -64,6 +64,16 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = app.getSharedPreferences("murshid_compose_preferences", 0)
     var appearance by mutableStateOf(prefs.getString("appearance", "system") ?: "system")
         private set
+    var studentPalette by mutableStateOf(
+        prefs.getString("student_palette", "royal")?.takeIf { it in setOf("royal", "aurora", "orchid") }
+            ?: "royal"
+    )
+        private set
+    fun changeStudentPalette(value: String) {
+        if (value !in setOf("royal", "aurora", "orchid")) return
+        studentPalette = value
+        prefs.edit().putString("student_palette", value).apply()
+    }
     var screen by mutableStateOf(Screen.GUEST)
         private set
     var tab by mutableStateOf(0)

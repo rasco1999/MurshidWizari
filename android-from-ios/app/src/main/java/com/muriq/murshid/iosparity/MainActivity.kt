@@ -111,7 +111,7 @@ class MainActivity : ComponentActivity() {
                 "light" -> false
                 else -> systemDark
             }
-            MurshidTheme(dark) {
+            MurshidTheme(dark, vm.studentPalette) {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     AppShell(vm)
                 }
