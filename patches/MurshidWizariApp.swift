@@ -98,8 +98,21 @@ struct MurshidWizariApp: App {
                 }
             }
             .onChange(of: device.isOnline) { online in
-                guard online, bootstrapNeedsNetworkRetry else { return }
-                Task { @MainActor in beginBootstrap() }
+                Task { @MainActor in
+                    if !online, app.bootstrapping, !app.v3Authenticated {
+                        // The network monitor can report no connection after launch.
+                        bootstrapAttempt += 1
+                        bootstrapTask?.cancel()
+                        bootstrapTimeoutTask?.cancel()
+                        bootstrapTask = nil
+                        bootstrapTimeoutTask = nil
+                        app.bootstrapping = false
+                        app.bootstrapNetworkFailed = true
+                        bootstrapNeedsNetworkRetry = true
+                    } else if online, bootstrapNeedsNetworkRetry, !app.v3Authenticated {
+                        beginBootstrap()
+                    }
+                }
             }
             .onChange(of: device.isLocked) { locked in
                 guard !locked, pendingWelcomeAfterUnlock, scenePhase == .active else { return }
@@ -138,6 +151,13 @@ struct MurshidWizariApp: App {
         let attempt = bootstrapAttempt
         bootstrapTask?.cancel()
         bootstrapTimeoutTask?.cancel()
+        // Native offline launch is independent of the "remember me" cookie.
+        if !device.isOnline {
+            app.bootstrapping = false
+            app.bootstrapNetworkFailed = true
+            bootstrapNeedsNetworkRetry = true
+            return
+        }
         app.bootstrapping = true
         app.bootstrapNetworkFailed = false
         bootstrapNeedsNetworkRetry = false
@@ -188,63 +208,45 @@ struct MurshidWizariApp: App {
 
 struct RootView: View {
     @EnvironmentObject var app: AppSession
-    @State private var showingOfflineReview = false
+    @State private var showingPublicOfflineLanding = false
     let onRetryBootstrap: () -> Void
     var body: some View {
         Group {
             if app.bootstrapping { LoadingView(text: "جاري تجهيز حسابك…") }
             else if app.bootstrapNetworkFailed {
-                VStack(spacing: 18) {
-                    Image(systemName: "wifi.exclamationmark")
-                        .font(.system(size: 52, weight: .semibold))
-                        .foregroundStyle(Color.murshidBlue)
-                    Text("تعذّر تحميل بيانات الحساب")
-                        .font(.title3.bold())
-                    Text("تعذّر الوصول إلى خادم المنصة عبر هذه الشبكة. حسابك محفوظ، ويمكنك إعادة المحاولة عند تحسن الاتصال.")
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(.secondary)
-                    Button {
-                        onRetryBootstrap()
-                    } label: {
-                        Label("إعادة المحاولة", systemImage: "arrow.clockwise")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding(14)
+                VStack(spacing: 0) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "wifi.slash")
+                            .foregroundStyle(Color.murshidBlue)
+                        Text("وضع الدراسة دون إنترنت").font(.subheadline.bold())
+                        Spacer(minLength: 8)
+                        Button("إعادة الاتصال") { onRetryBootstrap() }
+                            .font(.footnote.weight(.semibold))
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.murshidBlue)
-                    if V49StudyStore.shared.hasOfflineReview() {
-                        Divider().padding(.vertical, 4)
-                        Button { showingOfflineReview = true } label: {
-                            Label("مراجعة ما حفظته دون إنترنت", systemImage: "books.vertical.fill")
-                                .font(.headline)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    .background(Color.murshidBlue.opacity(0.08))
+
+                    if V49StudyStore.shared.hasOfflineAccount() && !showingPublicOfflineLanding {
+                        // Account data is only visible after iOS owner authentication.
+                        // Offline review needs neither remembered cookies nor subscriptions.
+                        V49OfflineAccessView()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        Button("استعراض الواجهة العامة") {
+                            showingPublicOfflineLanding = true
                         }
-                        .buttonStyle(.bordered)
+                        .font(.footnote.weight(.semibold))
+                        .padding(.vertical, 14)
+                    } else {
+                        // A clean install is still able to open the native guest pages.
+                        AuthFlowView()
                     }
                 }
-                .frame(maxWidth: 420)
-                .padding(24)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             else if app.authenticated { MainV3TabView() }
             else { AuthFlowView() }
         }
         .animation(.easeInOut(duration: 0.22), value: app.authenticated)
-        .fullScreenCover(isPresented: $showingOfflineReview) {
-            VStack(spacing: 0) {
-                HStack {
-                    Button { showingOfflineReview = false } label: {
-                        Label("العودة", systemImage: "xmark.circle.fill")
-                    }
-                    Spacer()
-                    Text("وضع المراجعة الآمنة").font(.subheadline.bold())
-                }
-                .padding(16)
-                V49OfflineAccessView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .background(Color.murshidBackground.ignoresSafeArea())
-        }
         .alert("انتهت الجلسة", isPresented: Binding(get: { app.sessionExpired }, set: { app.sessionExpired = $0 })) {
             Button("تسجيل الدخول", role: .cancel) { app.sessionExpired = false }
         } message: {
