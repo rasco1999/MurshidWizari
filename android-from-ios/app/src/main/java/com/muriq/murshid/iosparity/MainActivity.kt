@@ -47,6 +47,7 @@ import com.muriq.murshid.iosparity.notifications.NoticeDelivery
 import kotlinx.coroutines.isActive
 import com.muriq.murshid.iosparity.ui.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class MainActivity : androidx.fragment.app.FragmentActivity() {
     private fun promptBiometricUnlock(onSuccess: () -> Unit, onFailure: (String) -> Unit) {
@@ -376,29 +377,47 @@ private data class LandingItem(val title: String, val description: String)
 
 @Composable
 private fun GuestLandingScreen(onLogin: () -> Unit, onRegister: () -> Unit) {
+    val context = LocalContext.current
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val features = listOf(
-        LandingItem("أسئلة مرتبة حسب الموضوع", "اختر المادة والموضوع وشاهد الأسئلة المنشورة."),
-        LandingItem("تعلّم من إجابتك", "اعرف الإجابة النموذجية والتفسير بعد إرسال الحل."),
-        LandingItem("اختبارات تحفظ تقدمك", "تابع نتائجك ومحاولاتك من حسابك الشخصي."),
-        LandingItem("15 إجابة مجانية", "ابدأ التجربة قبل الاشتراك في المنصة."),
-        LandingItem("نتائج وتفسير للأخطاء", "حدد نقاط قوتك والموضوعات التي تحتاج مراجعة."),
-        LandingItem("خدمة دعم ومتابعة", "تواصل مع إدارة المنصة من داخل حسابك.")
+        LandingItem("أسئلة مرتبة حسب الموضوع", "تنقّل بين المواد والمواضيع المنشورة واعرف عدد الأسئلة قبل أن تبدأ."),
+        LandingItem("تعلّم من إجابتك", "ارجع إلى الإجابات والتوضيحات المتاحة، وأبلغ عن أي ملاحظة لتُراجع."),
+        LandingItem("اختبارات سريعة ومستقرة", "تجربة خفيفة وواضحة تحفظ التقدم والنتائج داخل الحساب."),
+        LandingItem("تجربة مجانية حقيقية", "15 سؤالًا مجانيًا للحساب الجديد لتجربة المنصة قبل الاشتراك."),
+        LandingItem("دفع إلكتروني سهل", "خطوات اشتراك واضحة مع تأكيد حالة الدفع داخل المنصة."),
+        LandingItem("نتائج وتفسير للأخطاء", "متابعة المستوى ومعرفة نقاط القوة والموضوعات التي تحتاج مراجعة."),
+        LandingItem("تحديثات مستمرة", "إضافة ومراجعة المحتوى باستمرار استعدادًا لمواعيد الامتحانات."),
+        LandingItem("دعم سريع وموثوق", "خدمة عملاء واضحة لمتابعة مشكلات الحساب والاشتراك والاستخدام.")
     )
     val rules = listOf(
-        LandingItem("الحساب وتسجيل الدخول", "استخدم بريدك أو هاتفك المسجل ولا تشارك كلمة المرور."),
-        LandingItem("الاختبارات", "اختر صفك الدراسي، ثم المادة والموضوع، وأجب عن الأسئلة بالترتيب."),
-        LandingItem("الأسئلة المجانية", "يتوفر للحساب الجديد 15 سؤالاً مجانياً، ويُحتسب عند إرسال الإجابة."),
-        LandingItem("تحدي المليون", "تُحتسب النقاط والترتيب وفق قواعد المسابقة على الخادم."),
-        LandingItem("خدمة العملاء", "يمكنك متابعة مشكلات الحساب والاشتراك من داخل التطبيق.")
+        LandingItem("الحساب وتسجيل الدخول",
+            "استخدم بيانات صحيحة عند إنشاء الحساب، واحفظ كلمة المرور الخاصة بك. تسجيل الدخول متاح برقم الهاتف أو البريد الإلكتروني المسجل في الحساب."),
+        LandingItem("الاختبارات",
+            "اختر الصف والمادة والموضوع ثم ابدأ الاختبار. يتم حفظ الإجابات والتقدم والنتائج داخل حساب الطالب، ويمكن متابعة الاختبار من الموضع المحفوظ."),
+        LandingItem("الأسئلة المجانية",
+            "يتوفر للحساب الجديد رصيد مقداره 15 سؤالًا مجانيًا بالضبط. بعد استهلاك الرصيد المجاني يتطلب الوصول إلى الأسئلة الإضافية اشتراكًا فعالًا."),
+        LandingItem("قسم النجاح",
+            "يعرض قسم النجاح أداء الطالب استنادًا إلى إجاباته وتقدمه، ويتضمن المواد الأقوى والموضوعات التي تحتاج إلى مراجعة. هذه المؤشرات خاصة بمتابعة المستوى داخل المنصة."),
+        LandingItem("تحدي المليون",
+            "يعتمد الترتيب على النقاط المسجلة وفق نظام المنصة. يستطيع الطالب متابعة مركزه والمتصدرين والفارق بينه وبين المراكز الأعلى من صفحة التحدي."),
+        LandingItem("بيانات الحساب",
+            "لا تشارك كلمة المرور أو بيانات الدخول مع أي شخص. يجب استخدام الحساب من صاحبه فقط لضمان سلامة النتائج والنقاط وسجل الاختبارات."),
+        LandingItem("خدمة العملاء",
+            "عند وجود مشكلة في الحساب أو الاشتراك أو استخدام الموقع، استخدم زر خدمة العملاء الموجود داخل المنصة بعد الدخول لإرسال طلب الدعم.")
     )
+    fun open(url: String) {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    }
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(), state = listState,
         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.School, null, tint = MurshidBlue, modifier = Modifier.size(43.dp))
+                Image(painterResource(R.drawable.murshid_original), contentDescription = "شعار المنصة",
+                    modifier = Modifier.size(43.dp).clip(CircleShape))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text("منصة المرشد الوزاري", fontWeight = FontWeight.Bold)
@@ -418,7 +437,48 @@ private fun GuestLandingScreen(onLogin: () -> Unit, onRegister: () -> Unit) {
                 }
             }
         }
-        item { SectionTitle("لماذا المرشد؟", "كل ما تحتاجه للمراجعة", "تعلم خطوة بخطوة وراجع تقدمك بوضوح.") }
+        item {
+            MurshidCard {
+                Text("مساحة التدريب", style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold)
+                Text("مثال توضيحي", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("كل سؤال، خطوة جديدة", color = MurshidBlue, fontWeight = FontWeight.SemiBold)
+                Text("ما ناتج 3² ؟", fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleLarge)
+                listOf("6", "9", "12").forEach { answer ->
+                    val good = answer == "9"
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp))
+                            .background(if (good) Color(0x1834C759) else MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(horizontal = 14.dp, vertical = 13.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(answer, modifier = Modifier.weight(1f))
+                        Icon(if (good) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                            contentDescription = if (good) "الإجابة الصحيحة" else null,
+                            tint = if (good) Color(0xFF34C759) else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Text("افهم الفكرة، ثم جرّب بنفسك.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf("لماذا المنصة؟" to 4, "كيف تبدأ" to 13,
+                    "الأسئلة المجانية" to 16, "تحدي المليون" to 18,
+                    "خدمة العملاء" to 20).forEach { (label, index) ->
+                    AssistChip(onClick = {
+                        scope.launch { listState.animateScrollToItem(index) }
+                    }, label = { Text(label) })
+                }
+            }
+        }
+        item { SectionTitle("لماذا المرشد؟", "كل ما تحتاجه للمراجعة",
+            "تعلم خطوة بخطوة وراجع تقدمك بوضوح.") }
         items(features) { feature ->
             MurshidCard {
                 Text(feature.title, fontWeight = FontWeight.Bold)
@@ -426,13 +486,50 @@ private fun GuestLandingScreen(onLogin: () -> Unit, onRegister: () -> Unit) {
             }
         }
         item { SectionTitle("تعليمات الاستخدام", "كيف تبدأ وتستفيد من المنصة") }
-        items(rules) { rule ->
+        items(rules.size) { index ->
+            val rule = rules[index]
             MurshidCard {
-                Text(rule.title, fontWeight = FontWeight.Bold)
-                Text(rule.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(verticalAlignment = Alignment.Top) {
+                    Text((index + 1).toString(), color = MurshidBlue,
+                        fontWeight = FontWeight.Bold, modifier = Modifier.width(30.dp))
+                    Column {
+                        Text(rule.title, fontWeight = FontWeight.Bold)
+                        Text(rule.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
         }
-        item { PrimaryAction("تسجيل الدخول", onLogin) }
+        item {
+            MurshidCard {
+                Text("بعد قراءة التعليمات", color = MurshidBlue, fontWeight = FontWeight.Bold)
+                Text("اختر طريقة الدخول إلى المنصة",
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                PrimaryAction("إنشاء حساب", onRegister)
+                SecondaryAction("تسجيل الدخول", onLogin)
+            }
+        }
+        item {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("© 2026 المرشد الوزاري · منصة تعليمية مستقلة",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TextButton(onClick = { open("https://www.instagram.com/murshid.iq/") }) { Text("Instagram") }
+                    TextButton(onClick = { open("https://www.facebook.com/Murshidiq/") }) { Text("Facebook") }
+                    TextButton(onClick = { open("https://t.me/El_Murshed_iq") }) { Text("Telegram") }
+                }
+                Text("الثالث المتوسط · السادس العلمي · السادس الأدبي",
+                    style = MaterialTheme.typography.labelSmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { open("https://mur-iq.com/privacy.php") }) { Text("الخصوصية") }
+                    TextButton(onClick = { open("https://mur-iq.com/terms.php") }) { Text("شروط الاستخدام") }
+                }
+            }
+        }
     }
 }
 
