@@ -270,6 +270,13 @@ def main():
  # The toggle is a native accessible header control, not a test-only shortcut.
  button('تبديل المظهر');ui.wait_for('حسابي');screenshot(args.output,'student-home-dark')
  button('الرئيسية');ui.wait_for('حسابي')
+ # Latest iPhone smart coach sits after the four metric cards.
+ ui.reveal('مدربي الذكي · مراجعة دون إنترنت',393,852)
+ button('مدربي الذكي · مراجعة دون إنترنت')
+ ui.wait_for('مراجعة اليوم')
+ ui.wait_for('بعد أول سؤال مصحّح سيُبنى لك دفتر مراجعة شخصيًا.')
+ screenshot(args.output,'student-coach-empty')
+ back();ui.wait_for('حسابي')
  # A newly published school advertisement must raise a RED account-scoped
  # badge without needing an app restart; visiting Ads clears the unread mark.
  BOOT['ads'].append({'id':9,'school':'مدرسة ثانية افتراضية',
@@ -343,6 +350,23 @@ def main():
  # the subsequently accepted logout must return to the exact guest landing.
  back();ui.wait_for('موضوع فحص افتراضي')
  back();ui.wait_for('الرياضيات')
+ button('الرئيسية');ui.wait_for('حسابي')
+ ui.reveal('مدربي الذكي · مراجعة دون إنترنت',393,852)
+ button('مدربي الذكي · مراجعة دون إنترنت')
+ ui.wait_for('أسئلتي المحفوظة')
+ screenshot(args.output,'student-coach-saved')
+ # The self-review session remains local and cannot consume a free answer.
+ prior_grades=sum(1 for m,p in STATE['calls'] if p=='/api/progress.php')
+ button('ابدأ مراجعة اليوم')
+ ui.wait_for('ما حاصل جمع اثنين وثلاثة؟')
+ button('أظهر الإجابة')
+ ui.wait_for('الإجابة الصحيحة')
+ screenshot(args.output,'student-coach-revealed')
+ button('أتقنت هذا السؤال')
+ ui.wait_for('أسئلتي المحفوظة')
+ assert sum(1 for m,p in STATE['calls'] if p=='/api/progress.php')==prior_grades, (
+  'The local coach must never send a billable answer')
+ back();ui.wait_for('حسابي')
  button('حسابي');ui.wait_for('تفعيل الاشتراك بكود')
  STATE['logout_reject_once']=True
  button('تسجيل الخروج');ui.wait_for('سيتم إنهاء جلسة حسابك على هذا الجهاز.')
