@@ -1,6 +1,7 @@
 package com.muriq.murshid.iosparity.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -41,17 +42,17 @@ val MurshidBlue: Color @Composable get() = LocalMurshidPalette.current.primary
 val MurshidGold: Color @Composable get() = LocalMurshidPalette.current.accent
 val MurshidAccentSecondary: Color @Composable get() = LocalMurshidPalette.current.secondary
 
-private val DarkSurface = Color(0xFF17283D)
-private val LightBackground = Color(0xFFF2F4F8)
+private val DarkSurface = Color(0xFF1C1C1E)
+private val LightBackground = Color(0xFFF2F2F7)
 
 @Composable
 fun MurshidTheme(dark: Boolean, palette: String, content: @Composable () -> Unit) {
     val chosen = MurshidPaletteOptions.forName(palette)
     val colors = if (dark) darkColorScheme(
         primary = chosen.primary, onPrimary = Color.White,
-        background = Color(0xFF0D1724), onBackground = Color(0xFFF2F6FB),
-        surface = DarkSurface, onSurface = Color(0xFFF2F6FB),
-        surfaceVariant = Color(0xFF22354C), onSurfaceVariant = Color(0xFFC0D0E1)
+        background = Color.Black, onBackground = Color(0xFFF2F2F7),
+        surface = DarkSurface, onSurface = Color(0xFFF2F2F7),
+        surfaceVariant = Color(0xFF2C2C2E), onSurfaceVariant = Color(0xFFAEAEB2)
     ) else lightColorScheme(
         primary = chosen.primary, onPrimary = Color.White,
         background = LightBackground, onBackground = chosen.navy,
@@ -66,7 +67,7 @@ fun MurshidTheme(dark: Boolean, palette: String, content: @Composable () -> Unit
 @Composable
 fun MurshidCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().border(1.dp, MurshidBlue.copy(alpha = 0.14f), RoundedCornerShape(22.dp)),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)

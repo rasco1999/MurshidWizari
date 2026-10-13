@@ -10,8 +10,8 @@ android {
         applicationId = "com.muriq.murshid.iosparity"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4915001
-        versionName = "4.9.15-native-preview"
+        versionCode = 4916001
+        versionName = "4.9.16-native-preview"
     }
     buildTypes {
         release { isMinifyEnabled = false }
