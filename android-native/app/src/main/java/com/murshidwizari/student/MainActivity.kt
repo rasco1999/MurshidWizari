@@ -67,6 +67,10 @@ class MainActivity : Activity() {
     private var resumeWelcomeOverlay: View? = null
     private var resumeWelcomeAfterUnlock = false
     private var lastPopupPoll = 0L
+    private var lastSchoolAdsBadgePoll = 0L
+    private var lastHeartbeatPoll = 0L
+    private var schoolAdsUnread = 0
+    private var schoolAdsBadgeView: TextView? = null
     private var popupChecking = false
     private var currentAdDialog: AlertDialog? = null
     private var examSubmitButton: Button? = null
@@ -570,6 +574,23 @@ class MainActivity : Activity() {
                 item.addView(tabAvatar, LinearLayout.LayoutParams(dp(27), dp(27)))
                 fetchAvatarInto(tabAvatar, student.optString("avatar_url").ifBlank { homepage.optString("avatar_url") },
                     student.optString("avatar_revision").ifBlank { homepage.optString("avatar_revision") })
+            } else if (name == "ads") {
+                val iconHolder = FrameLayout(this@MainActivity)
+                iconHolder.addView(IosGlyphView(this@MainActivity, icon, color),
+                    FrameLayout.LayoutParams(dp(23), dp(23), Gravity.CENTER))
+                val badge = TextView(this@MainActivity).apply {
+                    textSize = 10f
+                    gravity = Gravity.CENTER
+                    setTextColor(Color.WHITE)
+                    typeface = Typeface.DEFAULT_BOLD
+                    includeFontPadding = false
+                    background = shape(Color.rgb(226, 43, 61), dp(10).toFloat())
+                }
+                iconHolder.addView(badge, FrameLayout.LayoutParams(dp(19), dp(19),
+                    Gravity.TOP or Gravity.RIGHT))
+                schoolAdsBadgeView = badge
+                refreshSchoolAdsBadge()
+                item.addView(iconHolder, LinearLayout.LayoutParams(dp(36), dp(29)))
             } else {
                 item.addView(IosGlyphView(this@MainActivity, icon, color),
                     LinearLayout.LayoutParams(dp(23), dp(23)))
@@ -1716,9 +1737,15 @@ class MainActivity : Activity() {
         serviceTicker = object : Runnable {
             override fun run() {
                 if (!appForeground || csrf.isBlank() || isDestroyed) { serviceTicker = null; return }
-                fetch("api/session-heartbeat.php", showError = false) { }
-                if (SystemClock.elapsedRealtime() - lastPopupPoll > 180000L || lastPopupPoll == 0L) pollSchoolAd()
-                main.postDelayed(this, 60000L)
+                val now = SystemClock.elapsedRealtime()
+                if (now - lastHeartbeatPoll > 60000L || lastHeartbeatPoll == 0L) {
+                    lastHeartbeatPoll = now
+                    fetch("api/session-heartbeat.php", showError = false) { }
+                }
+                if (now - lastPopupPoll > 180000L || lastPopupPoll == 0L) pollSchoolAd()
+                if (now - lastSchoolAdsBadgePoll >= 30000L || lastSchoolAdsBadgePoll == 0L)
+                    pollSchoolAdsBadge()
+                main.postDelayed(this, 30000L)
             }
         }.also { main.post(it) }
     }
@@ -2285,10 +2312,56 @@ class MainActivity : Activity() {
         }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(32) })
     }
 
+    private fun refreshSchoolAdsBadge() {
+        schoolAdsBadgeView?.apply {
+            text = SchoolAdBadgeRules.badgeLabel(schoolAdsUnread)
+            visibility = if (schoolAdsUnread > 0) View.VISIBLE else View.GONE
+            contentDescription = if (schoolAdsUnread > 0) "إعلانات جديدة: $schoolAdsUnread" else ""
+        }
+    }
+
+    private fun updateSchoolAdsBadge(data: JSONObject, markAsRead: Boolean = false) {
+        val userId = student.optInt("id")
+        val ads = data.optJSONArray("ads") ?: return
+        if (userId <= 0) return
+        val published = LinkedHashSet<Int>()
+        for (index in 0 until ads.length()) {
+            val ad = ads.optJSONObject(index) ?: continue
+            val id = ad.optInt("id")
+            if (id > 0 && ad.optBoolean("active", true) &&
+                ad.optString("school").isNotBlank() && ad.optString("text").isNotBlank()) published.add(id)
+        }
+        val key = "seen_school_ads_v1_$userId"
+        if (!prefs.contains(key)) {
+            // The first install/update establishes a baseline; only subsequently
+            // published ads raise the red badge.
+            prefs.edit().putString(key, SchoolAdBadgeRules.encode(published)).apply()
+            schoolAdsUnread = 0
+        } else {
+            val seen = SchoolAdBadgeRules.decode(prefs.getString(key, "").orEmpty())
+            if (markAsRead) {
+                prefs.edit().putString(key, SchoolAdBadgeRules.encode(seen + published)).apply()
+                schoolAdsUnread = 0
+            } else schoolAdsUnread = SchoolAdBadgeRules.unreadCount(published, seen)
+        }
+        refreshSchoolAdsBadge()
+    }
+
+    private fun pollSchoolAdsBadge() {
+        val userId = student.optInt("id")
+        if (!appForeground || userId <= 0 || csrf.isBlank() || biometricOverlay != null) return
+        lastSchoolAdsBadgePoll = SystemClock.elapsedRealtime()
+        fetch("mobile/bootstrap.php", showError = false) { response ->
+            if (student.optInt("id") == userId && response.optBoolean("ok"))
+                updateSchoolAdsBadge(response)
+        }
+    }
+
     private fun applyBootstrap(response: JSONObject) {
         homepage = response; csrf = response.optString("csrf", csrf)
         student = response.optJSONObject("user") ?: JSONObject()
         subscribed = response.optBoolean("subscribed")
+        updateSchoolAdsBadge(response)
         StudentPush.attach(this, api, student.optInt("id"), csrf) { configured ->
             if (!isFinishing && !isDestroyed && configured && student.optInt("id") > 0 &&
                 biometricOverlay == null && !biometricAuthInProgress && Build.VERSION.SDK_INT >= 33 &&
@@ -2423,13 +2496,13 @@ class MainActivity : Activity() {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
                 val icon = FrameLayout(this@MainActivity).apply {
-                    background = shape(brandColor, dp(17).toFloat())
+                    background = shape(brandColor, dp(12).toFloat())
                     addView(IosGlyphView(this@MainActivity, symbol, Color.WHITE),
-                        FrameLayout.LayoutParams(dp(34), dp(34), Gravity.CENTER))
+                        FrameLayout.LayoutParams(dp(23), dp(23), Gravity.CENTER))
                 }
-                addView(icon, LinearLayout.LayoutParams(dp(58), dp(58)))
-                addView(uiText(name, 13f, true).apply { gravity = Gravity.CENTER },
-                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
+                addView(icon, LinearLayout.LayoutParams(dp(44), dp(44)))
+                addView(uiText(name, 12f, true).apply { gravity = Gravity.CENTER },
+                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
             }
             socialRow.addView(tappable(platform, name) { external(url) },
                 LinearLayout.LayoutParams(0, -2, 1f))
@@ -3019,10 +3092,14 @@ class MainActivity : Activity() {
             })
         }
         renderAds(homepage)
+        updateSchoolAdsBadge(homepage, markAsRead = true)
         fetch("mobile/bootstrap.php", showError = false) { result ->
             if (result.optBoolean("ok")) {
                 applyBootstrap(result)
-                if (activeScreen == "ads_tab" && screenGeneration == screen) renderAds(result)
+                if (activeScreen == "ads_tab" && screenGeneration == screen) {
+                    renderAds(result)
+                    updateSchoolAdsBadge(result, markAsRead = true)
+                }
             }
         }
     }
