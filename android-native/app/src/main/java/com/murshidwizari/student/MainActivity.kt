@@ -2399,8 +2399,24 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun withoutFrenchSubjects(source: JSONObject): JSONObject {
+        // UI defense-in-depth: French must not reappear if an older server
+        // bootstrap, cached response, or imported question bank includes it.
+        val cleaned = JSONObject(source.toString())
+        val original = cleaned.optJSONArray("subjects") ?: return cleaned
+        val allowed = JSONArray()
+        for (i in 0 until original.length()) {
+            val item = original.optJSONObject(i) ?: continue
+            if (!EquationStudyRules.isFrenchSubject(item.optInt("id"), item.optString("name"))) {
+                allowed.put(item)
+            }
+        }
+        cleaned.put("subjects", allowed)
+        return cleaned
+    }
+
     private fun applyBootstrap(response: JSONObject) {
-        homepage = response; csrf = response.optString("csrf", csrf)
+        homepage = withoutFrenchSubjects(response); csrf = response.optString("csrf", csrf)
         student = response.optJSONObject("user") ?: JSONObject()
         subscribed = response.optBoolean("subscribed")
         offlineCoachMode = false
@@ -6601,7 +6617,7 @@ class MainActivity : Activity() {
                 }
                 fetch("mobile/bootstrap.php", showError = false) { updated ->
                     if (updated.optBoolean("ok")) {
-                        homepage = updated
+                        homepage = withoutFrenchSubjects(updated)
                         student = updated.optJSONObject("user") ?: student
                         csrf = updated.optString("csrf", csrf)
                         subscribed = updated.optBoolean("subscribed", subscribed)
