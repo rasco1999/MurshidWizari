@@ -1,0 +1,46 @@
+name: Verify and Package Android FCM School Ads Server
+on:
+  push:
+    branches: [android-v4915-fcm-server-integration]
+    paths:
+      - 'android-from-ios/server-push/**'
+      - '.github/workflows/android-fcm-server-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  php-qa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate PHP syntax of every server source
+        run: |
+          set -euo pipefail
+          php -v
+          find android-from-ios/server-push -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Validate school-ad notification revision semantics
+        run: php android-from-ios/server-push/tests/revisions.php
+      - name: Prepare FCM server deployment package
+        run: |
+          cd android-from-ios/server-push
+          zip -qr ../../Murshid_Android_FCM_School_Ads_Server_4_9_15.zip public_html INSTALL.txt
+          cd ../..
+          sha256sum Murshid_Android_FCM_School_Ads_Server_4_9_15.zip > Murshid_Android_FCM_School_Ads_Server_4_9_15.zip.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Murshid-Android-School-Push-PHP
+          path: |
+            Murshid_Android_FCM_School_Ads_Server_4_9_15.zip
+            Murshid_Android_FCM_School_Ads_Server_4_9_15.zip.sha256
+      - name: Publish reviewed deployment package (not activated)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="android-school-fcm-server-v4.9.15-preview"
+          ZIP="Murshid_Android_FCM_School_Ads_Server_4_9_15.zip"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP" "$ZIP.sha256" --clobber
+          else
+            gh release create "$TAG" "$ZIP" "$ZIP.sha256" --target "$GITHUB_SHA" --prerelease --title "Murshid Android FCM Server - Installation Preview" --notes "Not deployed. Requires personal Firebase project, private service-account credentials, DB backup, reviewed PHP merger, migration and cron. No secret key is included."
+          fi
