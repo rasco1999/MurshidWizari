@@ -353,10 +353,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
         val dash = dashboard ?: run { unreadSchoolAds = 0; return }
         val key = "school_ads_seen_" + dash.user.id.toString()
         val seen = prefs.getStringSet(key, emptySet()).orEmpty().toMutableSet()
-        val visible = dash.ads.filter { ad ->
-            ad.optInt("id") > 0 && ad.optString("school").isNotBlank() &&
-                ad.optString("text").isNotBlank() && ad.optBoolean("active", true)
-        }
+        val visible = com.muriq.murshid.iosparity.data.SchoolAdReadRules.published(dash.ads)
         val keys = visible.map(com.muriq.murshid.iosparity.data.SchoolAdReadRules::revision)
         if (screen == Screen.MAIN && tab == 3) {
             seen.addAll(keys)

@@ -517,10 +517,20 @@ private fun GuestLandingScreen(onLogin: () -> Unit, onRegister: () -> Unit) {
                 Text("© 2026 المرشد الوزاري · منصة تعليمية مستقلة",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    TextButton(onClick = { open("https://www.instagram.com/murshid.iq/") }) { Text("Instagram") }
-                    TextButton(onClick = { open("https://www.facebook.com/Murshidiq/") }) { Text("Facebook") }
-                    TextButton(onClick = { open("https://t.me/El_Murshed_iq") }) { Text("Telegram") }
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { open("https://www.instagram.com/murshid.iq/") }) {
+                        Icon(Icons.Default.CameraAlt, contentDescription = "إنستغرام",
+                            tint = MurshidBlue, modifier = Modifier.size(19.dp))
+                    }
+                    IconButton(onClick = { open("https://www.facebook.com/Murshidiq/") }) {
+                        Icon(Icons.Default.Group, contentDescription = "فيسبوك",
+                            tint = MurshidBlue, modifier = Modifier.size(19.dp))
+                    }
+                    IconButton(onClick = { open("https://t.me/El_Murshed_iq") }) {
+                        Icon(Icons.Default.Send, contentDescription = "تلغرام",
+                            tint = MurshidBlue, modifier = Modifier.size(19.dp))
+                    }
                 }
                 Text("الثالث المتوسط · السادس العلمي · السادس الأدبي",
                     style = MaterialTheme.typography.labelSmall)
