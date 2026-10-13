@@ -4565,10 +4565,12 @@ class MainActivity : Activity() {
         val card = uiCard()
         card.addView(uiText("اختر هويتك اللونية", 17f, true, blue),
             LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(13) })
+        // RTL layout: first child is on the right, matching Aurora | Violet | Royal
+        // as seen right-to-left on the owner's iPhone screenshot.
         val palettes = listOf(
-            Triple(AppearanceRules.ROYAL, "ملكي", "أزرق وذهبي"),
+            Triple(AppearanceRules.AURORA, "أورورا", "فيروزي وأزرق"),
             Triple(AppearanceRules.VIOLET, "بنفسجي", "بنفسجي ووردي"),
-            Triple(AppearanceRules.AURORA, "أورورا", "فيروزي وأزرق")
+            Triple(AppearanceRules.ROYAL, "ملكي", "أزرق وذهبي")
         )
         val choices = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
