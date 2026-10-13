@@ -7,7 +7,7 @@ on:
       - '.github/workflows/android-compose-visual-qa.yml'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: murshid-android-emulator-${{ github.ref }}
   cancel-in-progress: true
@@ -44,6 +44,39 @@ jobs:
             set -eu
             adb install -r android-from-ios/app/build/outputs/apk/debug/app-debug.apk
             python3 android-from-ios/qa/native_visual_smoke.py
+      # Guest, login and blank registration screens contain no student credentials.
+      # Keep a versioned visual snapshot in a dedicated QA branch for manual inspection.
+      - name: Publish anonymized native UI screenshots for visual comparison
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          if [ ! -s android-from-ios/visual-qa/guest.png ]; then
+            echo "No guest screenshot captured; leave visual verification unapproved."
+            exit 0
+          fi
+          QA_BRANCH="android-visual-qa"
+          if ! gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$QA_BRANCH" >/dev/null 2>&1; then
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/heads/$QA_BRANCH" -f sha="$GITHUB_SHA" >/dev/null
+          fi
+          for page in guest login register; do
+            file="android-from-ios/visual-qa/$page.png"
+            [ -s "$file" ] || continue
+            path="visual-qa/$page.png"
+            encoded="$(base64 < "$file" | tr -d '\\n')"
+            old="$(gh api "repos/$GITHUB_REPOSITORY/contents/$path?ref=$QA_BRANCH" --jq .sha 2>/dev/null || true)"
+            if [ -n "$old" ]; then
+              gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/$path" \
+                -f message="Capture native Android QA $page ($GITHUB_SHA)" \
+                -f branch="$QA_BRANCH" -f sha="$old" -f content="$encoded" >/dev/null
+            else
+              gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/$path" \
+                -f message="Capture native Android QA $page ($GITHUB_SHA)" \
+                -f branch="$QA_BRANCH" -f content="$encoded" >/dev/null
+            fi
+          done
       - name: Save screenshot and semantic view tree
         if: always()
         uses: actions/upload-artifact@v4
