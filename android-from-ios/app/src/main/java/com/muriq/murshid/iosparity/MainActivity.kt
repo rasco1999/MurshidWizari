@@ -6,6 +6,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
@@ -128,6 +130,24 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 }
             }
             val authenticatedStudent = vm.dashboard?.user?.id ?: 0
+            // Android 13+ requires explicit OS notification permission after login.
+            // Never block studying, and avoid repeatedly prompting after a denial.
+            val notificationPrefs = remember {
+                getSharedPreferences("murshid_notification_permission", MODE_PRIVATE)
+            }
+            val askNotifications = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestPermission()
+            ) { /* Delivery checks OS permission when an alert is received. */ }
+            LaunchedEffect(authenticatedStudent) {
+                if (authenticatedStudent > 0 && android.os.Build.VERSION.SDK_INT >= 33 &&
+                    androidx.core.content.ContextCompat.checkSelfPermission(
+                        this@MainActivity, android.Manifest.permission.POST_NOTIFICATIONS
+                    ) != android.content.pm.PackageManager.PERMISSION_GRANTED &&
+                    !notificationPrefs.getBoolean("requested_once", false)) {
+                    notificationPrefs.edit().putBoolean("requested_once", true).apply()
+                    askNotifications.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
             val lifecycleOwner = LocalLifecycleOwner.current
             LaunchedEffect(authenticatedStudent, lifecycleOwner) {
                 if (authenticatedStudent <= 0) return@LaunchedEffect
