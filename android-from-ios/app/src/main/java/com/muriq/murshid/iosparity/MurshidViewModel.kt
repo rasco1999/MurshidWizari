@@ -73,8 +73,8 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
     var message by mutableStateOf("")
         private set
     var dashboard by mutableStateOf<StudentDashboard?>(null)
-    var unreadSchoolAds by androidx.compose.runtime.mutableIntStateOf(0)
         private set
+    var unreadSchoolAds by androidx.compose.runtime.mutableIntStateOf(0)
         private set
     var grades by mutableStateOf<List<Pair<Int, String>>>(emptyList())
         private set
