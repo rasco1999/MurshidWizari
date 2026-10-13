@@ -36,6 +36,8 @@ jobs:
           grep -q 'android:allowBackup="false"' app/src/main/AndroidManifest.xml
           grep -q 'https://www.mur-iq.com/' app/src/main/java/com/muriq/murshid/iosparity/net/MurshidApi.kt
           test -f app/src/main/java/com/muriq/murshid/iosparity/data/QuestionPresentation.kt
+      - name: Audit original iPhone guest copy and Android design elements
+        run: python3 .github/scripts/check_ios_guest_parity.py
       - name: Latest iPhone compatibility invariants
         working-directory: android-from-ios
         run: |
