@@ -138,9 +138,14 @@ final class V49StudyStore: ObservableObject {
     }
 
     func eraseOnLogout(userID: Int?) {
-        guard let userID, userID > 0 else { archive = nil; return }
-        if let url = fileURL(for: userID) { try? FileManager.default.removeItem(at: url) }
-        if UserDefaults.standard.integer(forKey: recentUserKey) == userID {
+        // A password reset can occur with no active server session. Explicit
+        // revocation must then still clear the last locally verified account.
+        let storedID = UserDefaults.standard.integer(forKey: recentUserKey)
+        let targetID = (userID ?? 0) > 0 ? userID! : storedID
+        if targetID > 0, let url = fileURL(for: targetID) {
+            try? FileManager.default.removeItem(at: url)
+        }
+        if storedID == targetID {
             UserDefaults.standard.removeObject(forKey: recentUserKey)
         }
         archive = nil
