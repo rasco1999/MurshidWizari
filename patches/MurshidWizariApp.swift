@@ -99,8 +99,10 @@ struct MurshidWizariApp: App {
             }
             .onChange(of: device.isOnline) { online in
                 Task { @MainActor in
-                    if !online, app.bootstrapping, !app.v3Authenticated {
-                        // The network monitor can report no connection after launch.
+                    if !online, !app.v3Authenticated {
+                        // Also works if connectivity is lost after the guest or
+                        // expired-session screen has already appeared. Never wait
+                        // for a request to fail before offering local study.
                         bootstrapAttempt += 1
                         bootstrapTask?.cancel()
                         bootstrapTimeoutTask?.cancel()
@@ -109,7 +111,11 @@ struct MurshidWizariApp: App {
                         app.bootstrapping = false
                         app.bootstrapNetworkFailed = true
                         bootstrapNeedsNetworkRetry = true
-                    } else if online, bootstrapNeedsNetworkRetry, !app.v3Authenticated {
+                    } else if online, bootstrapNeedsNetworkRetry, !app.v3Authenticated,
+                              !V49StudyStore.shared.hasOfflineAccount() {
+                        // A student's offline coach must not be interrupted when
+                        // signal returns mid-review. The visible Reconnect button
+                        // restores the server session on their own terms.
                         beginBootstrap()
                     }
                 }
@@ -241,7 +247,16 @@ struct RootView: View {
                         .font(.footnote.weight(.semibold))
                         .padding(.vertical, 14)
                     } else {
-                        // A clean install is still able to open the native guest pages.
+                        if V49StudyStore.shared.hasOfflineAccount() {
+                            Button {
+                                showingPublicOfflineLanding = false
+                            } label: {
+                                Label("مدربي الذكي المحفوظ", systemImage: "books.vertical.fill")
+                                    .font(.footnote.weight(.semibold))
+                            }
+                            .padding(.vertical, 12)
+                        }
+                        // A clean install can open native instructions and guest pages.
                         AuthFlowView()
                     }
                 }
