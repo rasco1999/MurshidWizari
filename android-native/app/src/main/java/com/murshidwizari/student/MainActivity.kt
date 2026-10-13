@@ -2443,7 +2443,7 @@ class MainActivity : Activity() {
 
     /** Offline access never opens server-dependent tests, subscriptions or payments. */
     private fun showOfflineCoachHome() {
-        val studentId = OfflineCoachAccess(prefs).studentId(api.hasRememberedSession())
+        val studentId = OfflineCoachAccess(prefs).studentId()
         if (studentId <= 0) { guestLandingScreen(); return }
         offlineCoachMode = true
         csrf = ""
