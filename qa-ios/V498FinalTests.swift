@@ -51,6 +51,15 @@ final class V498FinalTests: XCTestCase {
     }
 
     @MainActor
+    func testSignedCoordinatesRemainOrderedWithinArabicSentence() {
+        let source = "أوجد المستقيم المار بـ(0,-4) بين (6,0) و(3,-2)."
+        let shown = V515MathBidi.display(source)
+        XCTAssertTrue(shown.contains("\u{2066}(0,-4)\u{2069}"))
+        XCTAssertTrue(shown.contains("\u{2066}(6,0)\u{2069}"))
+        XCTAssertTrue(shown.contains("\u{2066}(3,-2)\u{2069}"))
+    }
+
+    @MainActor
     func testEquationTutorIncludesMathChemistryPhysicsAndBiology() {
         let examples: [(String,String,String)] = [
             ("الرياضيات", "أوجد معادلة المستقيم العمودي على المار بالنقطتين (6,0) و(-2,-3)", "احسب"),

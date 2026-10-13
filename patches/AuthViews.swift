@@ -5256,6 +5256,7 @@ struct V515MathKeypad: View {
             .font(.caption.bold()).buttonStyle(.bordered)
             if showGrid {
                 V515GraphGrid(points: $points)
+                    .environment(\.layoutDirection, .leftToRight)
                     .frame(height: 230)
                 HStack {
                     Button("مسح النقاط") { points = [] }.disabled(points.isEmpty)
