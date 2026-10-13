@@ -7,7 +7,7 @@ on:
       - '.github/workflows/android-from-ios.yml'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   android:
     runs-on: ubuntu-latest
@@ -54,6 +54,23 @@ jobs:
           unzip -l "$APK" | grep -F 'classes.dex'
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           sha256sum "$APK"
+      - name: Publish versioned native Android preview APK
+        if: github.ref == 'refs/heads/android-from-ios-compose'
+        working-directory: android-from-ios
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="android-v4.9.13-compose-native-preview"
+          APK="Murshid_Wizari_Android_v4_9_13_NATIVE_PREVIEW.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$APK"
+          sha256sum "$APK" > "$APK.sha256"
+          NOTES="Independent Android Kotlin Jetpack Compose port of the iPhone 4.9.x student experience. Native guest landing, three-step account creation, code verification, five tabs, subjects/exams, account and subscriptions. Preview only, debug-signed for owner testing; no WebView. Not certified pixel-perfect. Offline school-ad push, comprehensive signed-in device QA and production signing remain separate release gates. This release is NOT suitable for public production deployment."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" "$APK.sha256" --clobber
+          else
+            gh release create "$TAG" "$APK" "$APK.sha256" --target "$GITHUB_SHA" --prerelease --title 'Murshid Android Native 4.9.13 — Private Testing Preview' --notes "$NOTES"
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: Murshid-Android-From-iOS-Compose
