@@ -141,7 +141,7 @@ final class V49StudyStore: ObservableObject {
         // A password reset can occur with no active server session. Explicit
         // revocation must then still clear the last locally verified account.
         let storedID = UserDefaults.standard.integer(forKey: recentUserKey)
-        let targetID = (userID ?? 0) > 0 ? userID! : storedID
+        let targetID = userID.flatMap { $0 > 0 ? $0 : nil } ?? storedID
         if targetID > 0, let url = fileURL(for: targetID) {
             try? FileManager.default.removeItem(at: url)
         }

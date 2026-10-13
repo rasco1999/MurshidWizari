@@ -44,7 +44,8 @@ final class V498FinalTests: XCTestCase {
         session.reset(expired: true)
         XCTAssertTrue(store.hasOfflineAccount(), "A server cookie expiring must not delete cached review")
 
-        session.user = user
+        // The previous reset clears session.user. An explicit reset or sign-out
+        // must still find and revoke the last locally verified user.
         session.reset(eraseOfflineStudy: true)
         XCTAssertFalse(store.hasOfflineAccount(), "Explicit sign-out must revoke the cached notebook")
     }
