@@ -73,6 +73,8 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
     var message by mutableStateOf("")
         private set
     var dashboard by mutableStateOf<StudentDashboard?>(null)
+    var unreadSchoolAds by androidx.compose.runtime.mutableIntStateOf(0)
+        private set
         private set
     var grades by mutableStateOf<List<Pair<Int, String>>>(emptyList())
         private set
@@ -224,6 +226,8 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
                     val bootstrap = api.get("mobile/bootstrap.php")
                     dashboard = StudentDashboard.from(bootstrap)
                     bindNoticesToStudent()
+                reconcileSchoolAds()
+                    reconcileSchoolAds()
                     loadAccount()
                     tab = 0; screen = Screen.MAIN
                 }
@@ -245,6 +249,8 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
                     api.setRemember(pendingVerificationRemember)
                     dashboard = StudentDashboard.from(result)
                     bindNoticesToStudent()
+                reconcileSchoolAds()
+                    reconcileSchoolAds()
                     tab = 0; screen = Screen.MAIN
                     loadAccount()
                     message = "تم تأكيد الحساب بنجاح."
@@ -311,6 +317,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 dashboard = StudentDashboard.from(api.get("mobile/bootstrap.php"))
                 bindNoticesToStudent()
+                reconcileSchoolAds()
                 loadAccount()
                 tab = 0; screen = Screen.MAIN; clearMessage()
             } catch (error: Exception) {
@@ -327,10 +334,29 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private fun reconcileSchoolAds() {
+        val dash = dashboard ?: run { unreadSchoolAds = 0; return }
+        val key = "school_ads_seen_" + dash.user.id.toString()
+        val seen = prefs.getStringSet(key, emptySet()).orEmpty().toMutableSet()
+        val visible = dash.ads.filter { ad ->
+            ad.optInt("id") > 0 && ad.optString("school").isNotBlank() &&
+                ad.optString("text").isNotBlank() && ad.optBoolean("active", true)
+        }
+        val keys = visible.map(com.muriq.murshid.iosparity.data.SchoolAdReadRules::revision)
+        if (screen == Screen.MAIN && tab == 3) {
+            seen.addAll(keys)
+            prefs.edit().putStringSet(key, seen).apply()
+            unreadSchoolAds = 0
+        } else {
+            unreadSchoolAds = keys.count { it !in seen }
+        }
+    }
+
     fun selectTab(index: Int) {
         if (index !in 0..4) return
         // Keep all five tabs visible, with a locked predictions screen for nonsubscribers.
         tab = index; screen = Screen.MAIN; clearMessage()
+        reconcileSchoolAds()
         if (index == 4) loadAccount()
     }
 
@@ -601,15 +627,19 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun refreshAds() {
+    fun refreshAds(silent: Boolean = false) {
+        if (loading && !silent) return
         viewModelScope.launch {
-            loading = true
+            if (!silent) loading = true
             try {
-                dashboard = StudentDashboard.from(api.get("mobile/bootstrap.php"))
+                val latest = StudentDashboard.from(api.get("mobile/bootstrap.php"))
+                if (dashboard?.user?.id != latest.user.id) return@launch
+                dashboard = latest
                 bindNoticesToStudent()
-                message = "تم تحديث الإعلانات."
-            } catch (error: Exception) { fail(error) }
-            finally { loading = false }
+                reconcileSchoolAds()
+                if (!silent) message = "تم تحديث الإعلانات."
+            } catch (error: Exception) { if (!silent) fail(error) }
+            finally { if (!silent) loading = false }
         }
     }
 
@@ -800,7 +830,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
                 // Always let the student explicitly clear their own local credentials.
             } finally {
                 updateBiometricEnabled(false)
-                clearNotices(); api.clearSession(); dashboard = null; featureData = JSONObject()
+                clearNotices(); api.clearSession(); dashboard = null; unreadSchoolAds = 0; featureData = JSONObject()
                 screen = Screen.GUEST; tab = 0; clearMessage()
             }
         }

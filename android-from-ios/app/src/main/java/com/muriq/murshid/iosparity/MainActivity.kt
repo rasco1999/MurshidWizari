@@ -165,7 +165,17 @@ fun AppShell(vm: MurshidViewModel) {
                         NavigationBarItem(
                             selected = vm.tab == index,
                             onClick = { vm.selectTab(index) },
-                            icon = { Icon(icons[index], contentDescription = label, modifier = Modifier.size(21.dp)) },
+                            icon = {
+                                if (index == 3 && vm.unreadSchoolAds > 0) {
+                                    BadgedBox(badge = {
+                                        Badge { Text(if (vm.unreadSchoolAds > 99) "99+" else vm.unreadSchoolAds.toString()) }
+                                    }) {
+                                        Icon(icons[index], contentDescription = label, modifier = Modifier.size(21.dp))
+                                    }
+                                } else {
+                                    Icon(icons[index], contentDescription = label, modifier = Modifier.size(21.dp))
+                                }
+                            },
                             label = { Text(label, fontSize = 10.sp, maxLines = 1) },
                             alwaysShowLabel = true
                         )
