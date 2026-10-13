@@ -50,7 +50,7 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Verify exam rules and build native APK
-        run: gradle --no-daemon testDebugUnitTest assembleDebug assembleQa assemblePreview assembleCandidate --stacktrace
+        run: gradle --no-daemon testDebugUnitTest assembleDebug assembleQa assemblePreview assembleCandidate bundleCandidate --stacktrace
       - name: Verify side-by-side preview application ID
         run: |
           test -s app/build/outputs/apk/preview/app-preview.apk
@@ -65,6 +65,16 @@ jobs:
         with:
           name: MurshidWizari-Student-Build498-Preview-Android
           path: android-native/app/build/outputs/apk/preview/app-preview.apk
+          if-no-files-found: error
+
+      - name: Confirm Play candidate app bundle
+        run: |
+          test -s app/build/outputs/bundle/candidate/app-candidate.aab
+          unzip -t app/build/outputs/bundle/candidate/app-candidate.aab >/dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MurshidWizari-Play-AAB-Unsigned-Build49803
+          path: android-native/app/build/outputs/bundle/candidate/app-candidate.aab
           if-no-files-found: error
 
       - name: Collect unsigned candidate and signing verifier
