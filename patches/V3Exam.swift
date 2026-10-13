@@ -305,10 +305,6 @@ struct V3ExamView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .lineSpacing(4)
-                        Button { V49QuestionSpeech.shared.speak(q.explanation) } label: {
-                            Label("استمع إلى التوضيح", systemImage: "speaker.wave.2.fill")
-                        }
-                        .font(.subheadline)
                     }
                     if let grade = grades[q.id], !jString(grade["message"]).isEmpty {
                         Text(jString(grade["message"]))

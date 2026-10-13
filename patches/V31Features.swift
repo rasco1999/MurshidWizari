@@ -1350,8 +1350,6 @@ struct V31AccountView: View {
                     Divider().padding(.leading, 48)
                     NavigationLink(destination: V49StudyHubView()) { V31AccountRowLabel(title: "مراجعاتي المحفوظة", subtitle: "مدرب ذكي يعمل دون اتصال بعد التصحيح", icon: "books.vertical.fill") }
                     Divider().padding(.leading, 48)
-                    NavigationLink(destination: V498NarrationSettingsView()) { V31AccountRowLabel(title: "صوت المعلّمة", subtitle: "اختيار الصوت العربي الأنثوي وتجربته وضبط سرعته", icon: "waveform") }
-                    Divider().padding(.leading, 48)
                     NavigationLink(destination: SupportView()) { V31AccountRowLabel(title: "خدمة العملاء", subtitle: "محادثة مباشرة مع الدعم", icon: "message.fill") }
                     Divider().padding(.leading, 48)
 

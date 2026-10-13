@@ -26,44 +26,6 @@ final class V498FinalUITests: XCTestCase {
     }
 
     @MainActor
-    func testArabicRecallListenAndStopControls() {
-        let app = XCUIApplication()
-        app.launch()
-        let button = app.buttons["V498_QA_AUDIO"]
-        XCTAssertTrue(button.waitForExistence(timeout: 20))
-        XCTAssertTrue(app.buttons["student-tab-0"].firstMatch.waitForExistence(timeout: 20))
-        button.tap()
-        let question = app.buttons["recall-question-98765001"]
-        XCTAssertTrue(question.waitForExistence(timeout: 8))
-        question.tap()
-        let setup = app.staticTexts["recall-question-98765001-message"]
-        if question.value as? String == "متوقف", setup.exists {
-            XCTAssertTrue(setup.label.contains("لا يوجد صوت عربي أنثوي"))
-            XCTAssertTrue(setup.label.contains("تسهيلات الاستخدام"))
-            screenshot("03-female-voice-setup-guidance")
-            app.buttons["اكشف الإجابة"].tap()
-            let answer = app.buttons["recall-answer-98765001"]
-            if !answer.isHittable { app.swipeUp() }
-            answer.tap()
-            XCTAssertEqual(answer.value as? String, "متوقف")
-            XCTAssertTrue(app.staticTexts["recall-answer-98765001-message"].label.contains("لا يوجد صوت عربي أنثوي"))
-            return
-        }
-        XCTAssertEqual(question.value as? String, "قيد التشغيل")
-        question.tap()
-        XCTAssertEqual(question.value as? String, "متوقف")
-        app.buttons["اكشف الإجابة"].tap()
-        let answer = app.buttons["recall-answer-98765001"]
-        if !answer.isHittable { app.swipeUp() }
-        XCTAssertTrue(answer.exists)
-        answer.tap()
-        XCTAssertEqual(answer.value as? String, "قيد التشغيل")
-        screenshot("03-arabic-answer-playing")
-        answer.tap()
-        XCTAssertEqual(answer.value as? String, "متوقف")
-    }
-
-    @MainActor
     func testCompactBrandLogosAndAccessibleTouchTargets() {
         let app = XCUIApplication()
         app.launch()
@@ -78,29 +40,6 @@ final class V498FinalUITests: XCTestCase {
             XCTAssertLessThanOrEqual(element.frame.width, 48)
         }
         screenshot("04-compact-social-icons")
-    }
-
-    @MainActor
-    func testNarratorSettingsAndPreviewAreAccessible() {
-        let app = XCUIApplication()
-        app.launch()
-        let control = app.buttons["V498_QA_NARRATOR_SETTINGS"]
-        XCTAssertTrue(control.waitForExistence(timeout: 20))
-        control.tap()
-        XCTAssertTrue(app.staticTexts["صوت الشرح"].waitForExistence(timeout: 8))
-        XCTAssertTrue(app.sliders["narration-speed-slider"].exists)
-        let preview = app.buttons["narration-preview-button"]
-        XCTAssertTrue(preview.exists)
-        screenshot("05-narrator-voice-settings")
-        if preview.isEnabled {
-            XCTAssertTrue(app.buttons["narration-female-voice-picker"].exists)
-            preview.tap()
-            let stop = app.buttons["narration-preview-button"]
-            XCTAssertTrue(stop.exists)
-            stop.tap()
-        } else {
-            XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "لا يوجد صوت عربي أنثوي")).firstMatch.exists)
-        }
     }
 
     @MainActor private func screenshot(_ name: String) {

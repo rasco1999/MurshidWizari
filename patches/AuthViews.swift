@@ -1769,7 +1769,6 @@ struct MainV3TabView: View {
         .onChange(of: selection) { value in
             visited.insert(value)
             schoolAds.setViewingAds(value == 3 && canViewAds)
-            V49QuestionSpeech.shared.stop()
             selectionHaptic()
         }
         .task(id: adsMonitorKey) {
@@ -3108,7 +3107,6 @@ struct V3ExamView: View {
                     .padding(16)
                 }
                 .onChange(of: current) { _ in
-                    V49QuestionSpeech.shared.stop()
                     withAnimation(.easeOut(duration: 0.22)) { proxy.scrollTo("top", anchor: .top) }
                 }
                 .onChange(of: grades.count) { _ in
@@ -3336,9 +3334,6 @@ struct V3ExamView: View {
                         .foregroundStyle(.secondary)
                         .lineSpacing(5)
                         .fixedSize(horizontal: false, vertical: true)
-                    V498SpeechButton(text: serverCorrectAnswer + ". " + serverExplanation,
-                                     title: "استمع إلى الإجابة والشرح",
-                                     speechID: "exam-answer-\(q.id)")
                 }
             }
         }

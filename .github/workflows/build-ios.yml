@@ -1,4 +1,4 @@
-name: Build Murshid Student iPhone v4.9.10 Narrator Settings
+name: Build Murshid Student iPhone v4.9.11 Remove Voice and Hints
 
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ permissions:
 jobs:
   build:
     if: ${{ true }}
-    name: Build v4.9.10 Build 509 unsigned student IPA
+    name: Build v4.9.10 Build 510 unsigned student IPA
     runs-on: macos-15
     timeout-minutes: 35
 
@@ -157,8 +157,7 @@ jobs:
           cp patches/V44StudentFeatures.swift source/MurshidWizari/V44StudentFeatures.swift
           cp patches/V45ContestWelcome.swift source/MurshidWizari/V45ContestWelcome.swift
           cp patches/V49StudyIntelligence.swift source/MurshidWizari/V49StudyIntelligence.swift
-          cp patches/V498QuestionSpeech.swift source/MurshidWizari/
-          cp patches/V498LiveSchoolAds.swift source/MurshidWizari/
+                    cp patches/V498LiveSchoolAds.swift source/MurshidWizari/
           cp patches/V498SocialLinks.swift source/MurshidWizari/
           cp qa-ios/V498QAHarness.swift source/MurshidWizari/
           cp patches/SocialAssets-LICENSE.md source/MurshidWizari/SocialAssets-LICENSE.txt
@@ -568,7 +567,7 @@ jobs:
           TAG="v4.9.10-build509-female-voice-settings-ios-preview"
           TITLE="Murshid Wizari iPhone v4.9.10 Build 509 (Unsigned Preview)"
           RELEASE_FLAGS=(--prerelease)
-          NOTES="Based on Build508. Students can select an installed Arabic female narrator, preview her pronunciation and adjust reading pace from their account. The automatic highest-quality voice, strict female-only fallback, speech interruption recovery, school-ad badges and compact social icons remain. The voice must exist on the iPhone; importing a normal audio recording is not voice cloning. Unsigned; verify on your iPhone after signing."
+          NOTES="Removes speech UI and TTS from the student IPA, keeps written answers and explanations, retains ad badges and social icons. Site-side French removal and administrator-managed predictions require separately deploying the supplied public_html package. Unsigned; sign and test on device."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" \
               Murshid_Wizari_iOS_v4_9_10_BUILD509_unsigned.ipa \

@@ -36,28 +36,16 @@ final class V498QAURLProtocol: URLProtocol, @unchecked Sendable {
 }
 
 struct V498QATools: ViewModifier {
-    @State private var showAudio = false
     @State private var showSocial = false
-    @State private var showNarratorSettings = false
     func body(content: Content) -> some View {
         content
             .safeAreaInset(edge: .top) {
                 HStack {
                     Button("QA إعلان") { V498QAURLProtocol.publishFixture() }
                         .accessibilityIdentifier("V498_QA_PUBLISH_FIXTURE")
-                    Button("QA صوت") {
-                        seedReview()
-                        showAudio = true
-                    }.accessibilityIdentifier("V498_QA_AUDIO")
                     Button("QA روابط") { showSocial = true }
                         .accessibilityIdentifier("V498_QA_SOCIAL")
-                    Button("QA المعلّمة") { showNarratorSettings = true }
-                        .accessibilityIdentifier("V498_QA_NARRATOR_SETTINGS")
                 }.font(.caption).padding(5).background(.thinMaterial)
-            }
-            .sheet(isPresented: $showAudio) {
-                NavigationStack { V49RecallView(questionIDs: [98765001]) }
-                    .environment(\.layoutDirection, .rightToLeft)
             }
             .sheet(isPresented: $showSocial) {
                 NavigationStack {
@@ -67,10 +55,7 @@ struct V498QATools: ViewModifier {
                     }.padding(20).navigationTitle("التواصل الاجتماعي")
                 }.environment(\.layoutDirection, .rightToLeft)
             }
-            .sheet(isPresented: $showNarratorSettings) {
-                NavigationStack { V498NarrationSettingsView() }
-                    .environment(\.layoutDirection, .rightToLeft)
-            }
+
     }
     private func seedReview() {
         let user = UserSummary(id: 987654, name: "طالب اختبار محلي", grade: "السادس العلمي", gradeID: 1)

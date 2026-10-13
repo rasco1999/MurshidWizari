@@ -378,8 +378,6 @@ struct V49RecallView: View {
                         VStack(alignment: .leading, spacing: 15) {
                             Text(q.topicName).font(.caption.bold()).foregroundStyle(Color.murshidBlue)
                             Text(q.question).font(.title3.bold()).lineSpacing(5).textSelection(.enabled)
-                            V498SpeechButton(text: q.question, title: "استمع إلى السؤال",
-                                             speechID: "recall-question-\(q.id)")
                             if reveal {
                                 Divider()
                                 Text("الإجابة النموذجية").font(.caption.bold()).foregroundStyle(.secondary)
@@ -390,9 +388,6 @@ struct V49RecallView: View {
                                 } else {
                                     Text("لا يتوفر شرح معتمد لهذا السؤال حتى الآن.").font(.caption).foregroundStyle(.secondary)
                                 }
-                                V498SpeechButton(text: q.correctAnswer + ". " + q.explanation,
-                                                 title: "استمع إلى الإجابة والشرح",
-                                                 speechID: "recall-answer-\(q.id)")
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -434,14 +429,12 @@ struct V49RecallView: View {
         .background(Color.murshidBackground.ignoresSafeArea())
         .navigationTitle("مراجعة نشطة")
         .navigationBarTitleDisplayMode(.inline)
-        .onDisappear { V49QuestionSpeech.shared.stop() }
     }
 
     private func finish(_ q: V49StudyRecord, remembered didRemember: Bool) {
         store.markRecall(questionID: q.id, remembered: didRemember)
         if didRemember { remembered += 1; haptic(.success) }
         else { needsReview += 1; haptic(.warning) }
-        V49QuestionSpeech.shared.stop()
         reveal = false
         index += 1
     }

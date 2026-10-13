@@ -5,29 +5,12 @@ import xml.etree.ElementTree as ET
 
 root = Path(__file__).resolve().parent.parent
 patch = root / "patches"
-speech = (patch / "V498QuestionSpeech.swift").read_text()
 ads = (patch / "V498LiveSchoolAds.swift").read_text()
 auth = (patch / "AuthViews.swift").read_text()
 home = (patch / "V31Features.swift").read_text()
 api = (patch / "APIClient.swift").read_text()
 workflow = (root / ".github/workflows/build-ios.yml").read_text()
 checks = [
-    (speech, "setCategory(.playback, mode: .spokenAudio", "Silent-mode-safe playback category"),
-    (speech, "try session.setActive(true)", "Explicit activation, not swallowed errors"),
-    (speech, "AVSpeechSynthesizerDelegate", "Playback lifecycle and cancellation"),
-    (speech, "self.utterance === utterance", "Reject stale speech callbacks"),
-    (speech, "8_000_000_000", "Bounded start and one recovery attempt"),
-    (speech, "oldDeviceUnavailable", "Headphone unplug privacy"),
-    (speech, "didEnterBackgroundNotification", "Stop private speech in background"),
-    (speech, "$0.gender == .female", "Require an actual female voice"),
-    (speech, "a.quality.rawValue > b.quality.rawValue", "Prefer highest available female voice quality"),
-    (speech, "selectedVoice = Self.availableVoice()", "Keep one Arabic female voice across all chunks"),
-    (speech, "result.pitchMultiplier = 1.0", "Natural timbre without artificial pitch shifting"),
-    (speech, "result.prefersAssistiveTechnologySettings = false", "Apply app narration speed consistently"),
-    (speech, "V499ArabicNarration.unavailableMessage", "Explain missing female voice without male fallback"),
-    (speech, "struct V498NarrationSettingsView", "Student-controlled Arabic female narrator settings"),
-    (speech, "availableFemaleVoices()", "Show only eligible installed voices"),
-    (speech, "normalizedSpeed(savedSpeed)", "Bounded and persisted narration speed"),
     (ads, "15_000_000_000", "Foreground ad polling"),
     (ads, "generation == expectedGeneration", "Account-switch response guard"),
     (ads, 'request("mobile/bootstrap.php", fresh: true)', "Uncached canonical active ads"),
@@ -37,14 +20,14 @@ checks = [
     (auth, "if selection == index && !keyboardVisible { bottomBar }", "Only selected pane exposes tab controls"),
     (home, "V498SocialLinksFooter()", "Compact branded student footer"),
     (home, "StudentPalette.allCases", "Build506 color themes preserved"),
-    (home, "V498NarrationSettingsView()", "Accessible narrator controls in student account"),
     (workflow, "V498Final.xcresult", "Simulator QA gates the IPA"),
     (workflow, "Match simulator launch metadata", "QA uses production fullscreen layout"),
 ]
 for source, needle, title in checks:
     assert needle in source, title
     print("PASS", title)
-assert "prefix(3200)" not in speech
+assert all("V49QuestionSpeech" not in (patch / x).read_text() for x in ["AuthViews.swift","V31Features.swift","V49StudyIntelligence.swift","V3Exam.swift"])
+assert "V498SpeechButton" not in auth
 assert 'method: "POST"' not in ads
 for name in ["Instagram", "Facebook", "Telegram"]:
     directory = patch / "SocialAssets.xcassets" / f"Social{name}.imageset"
