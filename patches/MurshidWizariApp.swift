@@ -174,7 +174,7 @@ struct MurshidWizariApp: App {
                 guard bootstrapAttempt == attempt else { return }
                 app.applyBootstrap(response)
                 bootstrapNeedsNetworkRetry = false
-            } catch let failure as APIError where failure.status == 0 {
+            } catch let failure as APIError where failure.status == 0 || failure.status == 408 || failure.status == 429 || failure.status >= 500 {
                 guard bootstrapAttempt == attempt else { return }
                 // Network timeouts are not invalid credentials. Keep stored
                 // cookies and allow retry; never reset the student account.
