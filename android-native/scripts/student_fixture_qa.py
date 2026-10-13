@@ -158,6 +158,16 @@ def visible_login_field(index):
   ui.adb('shell','input','swipe','196','410','196','200','330')
   time.sleep(.35)
  raise AssertionError(f'Could not reveal login field {index}: {last!r}')
+def type_ascii_keyevents(value):
+ # AOSP API26 fallback for synthetic ASCII fixture strings only.
+ special={'.':56,'@':77,'-':69}
+ for character in value:
+  if 'a'<=character<='z': code=29+ord(character)-ord('a')
+  elif '0'<=character<='9': code=7+ord(character)-ord('0')
+  else: code=special.get(character)
+  if code is None: raise AssertionError('Unsupported synthetic QA keyevent')
+  ui.adb('shell','input','keyevent',str(code))
+
 def login_field(index,value):
  # A cold API-26 emulator can drop the first adb text event while its IME is
  # opening. Confirm that the native EditText actually changed before moving
@@ -178,6 +188,24 @@ def login_field(index,value):
   if seen==value or (index==1 and seen not in ('',hint)):
    hide_keyboard_if_visible()
    return
+  if attempt>=1 and ui.adb('shell','getprop','ro.build.version.sdk').strip()==b'26':
+   # Record focus state before changing the injection mechanism; do not hide a
+   # genuine focus failure behind an unconditional test pass.
+   native_field=visible_login_field(index)
+   print('API26 IME fallback focus before tap:',native_field.attrib.get('focused'),flush=True)
+   ui.tap_node(native_field)
+   time.sleep(.6)
+   current=visible_login_field(index).attrib.get('text','')
+   if current not in ('',hint):
+    ui.adb('shell','input','keyevent','KEYCODE_MOVE_END')
+    for _ in range(len(current)+3):ui.adb('shell','input','keyevent','KEYCODE_DEL')
+   type_ascii_keyevents(value)
+   time.sleep(.7)
+   seen=visible_login_field(index).attrib.get('text','')
+   if seen==value or (index==1 and seen not in ('',hint)):
+    print('RECOVER API26 input through Android keyevents',flush=True)
+    hide_keyboard_if_visible()
+    return
   print(f'RETRY input for login field {index} on emulator (attempt {attempt+1}, actual={seen!r})',flush=True)
  raise AssertionError(f'Native login field {index} failed to retain typed value; last visible={seen!r}')
 def button(text): ui.tap_visible(text,393,852)
