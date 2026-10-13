@@ -499,12 +499,12 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
             noticeError = ""
         }
         noticeDelivery.bind(id, api.hasSavedSession())
-        SchoolFirebasePush.attach(getApplication(), api, id, dashboard?.csrf.orEmpty())
+        SchoolFirebasePush.attach(getApplication<Application>(), api, id, dashboard?.csrf.orEmpty())
         syncNotices(silent = true)
     }
 
     private fun clearNotices() {
-        SchoolFirebasePush.detach(getApplication())
+        SchoolFirebasePush.detach(getApplication<Application>())
         noticeDelivery.clear()
         noticeBoundStudentId = 0
         noticeInbox = NoticeInbox(0, emptyList())
@@ -887,7 +887,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val token = dashboard?.csrf.orEmpty()
                 if (token.isNotBlank()) api.post("mobile/logout.php",
-                    SchoolFirebasePush.logoutPayload(getApplication(), token))
+                    SchoolFirebasePush.logoutPayload(getApplication<Application>(), token))
             } catch (_: Exception) {
                 // Always let the student explicitly clear their own local credentials.
             } finally {

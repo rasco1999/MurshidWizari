@@ -40,6 +40,27 @@ object SchoolFirebasePush {
     private val mutex = Any()
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
 
+    /** Reinitialize the public Firebase client from protected app preferences at cold start. */
+    fun initialize(ctx: Context) {
+        val app = ctx.applicationContext
+        val stored = prefs(app).getString("firebase_config", null) ?: return
+        runCatching {
+            val config = JSONObject(stored)
+            if (validPublicConfig(config)) {
+                val options = FirebaseOptions.Builder()
+                    .setApplicationId(config.getString("app_id"))
+                    .setApiKey(config.getString("api_key"))
+                    .setGcmSenderId(config.getString("sender_id"))
+                    .setProjectId(config.getString("project_id"))
+                    .build()
+                if (FirebaseApp.getApps(app).none { it.name == "[DEFAULT]" }) {
+                    FirebaseApp.initializeApp(app, options)
+                }
+                FirebaseMessaging.getInstance().isAutoInitEnabled = false
+            }
+        }
+    }
+
     fun acceptedBinding(storedUser: Int, storedBinding: String, incomingBinding: String,
                         lastId: Long, currentId: Long): Boolean =
         storedUser > 0 && isUuid(storedBinding) && storedBinding == incomingBinding &&
@@ -71,6 +92,7 @@ object SchoolFirebasePush {
                 if (serial != epoch || !response.optBoolean("enabled")) return@launch
                 val firebase = response.optJSONObject("firebase") ?: return@launch
                 if (!validPublicConfig(firebase)) return@launch
+                prefs(app).edit().putString("firebase_config", firebase.toString()).apply()
                 val options = FirebaseOptions.Builder()
                     .setApplicationId(firebase.getString("app_id"))
                     .setApiKey(firebase.getString("api_key"))
