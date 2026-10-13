@@ -89,7 +89,7 @@ object SchoolFirebasePush {
         }
         scope.launch {
             try {
-                val response = api.get("mobile/android-push-config.php")
+                val response = api.get("mobile/android-push-config.php?package=com.muriq.murshid.iosparity")
                 if (serial != epoch || !response.optBoolean("enabled")) return@launch
                 val firebase = response.optJSONObject("firebase") ?: return@launch
                 if (!validPublicConfig(firebase)) return@launch
