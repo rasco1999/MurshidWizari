@@ -98,6 +98,7 @@ class MainActivity : Activity() {
     private var busyAnswer = false
     private var submissionUncertain = false
     private var activeScreen = "welcome"
+    private var offlineCoachMode = false
     private var subscribed = false
     private val competitionHistory = ArrayDeque<String>()
     private var dailyQuestions = emptyList<CompetitionRules.Question>()
@@ -231,19 +232,31 @@ class MainActivity : Activity() {
                     caption("جارٍ استعادة حسابك…")
                 }
             }, minimumWelcomeMs)
-            fetch("mobile/bootstrap.php", showError = false) { response ->
+            if (!hasAnyInternetNetwork() && canOpenOfflineCoach()) {
                 main.postDelayed({
-                    if (activeScreen == "welcome" || activeScreen == "restoring") {
-                        if (response.optBoolean("ok")) showHome(response)
-                        else {
-                            activeScreen = "restore_error"
-                            base("استعادة الاتصال")
-                            caption(response.optString("message", "تعذر الاتصال الآن. بيانات جلستك محفوظة."))
-                            button("إعادة المحاولة") { refreshHome() }
-                            button("العودة لتسجيل الدخول", secondary = true) { loginScreen() }
+                    if (activeScreen == "welcome" || activeScreen == "restoring")
+                        showOfflineCoachHome()
+                }, minimumWelcomeMs)
+            } else {
+                fetch("mobile/bootstrap.php", showError = false) { response ->
+                    main.postDelayed({
+                        if (activeScreen == "welcome" || activeScreen == "restoring") {
+                            if (response.optBoolean("ok")) showHome(response)
+                            else if (response.optBoolean("network_error") && canOpenOfflineCoach())
+                                showOfflineCoachHome()
+                            else {
+                                activeScreen = "restore_error"
+                                base("استعادة الاتصال")
+                                caption(response.optString("message", "تعذر الاتصال الآن. بيانات جلستك محفوظة."))
+                                if (canOpenOfflineCoach()) button("مدربي الذكي دون إنترنت", secondary = true) {
+                                    showOfflineCoachHome()
+                                }
+                                button("إعادة المحاولة") { refreshHome() }
+                                button("العودة لتسجيل الدخول", secondary = true) { loginScreen() }
+                            }
                         }
-                    }
-                }, (readyAt - SystemClock.elapsedRealtime()).coerceAtLeast(0))
+                    }, (readyAt - SystemClock.elapsedRealtime()).coerceAtLeast(0))
+                }
             }
         } else {
             main.postDelayed({ if (activeScreen == "welcome") guestLandingScreen() }, minimumWelcomeMs)
@@ -998,6 +1011,8 @@ class MainActivity : Activity() {
         NetworkRules.requiresReconciliation(result.optBoolean("network_error"),
             result.optBoolean("transport_uncertain"))
     private fun expireSession() {
+        OfflineCoachAccess(prefs).clear()
+        offlineCoachMode = false
         sessionGeneration++
         StudentPush.detach(this)
         intent.removeExtra(StudentPush.inboxExtra)
@@ -2380,6 +2395,8 @@ class MainActivity : Activity() {
         homepage = response; csrf = response.optString("csrf", csrf)
         student = response.optJSONObject("user") ?: JSONObject()
         subscribed = response.optBoolean("subscribed")
+        offlineCoachMode = false
+        OfflineCoachAccess(prefs).remember(student.optInt("id"), api.hasRememberedSession())
         updateSchoolAdsBadge(response)
         StudentPush.attach(this, api, student.optInt("id"), csrf) { configured ->
             if (!isFinishing && !isDestroyed && configured && student.optInt("id") > 0 &&
@@ -2404,6 +2421,51 @@ class MainActivity : Activity() {
         super.onNewIntent(newIntent)
         intent = newIntent
         // onResume decides whether the biometric shield is required before routing.
+    }
+
+    private fun hasAnyInternetNetwork(): Boolean {
+        val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+        val network = manager.activeNetwork ?: return false
+        return manager.getNetworkCapabilities(network)
+            ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+    }
+
+    private fun canOpenOfflineCoach(): Boolean =
+        OfflineCoachAccess(prefs).studentId(api.hasRememberedSession()) > 0
+
+    /** Offline access never opens server-dependent tests, subscriptions or payments. */
+    private fun showOfflineCoachHome() {
+        val studentId = OfflineCoachAccess(prefs).studentId(api.hasRememberedSession())
+        if (studentId <= 0) { guestLandingScreen(); return }
+        offlineCoachMode = true
+        csrf = ""
+        student = JSONObject().put("id", studentId).put("name", "طالبنا")
+        subscribed = false
+        homepage = JSONObject()
+        activeScreen = "offline_coach_home"
+        base("المرشد الوزاري")
+        val welcome = uiCard()
+        welcome.addView(uiText("مراجعتك معك أينما كنت", 23f, true, blue))
+        welcome.addView(uiText("وضع المراجعة دون إنترنت", 15f, true),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        welcome.addView(uiText(
+            "يمكنك فتح المدرب الذكي ومراجعة الأسئلة التي سبق حفظها على هذا الجهاز، دون اتصال ولا إرسال إجابات جديدة.",
+            14f, tint = mutedText),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        addUiCard(welcome, bottom = 16)
+        addUiCard(uiRow("مدربي الذكي · مراجعة دون إنترنت",
+            "افتح دفتر الأسئلة المحفوظة", "brain") { coachScreen() }, bottom = 14)
+        val count = OfflineCoachNotebook(prefs).cards(studentId).size
+        caption(if (count > 0) "أسئلتك المحفوظة على الجهاز: $count"
+            else "لا توجد أسئلة محفوظة بعد. اتصل بالإنترنت وأجب عن أسئلة الاختبارات أولاً.")
+        button("العودة إلى الوضع المتصل", secondary = true) {
+            if (!hasAnyInternetNetwork()) message("لا يوجد اتصال الآن. يمكنك متابعة المراجعة دون إنترنت.")
+            else fetch("mobile/bootstrap.php", showError = false) { result ->
+                if (result.optBoolean("ok")) showHome(result)
+                else if (!result.optBoolean("network_error"))
+                    message("تعذر استعادة الجلسة. تحقق من حسابك واتصال الإنترنت.")
+            }
+        }
     }
 
     private fun showHome(response: JSONObject) {
@@ -2606,7 +2668,7 @@ class MainActivity : Activity() {
             "هذه مراجعة محلية مستقلة. تقييم إتقانك هنا لا يرسل إجابات جديدة ولا يخصم سؤالًا مجانيًا، ولا يُحدّث جدول المدرب الموجود على الموقع.",
             12f, tint = mutedText))
         addUiCard(disclaimer)
-        button("تحديث أخطائي المحفوظة من الخادم", secondary = true) {
+        if (!offlineCoachMode) button("تحديث أخطائي المحفوظة من الخادم", secondary = true) {
             fetch("mobile/review.php", showError = false) { response ->
                 if (activeScreen != "coach") return@fetch
                 if (!response.optBoolean("ok")) {
@@ -4999,6 +5061,8 @@ class MainActivity : Activity() {
                             StudentPush.detach(this@MainActivity)
                             intent.removeExtra(StudentPush.inboxExtra)
                             api.clear(); csrf = ""; student = JSONObject()
+                            OfflineCoachAccess(prefs).clear()
+                            offlineCoachMode = false
                             homeFeatureFlags = JSONObject()
                             homeInsightsLoaded = false; homeInsights = JSONObject(); homeWeekly = JSONObject()
                             guestLandingScreen()
@@ -6634,7 +6698,8 @@ class MainActivity : Activity() {
         }
         when (activeScreen) {
             "coach_question" -> coachScreen()
-            "coach" -> showHome(homepage)
+            "coach" -> if (offlineCoachMode) showOfflineCoachHome() else showHome(homepage)
+            "offline_coach_home" -> moveTaskToBack(true)
             "bound_recovery" -> accountScreen()
             "contest_instructions" -> loadContest()
             "phone_reset" -> if (recoverReturnScreen == "account") boundRecoveryScreen() else recoverScreen()
