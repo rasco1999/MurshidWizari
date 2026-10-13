@@ -61,6 +61,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # Never let an obsolete workflow overwrite the newest APK artifact.
+          CURRENT_HEAD="$(gh api "repos/$GITHUB_REPOSITORY/branches/android-from-ios-compose" --jq '.commit.sha')"
+          if [ "$CURRENT_HEAD" != "$GITHUB_SHA" ]; then
+            echo "Outdated build: $GITHUB_SHA (branch is $CURRENT_HEAD); skipping release update."
+            exit 0
+          fi
           TAG="android-v4.9.14-compose-native-preview"
           APK="Murshid_Wizari_Android_v4_9_14_NATIVE_PREVIEW.apk"
           cp app/build/outputs/apk/debug/app-debug.apk "$APK"
