@@ -8,6 +8,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: murshid-android-emulator-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   native-emulator:
     runs-on: ubuntu-latest
