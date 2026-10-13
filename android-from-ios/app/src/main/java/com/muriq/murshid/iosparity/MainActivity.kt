@@ -133,6 +133,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                 lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                     while (isActive) {
                         vm.syncNotices(silent = true)
+                        vm.refreshAds(silent = true)
                         delay(75_000)
                     }
                 }

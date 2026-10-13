@@ -635,8 +635,10 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    private var refreshingSchoolAds = false
     fun refreshAds(silent: Boolean = false) {
-        if (loading && !silent) return
+        if (refreshingSchoolAds || (loading && !silent)) return
+        refreshingSchoolAds = true
         viewModelScope.launch {
             if (!silent) loading = true
             try {
@@ -647,7 +649,10 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
                 reconcileSchoolAds()
                 if (!silent) message = "تم تحديث الإعلانات."
             } catch (error: Exception) { if (!silent) fail(error) }
-            finally { if (!silent) loading = false }
+            finally {
+                refreshingSchoolAds = false
+                if (!silent) loading = false
+            }
         }
     }
 
