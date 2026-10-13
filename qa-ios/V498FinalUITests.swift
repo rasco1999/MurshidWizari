@@ -42,6 +42,24 @@ final class V498FinalUITests: XCTestCase {
         screenshot("04-compact-social-icons")
     }
 
+    @MainActor
+    func testOfflineColdStartAfterVerifiedLoginWithoutRememberedCookie() {
+        // All bootstrap responses are synthetic URLProtocol fixtures; the QA
+        // user was verified but no server cookies are saved for restoration.
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.buttons["student-tab-0"].waitForExistence(timeout: 25))
+        app.terminate()
+
+        // Reopen the real native UI with the network monitor forced offline.
+        app.launchArguments = ["V498_QA_FORCE_OFFLINE"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["وضع الدراسة دون إنترنت"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["مراجعاتك محفوظة على الآيفون"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["فتح المراجعة دون إنترنت"].exists)
+        screenshot("06-cold-offline-student-without-remember")
+    }
+
     @MainActor private func screenshot(_ name: String) {
         let image = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         image.name = name
