@@ -20,6 +20,9 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.muriq.murshid.iosparity.MainActivity
+import com.muriq.murshid.iosparity.data.SchoolAdReadRules
+import com.muriq.murshid.iosparity.data.StudentDashboard
+import org.json.JSONObject
 import com.muriq.murshid.iosparity.net.ApiProblem
 import com.muriq.murshid.iosparity.net.MurshidApi
 import java.util.concurrent.TimeUnit
@@ -32,6 +35,7 @@ import java.util.concurrent.TimeUnit
 class NoticeDelivery(private val context: Context) {
     companion object {
         const val ACTION_OPEN_NOTICES = "com.muriq.murshid.iosparity.OPEN_NOTICES"
+        const val ACTION_OPEN_SCHOOL_ADS = "com.muriq.murshid.iosparity.OPEN_SCHOOL_ADS"
         const val EXTRA_STUDENT_ID = "student_id"
         const val EXTRA_NOTICE_ID = "notice_id"
         private const val PREFS = "murshid_notification_delivery_v1"
@@ -103,6 +107,53 @@ class NoticeDelivery(private val context: Context) {
         }
     }
 
+    /**
+     * Local fallback for school advertisements on devices with a remembered session:
+     * WorkManager refreshes at >=15 minute intervals; Firebase push is still required
+     * for timely alerts while Android is dozing. First sync seeds only, with no flood.
+     */
+    fun deliverSchoolAds(studentId: Int, items: List<JSONObject>) {
+        if (studentId <= 0 || activeUserId() != studentId) return
+        val revisions = SchoolAdReadRules.published(items)
+            .associateBy { SchoolAdReadRules.revision(it) }
+        val storageKey = "school_ad_revisions"
+        val seeded = prefs.contains(storageKey)
+        val prior = prefs.getStringSet(storageKey, emptySet()).orEmpty().toSet()
+        if (seeded && alertsEnabled()) {
+            ensureChannel()
+            revisions.filterKeys { it !in prior }.values.take(5).forEach { ad ->
+                val schoolName = ad.optString("school").trim().take(90)
+                val adId = ad.optInt("id")
+                if (adId <= 0) return@forEach
+                val intent = Intent(context, MainActivity::class.java).apply {
+                    action = ACTION_OPEN_SCHOOL_ADS
+                    flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    putExtra(EXTRA_STUDENT_ID, studentId)
+                }
+                val pending = PendingIntent.getActivity(
+                    context, 200_000 + (adId % 50_000), intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                val notification = NotificationCompat.Builder(context, CHANNEL)
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentTitle("إعلان مدرسة جديد")
+                    .setContentText(schoolName.ifBlank { "افتح الإعلانات للاطلاع على التفاصيل." })
+                    .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                    .setAutoCancel(true)
+                    .setContentIntent(pending)
+                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                    .build()
+                try {
+                    manager.notify("school-$studentId", 200_000 + (adId % 50_000), notification)
+                } catch (_: SecurityException) { /* OS permission can be revoked. */ }
+            }
+        }
+        // Snapshot replaces deleted/disabled content, so publishing it again counts as new.
+        if (!seeded || revisions.keys != prior) {
+            prefs.edit().putStringSet(storageKey, revisions.keys.toSet()).apply()
+        }
+    }
+
     private fun ensureChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             val channel = NotificationChannel(
@@ -152,11 +203,13 @@ class StudentNoticeWorker(context: Context, params: WorkerParameters) : Coroutin
         if (!api.hasSavedSession()) return Result.success()
         return try {
             // Reject a stale cookie, switched session or incorrectly bound worker.
-            val remote = api.get("mobile/bootstrap.php").optJSONObject("user")?.optInt("id") ?: 0
+            val bootstrap = api.get("mobile/bootstrap.php")
+            val remote = bootstrap.optJSONObject("user")?.optInt("id") ?: 0
             if (remote != expected) {
                 delivery.clear()
                 Result.success()
             } else {
+                delivery.deliverSchoolAds(expected, StudentDashboard.from(bootstrap).ads)
                 val inbox = NoticeInbox.from(api.get("mobile/notifications.php"))
                 delivery.deliver(expected, inbox)
                 Result.success()
