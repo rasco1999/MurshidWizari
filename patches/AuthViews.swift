@@ -5149,7 +5149,10 @@ enum V515EquationGuide {
         if kind == "calculation" { return true }
         let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
         if q.count < 7 { return false }
-        if ["=", "×", "÷", "√", "∑", "∫", "∆", "Δ", "→", "⇌", "²", "³", "^", "mol", "sin", "cos", "tan"].contains(where: { q.localizedCaseInsensitiveContains($0) }) { return true }
+        if ["=", "×", "÷", "√", "∑", "∫", "∆", "Δ", "→", "⇌", "²", "³", "^"].contains(where: { q.contains($0) }) { return true }
+        // Match complete mathematical tokens, not 'sin' inside 'sing',
+        // 'cos' inside 'because', or 'mol' inside an English paragraph.
+        if q.range(of: #"(?i)\b(?:sin|cos|tan|mol)\b"#, options: .regularExpression) != nil { return true }
         let quantitative = ["رياضيات", "فيزياء", "كيمياء", "أحياء", "اقتصاد", "جغرافية", "علوم"].contains { subject.contains($0) }
         let words = ["احسب", "أوجد", "جد قيمة", "معادلة", "قانون", "الميل", "العمودي", "المحيط", "مساحة", "الكتلة المولية", "حجم الغاز", "التخفيف", "التركيز", "النسبة الوراثية"]
         return quantitative && words.contains { q.contains($0) }
