@@ -217,6 +217,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
                     .put("remember_me", remember))
                 if (response.optBoolean("email_verification_required") ||
                     response.optBoolean("phone_verification_required")) {
+                    pendingVerificationRemember = remember
                     verification = response; screen = Screen.VERIFY
                 } else {
                     api.setRemember(remember)
@@ -227,6 +228,42 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
                     tab = 0; screen = Screen.MAIN
                 }
             } catch (error: Exception) { fail(error) }
+            finally { loading = false }
+        }
+    }
+
+    private var pendingVerificationRemember = false
+
+    fun verifyPendingCode(value: String) {
+        if (loading) return
+        val kind = if (verification.optBoolean("phone_verification_required")) "phone" else "email"
+        viewModelScope.launch {
+            loading = true
+            try {
+                val result = api.verifyPendingAccount(kind, value)
+                if (result.optBoolean("activated", false)) {
+                    api.setRemember(pendingVerificationRemember)
+                    dashboard = StudentDashboard.from(result)
+                    bindNoticesToStudent()
+                    tab = 0; screen = Screen.MAIN
+                    loadAccount()
+                    message = "تم تأكيد الحساب بنجاح."
+                } else {
+                    screen = Screen.LOGIN
+                    message = result.optString("message", "أكمل تسجيل الدخول بعد التحقق.")
+                }
+            } catch (error: Exception) { fail(error) }
+            finally { loading = false }
+        }
+    }
+
+    fun resendPendingVerification() {
+        if (loading) return
+        val kind = if (verification.optBoolean("phone_verification_required")) "phone" else "email"
+        viewModelScope.launch {
+            loading = true
+            try { message = api.resendPendingAccountCode(kind) }
+            catch (error: Exception) { fail(error) }
             finally { loading = false }
         }
     }
@@ -255,6 +292,7 @@ class MurshidViewModel(app: Application) : AndroidViewModel(app) {
                     .put("password_confirmation", confirmation))
                 if (response.optBoolean("email_verification_required") ||
                     response.optBoolean("phone_verification_required")) {
+                    pendingVerificationRemember = false
                     verification = response; screen = Screen.VERIFY
                     message = "أكمل تأكيد حسابك."
                 } else {

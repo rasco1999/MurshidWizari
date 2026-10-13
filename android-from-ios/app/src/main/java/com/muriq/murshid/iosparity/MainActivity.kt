@@ -512,23 +512,34 @@ private fun RegisterScreen(vm: MurshidViewModel) {
 
 @Composable
 private fun VerificationScreen(vm: MurshidViewModel) {
-    val ctx = LocalContext.current
+    var code by rememberSaveable { mutableStateOf("") }
     val email = vm.verification.optBoolean("email_verification_required")
-    val url = if (email) "https://www.mur-iq.com/verify-email.php"
-        else "https://www.mur-iq.com/verify-phone.php"
+    val destination = vm.verification.optString(if (email) "masked_email" else "masked_phone")
     Column(
         Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(18.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Icon(Icons.Default.VerifiedUser, null, tint = MurshidBlue, modifier = Modifier.size(58.dp))
-        Text("أكمل التحقق من حسابك", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text(vm.verification.optString("message", "أكمل التحقق وفق خطوات المنصة الرسمية."),
+        Text(if (email) "تأكيد البريد الإلكتروني" else "تأكيد رقم الهاتف",
+            style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(vm.verification.optString("message",
+            "أدخل الرمز المرسل إلى وسيلة التواصل المسجلة.") +
+            if (destination.isBlank()) "" else "\n" + destination,
             textAlign = TextAlign.Center)
-        PrimaryAction("فتح صفحة التحقق الرسمية") {
-            ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-        }
-        SecondaryAction("العودة للدخول", vm::showLogin)
+        OutlinedTextField(
+            value = code, onValueChange = {
+                code = com.muriq.murshid.iosparity.net.VerificationFormRules.normalizedDigits(it)
+                    .filter(Char::isDigit).take(6)
+            },
+            label = { Text("رمز التحقق (6 أرقام)") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            singleLine = true, modifier = Modifier.fillMaxWidth()
+        )
+        PrimaryAction("تأكيد الحساب", { vm.verifyPendingCode(code) },
+            enabled = !vm.loading && code.length == 6)
+        SecondaryAction("إعادة إرسال الرمز", vm::resendPendingVerification)
+        SecondaryAction("العودة لتسجيل الدخول", vm::showLogin)
     }
 }
 

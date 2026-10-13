@@ -19,6 +19,7 @@ import java.net.URI
 import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
+import com.muriq.murshid.iosparity.net.VerificationFormRules
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -179,6 +180,80 @@ class MurshidApi(private val context: Context) {
         } finally {
             connection.disconnect()
         }
+    }
+
+
+    // First-party email/phone verification uses the platform's legacy same-origin PHP form
+    // contract. No WebView and no external verifier; never retry a POST automatically.
+    private data class VerifyFormReply(val status: Int, val html: String)
+
+    private fun verificationForm(path: String, fields: Map<String, String>? = null): VerifyFormReply {
+        require(path == "verify-email.php" || path == "verify-phone.php")
+        val conn = URL(origin.toString() + path).openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = if (fields == null) "GET" else "POST"
+            conn.connectTimeout = 15000
+            conn.readTimeout = 20000
+            conn.instanceFollowRedirects = false
+            conn.setRequestProperty("Accept", "text/html,application/xhtml+xml")
+            conn.setRequestProperty("Cache-Control", "no-store")
+            cookies.cookieStore.get(origin).filter { !it.hasExpired() }.takeIf { it.isNotEmpty() }?.let { jar ->
+                conn.setRequestProperty("Cookie", jar.joinToString("; ") { it.name + "=" + it.value })
+            }
+            if (fields != null) {
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
+                val payload = fields.entries.joinToString("&") {
+                    java.net.URLEncoder.encode(it.key, "UTF-8") + "=" +
+                        java.net.URLEncoder.encode(it.value, "UTF-8")
+                }
+                conn.outputStream.use { it.write(payload.toByteArray(StandardCharsets.UTF_8)) }
+            }
+            val status = conn.responseCode
+            cookies.put(origin, conn.headerFields)
+            persistCookies()
+            val stream = if (status >= 400) conn.errorStream else conn.inputStream
+            val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText().take(500_000) }.orEmpty()
+            return VerifyFormReply(status, text)
+        } finally { conn.disconnect() }
+    }
+
+    suspend fun verifyPendingAccount(kind: String, submittedCode: String): JSONObject = withContext(Dispatchers.IO) {
+        val code = VerificationFormRules.normalizedDigits(submittedCode)
+        if (kind !in setOf("phone", "email") || !VerificationFormRules.validCode(code))
+            throw ApiProblem("أدخل رمزًا صحيحًا من ستة أرقام.")
+        val path = if (kind == "phone") "verify-phone.php" else "verify-email.php"
+        val csrf = VerificationFormRules.csrf(verificationForm(path).html)
+            ?: throw ApiProblem("تعذّر تجهيز التحقق. أعد المحاولة.")
+        val response = verificationForm(path, mapOf("csrf" to csrf, "action" to "verify", "code" to code))
+        val alert = VerificationFormRules.result(response.html)
+        if (response.status >= 400 || alert.error) {
+            throw ApiProblem(alert.text.ifBlank { "رمز التحقق غير صالح أو انتهت صلاحيته." }, response.status)
+        }
+        // Authentication must be verified by the authoritative JSON bootstrap.
+        // A 302/empty HTML response alone is not proof that the code was accepted.
+        try {
+            val dashboard = perform("mobile/bootstrap.php", null)
+            dashboard.put("activated", true)
+            dashboard
+        } catch (error: ApiProblem) {
+            if (error.sessionExpired && (alert.text.contains("تم") || response.status in 300..399))
+                JSONObject().put("ok", true).put("activated", false)
+                    .put("message", "تحقق من حالة الحساب بتسجيل الدخول مجددًا.")
+            else throw error
+        }
+    }
+
+    suspend fun resendPendingAccountCode(kind: String): String = withContext(Dispatchers.IO) {
+        if (kind !in setOf("phone", "email")) throw ApiProblem("طريقة التحقق غير صالحة.")
+        val path = if (kind == "phone") "verify-phone.php" else "verify-email.php"
+        val csrf = VerificationFormRules.csrf(verificationForm(path).html)
+            ?: throw ApiProblem("تعذّر تهيئة إعادة الإرسال.")
+        val response = verificationForm(path, mapOf("csrf" to csrf, "action" to "resend"))
+        val alert = VerificationFormRules.result(response.html)
+        if (response.status >= 400 || alert.error)
+            throw ApiProblem(alert.text.ifBlank { "تعذّر إعادة إرسال الرمز." }, response.status)
+        alert.text.ifBlank { "تم إرسال الطلب. تحقّق من وسيلة التواصل المسجلة." }
     }
 
     /** Multipart avatar upload, using the same form contract as the original iOS app. */
