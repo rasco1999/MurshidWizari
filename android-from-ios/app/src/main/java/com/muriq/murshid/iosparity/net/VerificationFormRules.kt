@@ -26,6 +26,10 @@ object VerificationFormRules {
             .replace("&nbsp;", " ").replace("&amp;", "&").replace("&quot;", "\"")
             .replace("&#039;", "'").trim()
         val cls = matched.groupValues[1].lowercase()
-        return FormMessage(cleaned, cls.contains("error") || cls.contains("bad"))
+        // The production verify-email.php and verify-phone.php pages use
+        // `form-message danger` for failed OTP/resend attempts.
+        val classes = cls.split(Regex("\\s+")).toSet()
+        return FormMessage(cleaned,
+            classes.any { it in setOf("danger", "error", "bad", "invalid") })
     }
 }
