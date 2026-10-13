@@ -370,8 +370,9 @@ def main():
  # A previously signed-in student must reopen the offline coach after process
  # death in airplane mode; no bootstrap request may be made on the flight.
  bootstrap_before=sum(1 for _,p in STATE['calls'] if p=='/mobile/bootstrap.php')
- ui.adb('shell','settings','put','global','airplane_mode_on','1')
- ui.adb('shell','am','broadcast','-a','android.intent.action.AIRPLANE_MODE','--ez','state','true')
+ # Sending ACTION_AIRPLANE_MODE_CHANGED from shell is blocked by newer
+ # permission policy and also fails on API26. Disable both real transports;
+ # the test cares that no usable network remains, not about the UI icon.
  ui.adb('shell','svc','wifi','disable')
  ui.adb('shell','svc','data','disable')
  time.sleep(1.5)
@@ -388,8 +389,6 @@ def main():
  screenshot(args.output,'student-offline-coach')
  back();ui.wait_for('أسئلتي المحفوظة')
  back();ui.wait_for('وضع المراجعة دون إنترنت')
- ui.adb('shell','settings','put','global','airplane_mode_on','0')
- ui.adb('shell','am','broadcast','-a','android.intent.action.AIRPLANE_MODE','--ez','state','false')
  ui.adb('shell','svc','wifi','enable')
  ui.adb('shell','svc','data','enable')
  time.sleep(3)
