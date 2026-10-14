@@ -46,6 +46,18 @@ def main() -> None:
     ]
     for path, needle, label in checks:
         require(path, needle, label)
+    services = PATCH / "ServicesV32.swift"
+    cache_checks = [
+        (api, "scopedCacheKey", "Account-bound cache identifier"),
+        (api, "v2:student:", "Cache namespace partitioned by user"),
+        (api, "config.urlCache = nil", "Disable shared HTTP cache"),
+        (api, "ResponseCache.shared.clearAll()", "Clear cached data at logout"),
+        (services, "completeFileProtectionUntilFirstUserAuthentication", "Cached data uses device file protection"),
+        (services, "SHA256.hash", "Opaque fixed-length cache filename"),
+        (services, "isExcludedFromBackup", "Do not include student cache in backup"),
+    ]
+    for path, needle, label in cache_checks:
+        require(path, needle, label)
 
     isolated = study.read_text(encoding="utf-8")
     forbidden = ['APIClient.shared.request(', '"api/progress.php"', 'subscribed = true',
@@ -54,7 +66,7 @@ def main() -> None:
         if needle in isolated:
             raise AssertionError(f"Offline module must not change network entitlements: {needle}")
     print("PASS No API writes, quota increments, or fabricated subscription state in offline module")
-    print(f"Passed {len(checks) + 1} static checks; Xcode build and simulator QA still required.")
+    print(f"Passed {len(checks) + len(cache_checks) + 1} static checks; Xcode build and simulator QA still required.")
 
 
 if __name__ == "__main__":
