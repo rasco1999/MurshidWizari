@@ -25,6 +25,8 @@ jobs:
         run: |
           test -n "$ANDROID_HOME"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+      - name: Install licensed Noto Sans Arabic and Inter fonts
+        run: bash scripts/install_font_assets.sh
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
