@@ -4381,42 +4381,94 @@ class MainActivity : Activity() {
     }
 
 
-    /** Inserts a mathematical symbol at the caret; only the text goes to the server. */
+    /**
+     * Mathematical keyboard integrated into the TOP edge of the actual answer
+     * field (not a separate row of buttons underneath the answer).
+     * The input keeps all of its existing draft and server submission listeners.
+     */
     private fun addEquationTools(field: EditText, parent: LinearLayout, question: JSONObject) {
-        parent.addView(uiText("لوحة المعادلات", 13f, true, blue),
-            LinearLayout.LayoutParams(-1,-2).apply { topMargin=dp(12); bottomMargin=dp(8) })
-        val keys = listOf("−" to "-", "+" to "+", "×" to "*", "÷" to "/",
-            "=" to "=", "(" to "(", ")" to ")", "س" to "x", "ص" to "y",
-            "²" to "^2", "³" to "^3", "√" to "sqrt(", "π" to "pi", "/" to "/")
-        keys.chunked(7).forEach { rowKeys ->
-            val row = LinearLayout(this).apply {
-                orientation=LinearLayout.HORIZONTAL
-                layoutDirection=View.LAYOUT_DIRECTION_RTL
+        val fieldIndex = parent.indexOfChild(field)
+        if (fieldIndex < 0) return
+        parent.removeView(field)
+        val holder = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            background = GradientDrawable().apply {
+                cornerRadius = dp(14).toFloat()
+                setColor(if (night) Color.rgb(44, 44, 46) else Color.rgb(242, 242, 247))
+                setStroke(dp(1), if (night) Color.rgb(75, 75, 79) else Color.rgb(218, 221, 227))
             }
-            rowKeys.forEach { (shown,insert) ->
-                val key = Button(this).apply {
-                    text=shown
-                    textSize=16f
-                    isAllCaps=false
-                    setOnClickListener {
-                        val position=field.selectionStart.coerceAtLeast(0).coerceAtMost(field.text.length)
-                        field.text.insert(position,insert)
-                    }
-                    contentDescription="إدراج الرمز $shown"
-                }
-                row.addView(key,LinearLayout.LayoutParams(0,dp(45),1f))
-            }
-            parent.addView(row)
+            clipToOutline = true
         }
-        if (EquationStudyRules.coordinateQuestion(question.optString("text"),chapterName)) {
-            parent.addView(uiText("ارسم نقاطك ثم أدرج إحداثياتها في الإجابة.",12f,tint=mutedText),
-                LinearLayout.LayoutParams(-1,-2).apply { topMargin=dp(10) })
-            val graph=NativeCoordinateGrid(this)
-            parent.addView(graph,LinearLayout.LayoutParams(-1,dp(240)).apply { topMargin=dp(6) })
+        parent.addView(holder, fieldIndex, LinearLayout.LayoutParams(-1, -2).apply {
+            bottomMargin = dp(12)
+        })
+
+        val toolStrip = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            fillViewport = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        val symbols = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(3), dp(4), dp(3))
+        }
+        val keys = listOf(
+            "−" to "-", "+" to "+", "×" to "*", "÷" to "/",
+            "=" to "=", "(" to "(", ")" to ")", "س" to "x", "ص" to "y",
+            "²" to "^2", "³" to "^3", "√" to "sqrt(", "π" to "pi", "/" to "/"
+        )
+        keys.forEach { (shown, inserted) ->
+            val chip = TextView(this).apply {
+                text = shown
+                textSize = 16f
+                gravity = Gravity.CENTER
+                setTextColor(if (night) Color.rgb(220, 230, 250) else blue)
+                background = shape(
+                    if (night) Color.rgb(56, 58, 63) else Color.WHITE, dp(9).toFloat()
+                )
+                contentDescription = "إدراج الرمز $shown"
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    val editable = field.text ?: return@setOnClickListener
+                    val first = field.selectionStart.coerceIn(0, editable.length)
+                    val last = field.selectionEnd.coerceIn(0, editable.length)
+                    val from = minOf(first, last)
+                    val to = maxOf(first, last)
+                    editable.replace(from, to, inserted)
+                    field.requestFocus()
+                    field.setSelection((from + inserted.length).coerceAtMost(editable.length))
+                }
+            }
+            symbols.addView(chip, LinearLayout.LayoutParams(dp(43), dp(38)).apply {
+                marginStart = dp(2)
+                marginEnd = dp(2)
+            })
+        }
+        toolStrip.addView(symbols, android.widget.FrameLayout.LayoutParams(-2, -2))
+        holder.addView(toolStrip, LinearLayout.LayoutParams(-1, dp(46)))
+        holder.addView(View(this).apply {
+            setBackgroundColor(if (night) Color.rgb(75, 75, 79) else Color.rgb(218, 221, 227))
+        }, LinearLayout.LayoutParams(-1, dp(1)))
+
+        // Move the existing EditText below the integrated symbol strip.
+        field.background = null
+        field.setPadding(dp(14), dp(12), dp(14), dp(12))
+        holder.addView(field, LinearLayout.LayoutParams(-1, -2))
+        if (EquationStudyRules.coordinateQuestion(question.optString("text"), chapterName)) {
+            parent.addView(uiText("ارسم نقاطك ثم أدرج إحداثياتها في الإجابة.", 12f, tint = mutedText),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+            val graph = NativeCoordinateGrid(this)
+            parent.addView(graph, LinearLayout.LayoutParams(-1, dp(240)).apply { topMargin = dp(6) })
             parent.addView(makeButton("إدراج النقاط المرسومة") {
-                val encoded=graph.coordinates()
-                if(encoded.isNotBlank()) field.text.insert(field.selectionStart.coerceAtLeast(0)
-                    .coerceAtMost(field.text.length),encoded)
+                val encoded = graph.coordinates()
+                if (encoded.isNotBlank()) field.text.insert(
+                    field.selectionStart.coerceAtLeast(0).coerceAtMost(field.text.length), encoded
+                )
             })
             parent.addView(makeButton("مسح الشبكة") { graph.reset() })
         }
