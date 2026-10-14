@@ -142,7 +142,8 @@ final class KeychainVault {
     private let service = "com.muriq.murshid"
     private init() {}
 
-    func set(_ value: Data, for key: String) {
+    @discardableResult
+    func set(_ value: Data, for key: String) -> Bool {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -152,7 +153,7 @@ final class KeychainVault {
         var add = query
         add[kSecValueData as String] = value
         add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        SecItemAdd(add as CFDictionary, nil)
+        return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
     }
 
     func data(for key: String) -> Data? {
@@ -282,8 +283,7 @@ final class OfflineReviewNotebook {
     private func persist(_ collection: [OfflineReviewCard], userID: Int) -> Bool {
         let bounded = Array(collection.sorted { $0.savedAt > $1.savedAt }.prefix(limit))
         guard let data = try? JSONEncoder().encode(bounded) else { return false }
-        KeychainVault.shared.set(data, for: key(userID))
-        return true
+        return KeychainVault.shared.set(data, for: key(userID))
     }
 }
 
