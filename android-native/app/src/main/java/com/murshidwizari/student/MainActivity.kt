@@ -53,6 +53,7 @@ import java.util.concurrent.Executor
 
 /** 100% Android native UI: no WebView, no embedded website, no hardcoded secrets. */
 class MainActivity : Activity() {
+    private val typography by lazy { MurshidTypography(this) }
     private val jobs = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private lateinit var api: ApiClient
@@ -702,11 +703,10 @@ class MainActivity : Activity() {
                     LinearLayout.LayoutParams(dp(23), dp(23)))
             }
             item.addView(TextView(this@MainActivity).apply {
-                text = title
+                typography.apply(this, title, true)
                 textSize = 10f
                 setTextColor(color)
                 gravity = Gravity.CENTER
-                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
                 includeFontPadding = false
                 setPadding(0, dp(3), 0, 0)
             })
@@ -753,8 +753,7 @@ class MainActivity : Activity() {
     }
     private fun title(text: String) {
         root.addView(TextView(this).apply {
-            this.text = text; textSize = 25f
-            typeface = Typeface.DEFAULT_BOLD
+            typography.apply(this, text, true); textSize = 25f
             gravity = Gravity.CENTER
             setTextColor(accent)
             setPadding(dp(4), dp(10), dp(4), dp(20))
@@ -762,16 +761,15 @@ class MainActivity : Activity() {
     }
     private fun caption(text: String) {
         root.addView(TextView(this).apply {
-            this.text = text; textSize = 15f; setTextColor(textColor)
+            typography.apply(this, text); textSize = 15f; setTextColor(textColor)
             setPadding(dp(4), dp(8), dp(4), dp(10))
         })
     }
     private fun uiText(value: String, size: Float, bold: Boolean = false,
                        tint: Int = textColor): TextView = TextView(this).apply {
-        text = value
+        typography.apply(this, value, bold)
         textSize = size
         setTextColor(tint)
-        typeface = Typeface.create(if (bold) "sans-serif-medium" else "sans-serif", Typeface.NORMAL)
         includeFontPadding = false
         setLineSpacing(dp(2).toFloat(), 1f)
         layoutDirection = View.LAYOUT_DIRECTION_RTL
@@ -812,6 +810,14 @@ class MainActivity : Activity() {
         }
         val input = EditText(this).apply {
             hint = hintText
+            typeface = typography.typeface(hintText)
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                override fun afterTextChanged(s: Editable?) {
+                    typeface = typography.typeface(s?.toString().orEmpty().ifBlank { hintText })
+                }
+            })
             textSize = 16f
             setSingleLine(true)
             setTextColor(textColor)
@@ -911,10 +917,9 @@ class MainActivity : Activity() {
     }
     private fun line(text: String, prominent: Boolean = false) {
         root.addView(TextView(this).apply {
-            this.text = text
+            typography.apply(this, text, prominent)
             textSize = if (prominent) 19f else 16f
             setTextColor(textColor)
-            if (prominent) typeface = Typeface.DEFAULT_BOLD
             setPadding(dp(12), dp(13), dp(12), dp(13))
             background = shape(surface)
         })
@@ -925,6 +930,14 @@ class MainActivity : Activity() {
                       parent: LinearLayout = root): EditText {
         val field = EditText(this).apply {
             this.hint = hint
+            typeface = typography.typeface(hint)
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                override fun afterTextChanged(s: Editable?) {
+                    typeface = typography.typeface(s?.toString().orEmpty().ifBlank { hint })
+                }
+            })
             textSize = 16f
             setTextColor(textColor)
             setHintTextColor(if (night) Color.LTGRAY else Color.GRAY)
@@ -950,13 +963,12 @@ class MainActivity : Activity() {
                 alpha = if (isEnabled) 1f else 0.48f
             }
         }.apply {
-            this.text = text; textSize = 15f
+            typography.apply(this, text, true); textSize = 15f
             isAllCaps = false
             setSingleLine(false)
             maxLines = 3
             minHeight = dp(if (secondary) VisualRules.secondaryButtonHeight else VisualRules.primaryButtonHeight)
             setPadding(dp(if (secondary) 14 else 16), dp(8), dp(if (secondary) 14 else 16), dp(8))
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setTextColor(if (secondary) accent else Color.WHITE)
             val radius = dp(if (secondary) VisualRules.secondaryButtonRadius else VisualRules.primaryButtonRadius).toFloat()
             val fill = if (secondary) GradientDrawable().apply {
