@@ -10,6 +10,12 @@ class OfflineExamRulesTest {
         }
     }
 
+    @Test fun refusesMalformedMcqOptions() {
+        assertFalse(OfflineExamRules.supported("mcq", 0))
+        assertFalse(OfflineExamRules.supported("mcq", 1))
+        assertTrue(OfflineExamRules.supported("mcq", 2))
+    }
+
     @Test fun refusesMultistageQuestionsRatherThanSilentlyMisgrading() {
         for (kind in listOf("calculation", "genetics", "match", "unknown")) {
             assertFalse(OfflineExamRules.supported(kind, 0))
