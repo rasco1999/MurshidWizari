@@ -103,6 +103,7 @@ final class AppSession: ObservableObject {
         featureFlags = [:]
         releaseInfo = [:]
         sessionExpired = expired
+        ResponseCache.shared.clearAll()
     }
 
     func applyBootstrap(_ json: JSON) {
@@ -165,8 +166,9 @@ final class APIClient {
         // Bound stalled DNS/connectivity requests; two safe read attempts remain enabled.
         config.timeoutIntervalForRequest = 18
         config.timeoutIntervalForResource = 38
-        config.requestCachePolicy = .useProtocolCachePolicy
-        config.urlCache = URLCache(memoryCapacity: 24 * 1024 * 1024, diskCapacity: 96 * 1024 * 1024, diskPath: "MurshidHTTP")
+        // Never share authenticated HTTP response bodies across student sessions.
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.urlCache = nil
         config.httpAdditionalHeaders = [
             "Accept": "application/json",
             "X-Murshid-App": "ios-native-4.1",
@@ -184,6 +186,7 @@ final class APIClient {
 
         var req = URLRequest(url: url)
         req.httpMethod = method
+        req.cachePolicy = .reloadIgnoringLocalCacheData
         // A metered/Low Data Mode connection must never disable essential API calls.
         req.allowsCellularAccess = true
         req.allowsExpensiveNetworkAccess = true
@@ -191,6 +194,13 @@ final class APIClient {
         req.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         if let body { req.httpBody = try JSONSerialization.data(withJSONObject: body, options: []) }
+
+        // User data must never be loaded using an unscoped key left by a prior account.
+        // No authenticated cache is available until bootstrap identifies its user.
+        let verifiedUserID = AppSession.shared.user?.id ?? 0
+        let scopedCacheKey: String? = method == "GET" && verifiedUserID > 0
+            ? cacheKey.map { "v2:student:\(verifiedUserID):\($0):\(url.absoluteString)" }
+            : nil
 
         do {
             let (data, response) = try await dataWithTransientRetry(for: req, idempotent: method == "GET")
@@ -227,12 +237,12 @@ final class APIClient {
                     paymentRequired: jBool(json["payment_required"])
                 )
             }
-            if method == "GET", let cacheKey { await ResponseCache.shared.save(json, key: cacheKey) }
+            if let scopedCacheKey { ResponseCache.shared.save(json, key: scopedCacheKey) }
             return json
         } catch let error as APIError {
             throw error
         } catch {
-            if method == "GET", let cacheKey, let cached = ResponseCache.shared.load(key: cacheKey) { return cached }
+            if let scopedCacheKey, let cached = ResponseCache.shared.load(key: scopedCacheKey) { return cached }
             let ns = error as NSError
             let message: String
             if ns.domain == NSURLErrorDomain && ns.code == NSURLErrorTimedOut {
