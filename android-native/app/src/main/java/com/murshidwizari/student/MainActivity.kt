@@ -689,7 +689,7 @@ class MainActivity : Activity() {
                     textSize = 10f
                     gravity = Gravity.CENTER
                     setTextColor(Color.WHITE)
-                    typeface = Typeface.DEFAULT_BOLD
+                    typeface = typography.strong()
                     includeFontPadding = false
                     background = shape(Color.rgb(226, 43, 61), dp(10).toFloat())
                 }
@@ -704,7 +704,7 @@ class MainActivity : Activity() {
             }
             item.addView(TextView(this@MainActivity).apply {
                 typography.apply(this, title, true)
-                textSize = 10f
+                textSize = MurshidTypeScale.sizeSp(10f)
                 setTextColor(color)
                 gravity = Gravity.CENTER
                 includeFontPadding = false
@@ -753,7 +753,7 @@ class MainActivity : Activity() {
     }
     private fun title(text: String) {
         root.addView(TextView(this).apply {
-            typography.apply(this, text, true); textSize = 25f
+            typography.apply(this, text, true); textSize = MurshidTypeScale.sizeSp(25f)
             gravity = Gravity.CENTER
             setTextColor(accent)
             setPadding(dp(4), dp(10), dp(4), dp(20))
@@ -768,10 +768,10 @@ class MainActivity : Activity() {
     private fun uiText(value: String, size: Float, bold: Boolean = false,
                        tint: Int = textColor): TextView = TextView(this).apply {
         typography.apply(this, value, bold)
-        textSize = size
+        textSize = MurshidTypeScale.sizeSp(size)
         setTextColor(tint)
-        includeFontPadding = false
-        setLineSpacing(dp(2).toFloat(), 1f)
+        includeFontPadding = true
+        setLineSpacing(dp(1).toFloat(), 1.03f)
         layoutDirection = View.LAYOUT_DIRECTION_RTL
     }
 
@@ -811,13 +811,6 @@ class MainActivity : Activity() {
         val input = EditText(this).apply {
             hint = hintText
             typeface = typography.typeface(hintText)
-            addTextChangedListener(object : TextWatcher {
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
-                override fun afterTextChanged(s: Editable?) {
-                    typeface = typography.typeface(s?.toString().orEmpty().ifBlank { hintText })
-                }
-            })
             textSize = 16f
             setSingleLine(true)
             setTextColor(textColor)
@@ -931,13 +924,6 @@ class MainActivity : Activity() {
         val field = EditText(this).apply {
             this.hint = hint
             typeface = typography.typeface(hint)
-            addTextChangedListener(object : TextWatcher {
-                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
-                override fun afterTextChanged(s: Editable?) {
-                    typeface = typography.typeface(s?.toString().orEmpty().ifBlank { hint })
-                }
-            })
             textSize = 16f
             setTextColor(textColor)
             setHintTextColor(if (night) Color.LTGRAY else Color.GRAY)
@@ -1058,7 +1044,7 @@ class MainActivity : Activity() {
             background = shape(surface)
         }
         row.addView(TextView(this).apply {
-            text = label; textSize = 16f; setTextColor(textColor)
+            typography.apply(this, label); textSize = 16f; setTextColor(textColor)
         }, LinearLayout.LayoutParams(0, -2, 1f))
         lateinit var valueText: TextView
         val subtract = makeButton("−", secondary = true) {
@@ -1068,7 +1054,7 @@ class MainActivity : Activity() {
         }
         row.addView(subtract, LinearLayout.LayoutParams(dp(48), dp(44)))
         valueText = TextView(this).apply {
-            text = value.toString(); textSize = 18f; typeface = Typeface.DEFAULT_BOLD
+            text = value.toString(); textSize = 18f; typeface = typography.strong()
             gravity = Gravity.CENTER; setTextColor(textColor)
         }
         row.addView(valueText, LinearLayout.LayoutParams(dp(53), dp(46)))
@@ -4923,9 +4909,8 @@ class MainActivity : Activity() {
         }
         fun detail(value: String, size: Float, strong: Boolean, opacity: Int = 255) {
             details.addView(TextView(this).apply {
-                text = value; textSize = size
+                typography.apply(this, value, strong); textSize = MurshidTypeScale.sizeSp(size)
                 setTextColor(Color.argb(opacity, 255,255,255))
-                if (strong) typeface = Typeface.DEFAULT_BOLD
                 setPadding(0, dp(3), 0, dp(3))
             })
         }
@@ -5677,7 +5662,7 @@ class MainActivity : Activity() {
         line("وقت هادئ لدراستك", true)
         caption("اختر 25 أو 45 أو 60 دقيقة، وسنسجل نشاطك على الخادم بعد إنهاء الجلسة.")
         val clock = TextView(this).apply {
-            textSize = 40f; gravity = Gravity.CENTER; typeface = Typeface.DEFAULT_BOLD
+            textSize = 40f; gravity = Gravity.CENTER; typeface = typography.strong()
             setTextColor(accent)
             setPadding(dp(8), dp(24), dp(8), dp(24))
             background = shape(surface)
@@ -5996,7 +5981,7 @@ class MainActivity : Activity() {
         val id = question.optInt("id")
         caption("السؤال ${practiceCurrent + 1} من ${practiceQuestions.length()}")
         val timerLabel = TextView(this).apply {
-            textSize = 20f; typeface = Typeface.DEFAULT_BOLD
+            textSize = 20f; typeface = typography.strong()
             gravity = Gravity.CENTER; setTextColor(accent)
         }
         if (practiceDeadline > 0L) {
