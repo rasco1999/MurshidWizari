@@ -3515,6 +3515,18 @@ struct V3ExamView: View {
 
     private func load() async {
         await MainActor.run { loading = true; error = ""; startedAt = Date() }
+        // Protect against old topic deep links or stale API caches after
+        // removing French from all three curricula.
+        if V520RetiredFrenchContent.isChapter(topic.id) ||
+           [33, 36, 40].contains(subject.id) ||
+           MurshidSubjectCatalog.isFrenchSubject(subject.name) {
+            await MainActor.run {
+                questions = []
+                error = "هذه المادة غير متاحة في المنهج الحالي."
+                loading = false
+            }
+            return
+        }
         do {
             var query: [URLQueryItem] = [URLQueryItem(name: "chapter_id", value: "\(topic.id)")]
             if filterType != "all" { query.append(URLQueryItem(name: "type", value: filterType)) }
@@ -3528,6 +3540,7 @@ struct V3ExamView: View {
             let qs = jArray(d["questions"])
                 .map(Question.init)
                 .filter { question in
+                    guard !V520RetiredFrenchContent.isQuestion(question.id) else { return false }
                     guard murshidQuestionIsStudentReady(question.text) else { return false }
                     guard murshidQuestionClientValid(question) else { return false }
                     guard murshidQuestionAnswerCompatible(question: question.text, serverAnswer: question.correctAnswer) else { return false }
