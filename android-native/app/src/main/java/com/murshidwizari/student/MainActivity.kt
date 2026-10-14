@@ -2603,6 +2603,143 @@ class MainActivity : Activity() {
         button("الواجهة العامة", secondary = true) { guestLandingScreen() }
     }
 
+    /** Opens only previously downloaded, account-bound subscription snapshots.
+     * These answers are NOT graded locally and never award points offline.
+     */
+    private fun offlineExamTopicsScreen() {
+        activeScreen = "offline_exam_topics"
+        val userId = student.optInt("id")
+        base("اختباراتي دون إنترنت", true)
+        caption("تظهر الموضوعات التي فتحتها سابقاً أثناء اشتراكك واتصالك بالإنترنت. المزامنة والتصحيح الرسمي بعد عودة الاتصال.")
+        val topics = offlineExams.topics(userId)
+        if (topics.isEmpty()) {
+            caption("لا توجد اختبارات قابلة للفتح حالياً. افتح موضوعاً أثناء الاتصال، وتأكد من صلاحية اشتراكك.")
+            button("العودة", secondary = true) {
+                if (offlineCoachMode) showOfflineCoachHome() else coachScreen()
+            }
+            return
+        }
+        caption("إجابات مؤجلة للمزامنة: ${offlineExams.pendingCount(userId)}")
+        topics.forEach { topic ->
+            addUiCard(uiRow(topic.name,
+                "${topic.count} سؤال متوافق مع الدراسة دون إنترنت", "book") {
+                offlineExamQuestionScreen(topic.id, 0)
+            }, bottom = 10)
+        }
+        if (!offlineCoachMode && offlineExams.pendingCount(userId) > 0) {
+            button("مزامنة الإجابات الآن") {
+                if (csrf.isBlank()) { message("سجّل الدخول أولاً لمزامنة الإجابات."); return@button }
+                val uid = student.optInt("id")
+                jobs.execute {
+                    val outcome = offlineExams.sync(api, csrf, uid)
+                    main.post {
+                        if (student.optInt("id") == uid && activeScreen == "offline_exam_topics") {
+                            message("تم تأكيد ${outcome.confirmed} إجابة. المتبقي ${outcome.remaining}.")
+                            offlineExamTopicsScreen()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun offlineExamQuestionScreen(chapter: Int, index: Int) {
+        offlineChapterId = chapter
+        activeScreen = "offline_exam_question"
+        val uid = student.optInt("id")
+        val topic = offlineExams.topics(uid).firstOrNull { it.id == chapter }
+        val list = offlineExams.questions(uid, chapter)
+        if (topic == null || list == null) {
+            offlineExamTopicsScreen()
+            message("انتهت صلاحية النسخة المحفوظة؛ اتصل بالإنترنت لتجديدها.")
+            return
+        }
+        if (index >= list.length()) {
+            base("نهاية المراجعة المحفوظة", true)
+            caption("انتهت أسئلة هذه النسخة. الإجابات المؤجلة لا تُحتسب درجات نهائية قبل وصول تأكيد الخادم.")
+            caption("المتبقي للمزامنة: ${offlineExams.pendingCount(uid)}")
+            button("العودة للمواضيع", secondary = true) { offlineExamTopicsScreen() }
+            return
+        }
+        val question = list.optJSONObject(index)
+        if (question == null) { offlineExamQuestionScreen(chapter, index + 1); return }
+        val qid = question.optInt("id")
+        val queued = offlineExams.queued(uid, qid)
+        val submitted = question.optBoolean("submitted", false)
+        base(topic.name, true)
+        val header = uiCard()
+        header.addView(uiText("السؤال ${index + 1} من ${list.length()}", 13f, true, blue))
+        header.addView(uiText(question.optString("text"), 19f, true),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(13) })
+        if (question.optString("meaning_word").isNotBlank())
+            header.addView(uiText("المفردة: ${question.optString("meaning_word")}", 14f, tint = mutedText))
+        addUiCard(header, bottom = 14)
+        val type = question.optString("type")
+        val options = question.optJSONArray("options") ?: JSONArray()
+        if (!OfflineExamRules.supported(type, options.length())) {
+            caption("يحتاج هذا النوع من السؤال إلى محرّر خاص واتصال. لن تُرسل إجابة غير مكتملة.")
+            button("التالي", secondary = true) { offlineExamQuestionScreen(chapter, index + 1) }
+            return
+        }
+        if (queued != null || submitted) {
+            val accepted = uiCard()
+            accepted.addView(uiText(if (submitted) "أجبت سابقاً على الخادم" else
+                "تم حفظ إجابتك على هذا الجهاز ✓", 17f, true, blue))
+            if (queued != null) {
+                accepted.addView(uiText("إجابتك: ${queued.optString("answer")}", 15f),
+                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+                accepted.addView(uiText("الدرجة والنقاط والرصيد ستُحدد من الخادم بعد المزامنة.",
+                    13f, tint = mutedText))
+            }
+            val correct = question.optString("correct_answer")
+            if (correct.isNotBlank()) {
+                accepted.addView(uiText("الإجابة النموذجية: $correct", 15f, true),
+                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+                val explanation = question.optString("explanation")
+                if (explanation.isNotBlank()) accepted.addView(uiText(explanation, 13f),
+                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+            }
+            addUiCard(accepted, bottom = 12)
+            button(if (index == list.length() - 1) "إنهاء المراجعة" else "السؤال التالي") {
+                offlineExamQuestionScreen(chapter, index + 1)
+            }
+            return
+        }
+        val answerCard = uiCard()
+        answerCard.addView(uiText("إجابتك — تحفظ دون إنترنت", 16f, true),
+            LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(9) })
+        var selected = ""
+        var selectedOptionId = 0
+        val enter = if (options.length() > 0 || type == "true_false") null
+            else input("اكتب الإجابة", multiline = true, parent = answerCard)
+        if (enter == null) {
+            val choices = if (options.length() > 0) options else JSONArray().put("صح").put("خطأ")
+            val changes = mutableListOf<Pair<String, (Boolean) -> Unit>>()
+            for (i in 0 until choices.length()) {
+                val item = choices.optJSONObject(i)
+                val label = item?.optString("text") ?: choices.optString(i)
+                val optionId = item?.optInt("id", 0) ?: 0
+                val change = examOptionButton(label, i, answerCard) {
+                    selected = label
+                    selectedOptionId = optionId
+                    changes.forEach { (text, callback) -> callback(text == selected) }
+                }
+                changes.add(label to change)
+            }
+        }
+        val button = makeButton("حفظ الإجابة على الجهاز") {
+            val given = enter?.text?.toString()?.trim() ?: selected.trim()
+            if (given.isEmpty()) { message("اكتب إجابتك أو اختر أحد الخيارات."); return@makeButton }
+            val originalIndex = question.optInt("_offline_index", index + 1)
+            if (offlineExams.queue(uid, chapter, qid, originalIndex, given, selectedOptionId)) {
+                offlineExamQuestionScreen(chapter, index)
+            } else message("تعذر الحفظ. قد تكون النسخة أو صلاحية اشتراكك انتهت.")
+        }
+        answerCard.addView(button, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
+        addUiCard(answerCard)
+        caption("الدرجة الرسمية لا تُحتسب على الجهاز. تجنب تسجيل الخروج قبل مزامنة الإجابات المؤجلة.")
+    }
+
     private fun showHome(response: JSONObject) {
         if (!response.optBoolean("ok")) { loginScreen(); return }
         competitionHistory.clear()
@@ -7066,6 +7203,8 @@ class MainActivity : Activity() {
             return
         }
         when (activeScreen) {
+            "offline_exam_question" -> offlineExamTopicsScreen()
+            "offline_exam_topics" -> if (offlineCoachMode) showOfflineCoachHome() else coachScreen()
             "coach_question" -> coachScreen()
             "performance_diagnostics" -> accountScreen()
             "coach" -> if (offlineCoachMode) showOfflineCoachHome() else showHome(homepage)
