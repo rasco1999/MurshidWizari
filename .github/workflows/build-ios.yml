@@ -152,6 +152,7 @@ jobs:
           cp patches/APIClient.swift source/MurshidWizari/APIClient.swift
           cp patches/MurshidWizariApp.swift source/MurshidWizari/MurshidWizariApp.swift
           cp patches/V31Features.swift source/MurshidWizari/V31Features.swift
+          cp patches/V3Dashboard.swift source/MurshidWizari/V3Dashboard.swift
           cp patches/V40Features.swift source/MurshidWizari/V40Features.swift
           cp patches/V43Enhancements.swift source/MurshidWizari/V43Enhancements.swift
           cp patches/V44StudentFeatures.swift source/MurshidWizari/V44StudentFeatures.swift
