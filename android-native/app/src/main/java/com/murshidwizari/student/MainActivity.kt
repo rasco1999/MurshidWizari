@@ -1863,7 +1863,15 @@ class MainActivity : Activity() {
                 return@fetch
             }
             sectionHeader("تحدي المليون", "جائزة المركز الأول: ${result.optInt("prize_iqd", 1000000)} د.ع", "trophy")
-            caption("الإغلاق: " + result.optString("end_at", "يُحدد من الإدارة") + " · بتوقيت بغداد")
+            val status = when (result.optString("phase")) {
+                "scheduled" -> "لم يبدأ التحدي بعد"
+                "active" -> "التحدي جارٍ الآن"
+                "ended" -> "انتهت فترة التحدي"
+                else -> if (result.optBoolean("active")) "التحدي جارٍ الآن" else "حالة التحدي غير متاحة"
+            }
+            line(status, true)
+            caption("البداية: " + result.optString("start_at", "يُحدد من الإدارة") + " · بتوقيت بغداد")
+            caption("النهاية: " + result.optString("end_at", "يُحدد من الإدارة") + " · بتوقيت بغداد")
             for (key in listOf("rules", "points")) {
                 val items = result.optJSONArray(key) ?: JSONArray()
                 for (i in 0 until items.length()) {
@@ -6671,8 +6679,25 @@ class MainActivity : Activity() {
             addView(uiText("الترتيب يعتمد على نقاط المنصة والإجابات الصحيحة ضمن فترة التحدي.",
                 14f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
         }, bottom = 16)
+        val configuration = contest.optJSONObject("config") ?: JSONObject()
+        val phase = configuration.optString("phase")
+        val phaseLabel = when (phase) {
+            "scheduled" -> "لم يبدأ تحدي المليون بعد"
+            "active" -> "تحدي المليون جارٍ الآن"
+            "ended" -> "انتهت فترة تحدي المليون"
+            else -> if (configuration.optBoolean("active")) "تحدي المليون جارٍ الآن" else "حالة التحدي غير متاحة"
+        }
+        addUiCard(uiCard().apply {
+            addView(uiText(phaseLabel, 17f, true, blue))
+            addView(uiText("موعد البداية: " + configuration.optString("start_at", "لم يحدد بعد"),
+                14f), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
+            addView(uiText("موعد النهاية: " + configuration.optString("end_at", "لم يحدد بعد"),
+                14f), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+            addView(uiText("التوقيت: بغداد · يتحدث الموعد عند فتح التحدي أو تحديثه.",
+                12f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        }, bottom = 14)
         val mine = contest.optJSONObject("mine")
-        val active = ExamRules.knownBoolean(contest.optJSONObject("config")?.opt("active"))
+        val active = ExamRules.knownBoolean(configuration.opt("active"))
         addUiCard(uiCard().apply {
             addView(uiText("مركزك الحالي", 13f, tint = mutedText))
             addView(uiText(if (mine == null) "ابدأ الإجابة لتدخل الترتيب"
