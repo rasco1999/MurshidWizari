@@ -2538,6 +2538,10 @@ class MainActivity : Activity() {
                     message("تم تأكيد ${report.confirmed} إجابة من وضع عدم الاتصال. المتبقي ${report.remaining}.")
                     if (activeScreen == "offline_exam_topics") offlineExamTopicsScreen()
                 }
+                if (gen == sessionGeneration && student.optInt("id") == uid &&
+                    report.changedQuestions > 0) {
+                    message("تم إيقاف إرسال ${report.changedQuestions} إجابة لأن أسئلتها تغيّرت أو حُذفت على الخادم. راجع الإجابات المؤجلة قبل حذفها أو إعادة حل الأسئلة.")
+                }
             }
         }
     }
@@ -2692,6 +2696,16 @@ class MainActivity : Activity() {
                     LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
                 accepted.addView(uiText("الدرجة والنقاط والرصيد ستُحدد من الخادم بعد المزامنة.",
                     13f, tint = mutedText))
+                val discardButton = makeButton("حذف هذه الإجابة المؤجلة", secondary = true) {
+                    AlertDialog.Builder(this).setTitle("حذف إجابة لم تُرسَل بعد؟")
+                        .setMessage("إذا كان السؤال قد تغيّر، احذف الإجابة المؤجلة ثم افتح الموضوع مجدداً أثناء الاتصال لتنزيل نسخته الجديدة. لن تتمكن من استعادة إجابتك القديمة.")
+                        .setPositiveButton("حذف الإجابة") { _, _ ->
+                            if (offlineExams.discardPending(uid, qid)) offlineExamQuestionScreen(chapter, index)
+                            else message("تعذّر حذف الإجابة. حاول مجدداً.")
+                        }
+                        .setNegativeButton("إلغاء", null).show()
+                }
+                accepted.addView(discardButton, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
             }
             val correct = question.optString("correct_answer")
             if (correct.isNotBlank()) {
