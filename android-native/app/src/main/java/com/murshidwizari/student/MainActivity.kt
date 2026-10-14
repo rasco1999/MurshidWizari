@@ -4406,7 +4406,6 @@ class MainActivity : Activity() {
 
         val toolStrip = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
-            fillViewport = false
             overScrollMode = View.OVER_SCROLL_NEVER
             layoutDirection = View.LAYOUT_DIRECTION_RTL
         }
