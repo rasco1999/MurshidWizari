@@ -38,6 +38,8 @@ class AppState(val api: MurshidApi, val scope: CoroutineScope) {
     var busy by mutableStateOf(false)
     var notice by mutableStateOf("")
     var csrf by mutableStateOf("")
+    var offlineMode by mutableStateOf(false)
+    var pendingSync by mutableIntStateOf(0)
     var session by mutableStateOf(JSONObject())
     var subjects by mutableStateOf(emptyList<Json>())
     var dark by mutableStateOf(false)
@@ -65,10 +67,19 @@ class AppState(val api: MurshidApi, val scope: CoroutineScope) {
     }
 
     suspend fun bootstrap(): Boolean {
-        val d = api.call("mobile/bootstrap.php")
-        session = d
+        var d = api.call("mobile/bootstrap.php")
         csrf = d.str("csrf")
+        val userId = d.obj("user").int("id")
+        // The server is authoritative for grades, subscription and free question allowance.
+        if (api.offline.pendingCount() > 0) {
+            val synced = api.offline.sync(api, csrf, userId)
+            if (synced > 0) d = api.call("mobile/bootstrap.php")
+        }
+        session = d
         subjects = d.arr("subjects")
+        pendingSync = api.offline.pendingCount()
+        offlineMode = false
+        api.offline.saveProfile(d)
         return true
     }
 
@@ -76,14 +87,33 @@ class AppState(val api: MurshidApi, val scope: CoroutineScope) {
         try {
             bootstrap()
             root("home")
-        } catch (_: Exception) { root("login") }
-        finally { booting = false }
+        } catch (e: Exception) {
+            // Never bypass a server-issued session rejection.
+            if (e is ServerError && e.isSessionExpired) {
+                api.offline.clear()
+                root("login")
+            } else {
+                val saved = api.offline.profile()
+                if (saved != null) {
+                    session = saved
+                    subjects = saved.arr("subjects")
+                    csrf = ""
+                    pendingSync = api.offline.pendingCount()
+                    offlineMode = true
+                    root("home")
+                    show("تعمل الآن دون إنترنت. النتائج الجديدة مؤجلة حتى المزامنة.")
+                } else root("login")
+            }
+        } finally { booting = false }
     }
 
     fun signOut() = job {
         try { api.call("mobile/logout.php", data = payload("csrf" to csrf)) }
         catch (_: Exception) { }
         api.clearSession()
+        api.offline.clear()
+        offlineMode = false
+        pendingSync = 0
         session = JSONObject()
         csrf = ""
         subjects = emptyList()
@@ -204,7 +234,19 @@ fun MurshidRoot(app: AppState, onTheme: () -> Unit, openUrl: (String) -> Unit) {
             }
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            if (loggedIn && (app.offlineMode || app.pendingSync > 0)) {
+                Surface(color = MaterialTheme.colorScheme.secondaryContainer) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (app.offlineMode) "دراسة دون إنترنت • التصحيح والمزامنة مؤجلان"
+                            else "إجابات تنتظر المزامنة: ${app.pendingSync}",
+                            modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall)
+                        TextButton(onClick = { app.job { app.bootstrap(); app.retry() } }) { Text("مزامنة") }
+                    }
+                }
+            }
+            Box(Modifier.weight(1f).fillMaxWidth()) {
             when (app.route.kind) {
                 "login" -> AuthPage(app, false, openUrl)
                 "register" -> AuthPage(app, true, openUrl)
@@ -232,6 +274,7 @@ fun MurshidRoot(app: AppState, onTheme: () -> Unit, openUrl: (String) -> Unit) {
             }
             if (app.busy && app.route.kind !in listOf("exam","practice")) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter))
+            }
             }
         }
     }
