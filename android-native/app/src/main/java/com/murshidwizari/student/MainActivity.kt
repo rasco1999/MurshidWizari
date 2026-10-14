@@ -908,11 +908,15 @@ class MainActivity : Activity() {
                 when (event.actionMasked) {
                     MotionEvent.ACTION_DOWN -> if (view.isEnabled) {
                         if (!secondary) view.alpha = 0.82f
-                        view.animate().scaleX(0.985f).scaleY(0.985f).setDuration(120).start()
+                        view.animate().cancel()
+                        view.animate().scaleX(0.985f).scaleY(0.985f)
+                            .setDuration(85).withLayer().start()
                     }
                     MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_UP -> {
                         view.alpha = if (view.isEnabled) 1f else 0.48f
-                        view.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+                        view.animate().cancel()
+                        view.animate().scaleX(1f).scaleY(1f)
+                            .setDuration(85).withLayer().start()
                     }
                 }
                 false
