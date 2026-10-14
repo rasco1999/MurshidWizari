@@ -323,7 +323,7 @@ def main():
  assert not any(path=='/api/progress.php' for _,path in STATE['calls']), 'Changing a selection must stay local'
  screenshot(args.output,'student-exam-selected')
  button('إرسال الإجابة');ui.wait_for('إجابة صحيحة');screenshot(args.output,'student-exam-graded')
- button('ملاحظتي الخاصة');ui.wait_for('حفظ')
+ button('•••');ui.wait_for('ملاحظتي الخاصة');button('ملاحظتي الخاصة');ui.wait_for('حفظ')
  # API 26 sometimes drops ADB IME injection while the AlertDialog is
  # settling. Verify the visible note field rather than assuming input worked.
  for attempt in range(4):
@@ -345,7 +345,7 @@ def main():
  while time.time()<deadline and STATE['notes'].get('101')!='fixture-note':
   time.sleep(.3)
  assert STATE['notes'].get('101')=='fixture-note',STATE['notes']
- button('ملاحظتي الخاصة');ui.wait_for('fixture-note');screenshot(args.output,'student-note-restored');button('إغلاق')
+ button('•••');ui.wait_for('ملاحظتي الخاصة');button('ملاحظتي الخاصة');ui.wait_for('fixture-note');screenshot(args.output,'student-note-restored');button('إغلاق')
  # Return to top before tapping the fixed exam footer.
  ui.adb('shell','input','swipe','196','250','196','740','300');time.sleep(.4)
  button('التالي ›');ui.wait_for('اكتب ناتج أربعة زائد أربعة.');screenshot(args.output,'student-text-question')
