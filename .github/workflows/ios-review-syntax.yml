@@ -1,0 +1,27 @@
+name: Validate iOS Swift patch syntax
+
+on:
+  pull_request:
+    branches: [android-native]
+    paths:
+      - 'patches/**'
+      - '.github/workflows/ios-review-syntax.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  swift-parse:
+    runs-on: macos-15
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Swift sources parse on Apple toolchain
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          for file in patches/*.swift; do
+            echo "Parsing ${file}"
+            xcrun swiftc -frontend -parse "${file}"
+          done
