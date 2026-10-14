@@ -97,7 +97,11 @@ internal class OfflineExamBank(context: Context) {
         for (i in 0 until questions.length()) {
             val q = questions.optJSONObject(i) ?: continue
             if (OfflineExamRules.supported(q.optString("type"), q.optJSONArray("options")?.length() ?: 0) &&
-                q.optInt("id") > 0 && q.optString("text").isNotBlank()) filtered.put(q)
+                q.optInt("id") > 0 && q.optString("text").isNotBlank()) {
+                val item = JSONObject(q.toString())
+                item.put("_offline_index", i + 1) // Preserve original server question order.
+                filtered.put(item)
+            }
         }
         if (filtered.length() == 0) return false
         val stored = JSONObject().put("id", chapterId).put("name", chapterName.take(180))
