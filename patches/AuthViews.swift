@@ -2618,6 +2618,10 @@ struct V3ContestView: View {
                     LazyVStack(spacing: 16) {
                         V3IntroCard(eyebrow: "تحدي المليون", title: "تقدمك بين الطلاب", text: "الترتيب يعتمد على نقاط المنصة والإجابات الصحيحة ضمن فترة التحدي.", icon: "trophy.fill")
                         V45ContestInstructionsLink()
+                        Text("بداية التحدي: " + jString((contest["config"] as? JSON)?["start_at"]))
+                            .font(.subheadline).foregroundStyle(.secondary)
+                        Text("نهاية التحدي: " + jString((contest["config"] as? JSON)?["end_at"]))
+                            .font(.subheadline).foregroundStyle(.secondary)
                         myRankCard
                         leaderboard(title: "متصدرو تحدي المليون", rows: jArray(contest["leaderboard"]), rankKey: "rank", xpKey: "xp")
                         leaderboard(title: "ترتيب الموسم", rows: jArray(season["leaderboard"]), rankKey: "rank", xpKey: "xp")
