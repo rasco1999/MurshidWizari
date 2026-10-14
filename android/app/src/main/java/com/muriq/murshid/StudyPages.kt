@@ -281,8 +281,8 @@ fun validQuestion(q: Json): Boolean {
             else -> {
                 val currentQuestion = data[current]
                 val id=currentQuestion.int("id")
-                var entry by remember(id) { mutableStateOf(currentQuestion.obj("answer").str("text")) }
-                var submitted by remember(id) { mutableStateOf(currentQuestion.bool("submitted")) }
+                var entry by remember(id) { mutableStateOf(app.api.offline.queuedAnswer(id) ?: currentQuestion.obj("answer").str("text")) }
+                var submitted by remember(id) { mutableStateOf(currentQuestion.bool("submitted") || app.api.offline.isQueued(id)) }
                 var grade by remember(id) { mutableStateOf(JSONObject()) }
                 var pendingLocal by remember(id) { mutableStateOf(app.api.offline.isQueued(id)) }
                 val options=currentQuestion.arr("options").map { it.str("text") }.filter { it.isNotBlank() }
