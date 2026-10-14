@@ -105,8 +105,22 @@ def tap_node(node: ET.Element) -> None:
 
 
 def reveal(text: str, width: int, height: int):
-    for attempt in range(6):
+    recovered_system_ui = 0
+    for attempt in range(10):
         root, _ = ui_tree()
+        # An occasional newly booted emulator presents an operating-system ANR
+        # dialog before the app login test. Recover only this infrastructure
+        # failure; never dismiss/ignore a "Murshid Wizari isn't responding" ANR.
+        if (find(root, "System UI isn't responding") is not None or
+                find(root, "Pixel Launcher isn't responding") is not None):
+            wait = find(root, "Wait")
+            if wait is not None and recovered_system_ui < 2:
+                tap_node(wait)
+                recovered_system_ui += 1
+                print(f"RECOVER Android system-process ANR; retry {recovered_system_ui}", flush=True)
+                time.sleep(4)
+                continue
+            raise AssertionError("Android emulator System UI not responsive after recovery")
         node = find(root, text)
         if node is not None:
             match = BOUNDS.fullmatch(node.attrib.get("bounds", ""))
@@ -119,7 +133,7 @@ def reveal(text: str, width: int, height: int):
                         0 <= (left + right) // 2 <= width):
                     return node
         # Scroll the native login form to reach buttons below the viewport.
-        if attempt < 5:
+        if attempt < 9:
             adb("shell", "input", "swipe", str(width // 2), str(height * 4 // 5),
                 str(width // 2), str(height // 4), "350")
             time.sleep(0.5)
