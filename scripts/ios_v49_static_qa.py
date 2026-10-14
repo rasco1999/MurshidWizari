@@ -33,7 +33,9 @@ def main() -> None:
         (study, "func markRecall", "Local spaced recall"),
         (study, "struct V49OfflineAccessView", "Dedicated offline entry"),
         (study, ".deviceOwnerAuthentication", "Offline device authentication"),
-        (study, "AVSpeechSynthesizer", "On-device spoken explanation"),
+        (study, "var subjectMastery", "Private subject mastery estimates"),
+        (study, "var suggestedDailyTarget", "Adaptive study goal"),
+        (study, "isExcludedFromBackup", "Exclude cached study content from cloud backup"),
         (study, "ShareLink(item:", "Opt-in shareable accomplishment"),
         (auth, 'grade["is_correct"] != nil', "Server grading is required before caching"),
         (auth, "V49StudyStore.shared.rememberGraded", "Official exam saves reviewed questions"),
@@ -46,7 +48,8 @@ def main() -> None:
         require(path, needle, label)
 
     isolated = study.read_text(encoding="utf-8")
-    forbidden = ['APIClient.shared.request(', '"api/progress.php"', 'subscribed = true']
+    forbidden = ['APIClient.shared.request(', '"api/progress.php"', 'subscribed = true',
+                 'AVSpeechSynthesizer', 'V49QuestionSpeech']
     for needle in forbidden:
         if needle in isolated:
             raise AssertionError(f"Offline module must not change network entitlements: {needle}")

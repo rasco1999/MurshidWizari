@@ -3308,10 +3308,6 @@ struct V3ExamView: View {
                         .foregroundStyle(.secondary)
                         .lineSpacing(5)
                         .fixedSize(horizontal: false, vertical: true)
-                    Button { V49QuestionSpeech.shared.speak(serverCorrectAnswer + ". " + serverExplanation) } label: {
-                        Label("استمع إلى الإجابة والشرح", systemImage: "speaker.wave.2.fill")
-                    }
-                    .font(.subheadline)
                 }
             }
         }

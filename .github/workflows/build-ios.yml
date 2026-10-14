@@ -2,6 +2,11 @@ name: Build Murshid iPhone v4.9 Preview IPA
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [ ios-study-ai-v50 ]
+    paths:
+      - '.github/workflows/build-ios.yml'
+      - 'patches/**'
   push:
     branches: [ main, ios-study-v49 ]
     paths:
@@ -477,7 +482,7 @@ jobs:
           shasum -a 256 Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.ipa | tee Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.sha256
 
       - name: Publish iPhone IPA preview release
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ios-study-v49'
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ios-study-v49')
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
