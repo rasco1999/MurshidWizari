@@ -50,6 +50,15 @@ final class V498FinalTests: XCTestCase {
         XCTAssertFalse(store.hasOfflineAccount(), "Explicit sign-out must revoke the cached notebook")
     }
 
+    func testRetiredFrenchCacheIdentifiersCannotResurfaceOffline() {
+        XCTAssertTrue(V520RetiredFrenchContent.isQuestion(6278))
+        XCTAssertTrue(V520RetiredFrenchContent.isQuestion(30830))
+        XCTAssertTrue(V520RetiredFrenchContent.isChapter(1507))
+        XCTAssertTrue(V520RetiredFrenchContent.isChapter(85))
+        XCTAssertFalse(V520RetiredFrenchContent.isQuestion(6277))
+        XCTAssertFalse(V520RetiredFrenchContent.isChapter(31))
+    }
+
     @MainActor
     func testSignedCoordinatesRemainOrderedWithinArabicSentence() {
         let source = "أوجد المستقيم المار بـ(0,-4) بين (6,0) و(3,-2)."

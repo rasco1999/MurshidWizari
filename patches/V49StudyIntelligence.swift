@@ -2,6 +2,43 @@ import SwiftUI
 import AVFoundation
 import LocalAuthentication
 
+// v5.20: French content retired from the owner's 2026-10-14 SQL snapshot.
+// Never re-surface previously graded French questions from offline storage.
+enum V520RetiredFrenchContent {
+    private static let questionRanges: [ClosedRange<Int>] = [
+        6278...6293,
+        6439...6502,
+        6675...6686,
+        6747...6758,
+        6771...6782,
+        6949...7003,
+        7449...7503,
+        8677...8710,
+        12788...12979,
+        14864...14945,
+        16976...17018,
+        17185...17192,
+        18218...18276,
+        23341...23492,
+        26747...27046,
+        30532...30830
+    ]
+    private static let chapterRanges: [ClosedRange<Int>] = [
+        22...29, 85...92, 145...152, 318...323, 1461...1461, 1507...1507
+    ]
+    static func isQuestion(_ id: Int) -> Bool {
+        id > 0 && questionRanges.contains(where: { $0.contains(id) })
+    }
+    static func isChapter(_ id: Int) -> Bool {
+        id > 0 && chapterRanges.contains(where: { $0.contains(id) })
+    }
+    static func isRetired(_ record: V49StudyRecord) -> Bool {
+        isQuestion(record.id) || isChapter(record.topicID) ||
+        [33, 36, 40].contains(record.subjectID) ||
+        MurshidSubjectCatalog.isFrenchSubject(record.subjectName)
+    }
+}
+
 // MARK: - iPhone-only v4.9: previously graded questions, never an offline paid exam
 
 // Offline access is not derived from a remembered web session or subscription.
@@ -101,7 +138,14 @@ final class V49StudyStore: ObservableObject {
               let data = try? Data(contentsOf: url),
               let decoded = try? JSONDecoder().decode(V49StudyArchive.self, from: data),
               decoded.userID == userID else { return nil }
-        return decoded
+        var sanitized = decoded
+        sanitized.records.removeAll(where: V520RetiredFrenchContent.isRetired)
+        if sanitized.records.count != decoded.records.count,
+           let encoded = try? JSONEncoder().encode(sanitized) {
+            // Erase retired French cards on disk, not just in the current UI.
+            try? encoded.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        }
+        return sanitized
     }
 
     func bind(to user: UserSummary) {
@@ -155,7 +199,11 @@ final class V49StudyStore: ObservableObject {
                        correct: Bool, correctAnswer: String? = nil, explanation: String? = nil,
                        persistImmediately: Bool = true) {
         let verifiedAnswer = correctAnswer ?? q.correctAnswer
-        guard q.id > 0, !V49QuestionQuality.normalized(q.text + q.meaningWord).isEmpty,
+        guard q.id > 0, !V520RetiredFrenchContent.isQuestion(q.id),
+              !V520RetiredFrenchContent.isChapter(topic.id),
+              ![33, 36, 40].contains(subject.id),
+              !MurshidSubjectCatalog.isFrenchSubject(subject.name),
+              !V49QuestionQuality.normalized(q.text + q.meaningWord).isEmpty,
               !V49QuestionQuality.normalized(verifiedAnswer).isEmpty, var archive,
               !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let key = V49QuestionQuality.normalized(q.text + " " + q.meaningWord)
