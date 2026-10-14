@@ -543,7 +543,74 @@ class MainActivity : Activity() {
         row.addView(tappable(back, backLabel) { navigateBack() }, LinearLayout.LayoutParams(dp(72), dp(44)))
         row.addView(uiText(title, 18f, true).apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(0, -2, 1f))
-        row.addView(Space(this), LinearLayout.LayoutParams(dp(72), dp(1)))
+        if (activeScreen == "exam" && questionIndex < examQuestions.length()) {
+            val question = examQuestions.optJSONObject(questionIndex)
+            val actionRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutDirection = View.LAYOUT_DIRECTION_RTL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            if (question != null) {
+                val favoriteButton = TextView(this).apply {
+                    text = if (question.optBoolean("favorite")) "♥" else "♡"
+                    textSize = 28f
+                    gravity = Gravity.CENTER
+                    setTextColor(blue)
+                    contentDescription = "المفضلة"
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener {
+                        val id = question.optInt("id")
+                        val action = if (question.optBoolean("favorite")) "unfavorite" else "favorite"
+                        val body = JSONObject().put("csrf", csrf).put("question_id", id).put("action", action)
+                        fetch("api/question-tools.php", body) { result ->
+                            if (result.optBoolean("ok")) {
+                                question.put("favorite", result.optBoolean("favorite"))
+                                text = if (question.optBoolean("favorite")) "♥" else "♡"
+                            }
+                        }
+                    }
+                }
+                actionRow.addView(favoriteButton, LinearLayout.LayoutParams(dp(42), dp(42)))
+                val more = TextView(this).apply {
+                    text = "•••"
+                    textSize = 20f
+                    gravity = Gravity.CENTER
+                    setTextColor(blue)
+                    contentDescription = "خيارات السؤال"
+                    background = shape(if (night) Color.rgb(43, 43, 46) else Color.rgb(242, 243, 246), dp(24).toFloat())
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener { anchor ->
+                        val menu = PopupMenu(this@MainActivity, anchor).apply {
+                            this.menu.add(0, 1, 0, "ملاحظتي الخاصة")
+                            this.menu.add(0, 2, 1, "الإبلاغ عن السؤال")
+                            this.menu.add(0, 3, 2, "طلب أسئلة جديدة")
+                            this.menu.add(0, 4, 3, "مشاركة السؤال")
+                            setOnMenuItemClickListener { item ->
+                                when (item.itemId) {
+                                    1 -> questionNote(question.optInt("id"))
+                                    2 -> reportQuestion(question.optInt("id"))
+                                    3 -> questionRequest()
+                                    4 -> {
+                                        val share = Intent(Intent.ACTION_SEND).apply {
+                                            type = "text/plain"
+                                            putExtra(Intent.EXTRA_TEXT,
+                                                question.optString("text") + "\nhttps://www.mur-iq.com/")
+                                        }
+                                        startActivity(Intent.createChooser(share, "مشاركة السؤال"))
+                                    }
+                                }
+                                true
+                            }
+                        }
+                        menu.show()
+                    }
+                }
+                actionRow.addView(more, LinearLayout.LayoutParams(dp(42), dp(42)))
+            }
+            row.addView(actionRow, LinearLayout.LayoutParams(dp(88), dp(44)))
+        } else row.addView(Space(this), LinearLayout.LayoutParams(dp(72), dp(1)))
         root.addView(row, LinearLayout.LayoutParams(-1, dp(52)).apply { bottomMargin = dp(10) })
     }
     private fun tabHeader(title: String, tab: String) {
@@ -4266,22 +4333,7 @@ class MainActivity : Activity() {
                 }
             }
         }
-        gap(15)
-        lateinit var favoriteButton: Button
-        favoriteButton = button(if (question.optBoolean("favorite")) "إزالة من المفضلة" else "إضافة للمفضلة", secondary = true) {
-            val action = if (question.optBoolean("favorite")) "unfavorite" else "favorite"
-            val body = JSONObject().put("csrf", csrf).put("question_id", id).put("action", action)
-            fetch("api/question-tools.php", body) { result ->
-                if (result.optBoolean("ok")) {
-                    question.put("favorite", result.optBoolean("favorite"))
-                    favoriteButton.text = if (question.optBoolean("favorite")) "إزالة من المفضلة" else "إضافة للمفضلة"
-                }
-            }
-        }
-        button("ملاحظتي الخاصة", secondary = true) { questionNote(id) }
-        button("الإبلاغ عن مشكلة في السؤال", secondary = true) { reportQuestion(id) }
-        button(if (examFromSearch) "العودة إلى نتائج البحث" else "العودة للمواضيع", secondary = true) { leaveExam() }
-    }
+        // Exam actions live in the top overflow menu, matching iOS.\n        // Back navigation is already present in the top bar.\n    }
 
     private fun leaveExam() {
         examStartedAt = 0L
