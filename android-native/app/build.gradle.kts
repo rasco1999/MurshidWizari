@@ -16,7 +16,7 @@ android {
     namespace = "com.murshidwizari.student"
     compileSdk = 36
     buildFeatures { buildConfig = true }
-    defaultConfig { applicationId = "com.murshidwizari.student"; minSdk = 26; targetSdk = 36; versionCode = 49809; versionName = "4.8.25"; buildConfigField("String", "API_ORIGIN", "\"https://www.mur-iq.com/\"") }
+    defaultConfig { applicationId = "com.murshidwizari.student"; minSdk = 26; targetSdk = 36; versionCode = 49810; versionName = "4.8.26"; buildConfigField("String", "API_ORIGIN", "\"https://www.mur-iq.com/\"") }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
     signingConfigs {
