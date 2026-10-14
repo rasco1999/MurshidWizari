@@ -331,7 +331,10 @@ def main():
   field=next(n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText')
   actual=field.attrib.get('text','')
   if actual=='fixture-note': break
-  if actual: raise AssertionError(f'Note input unexpectedly contained {actual!r}')
+  # Android 8 accessibility may expose the hint as text even when
+  # the actual editable field is empty.
+  if actual not in ('', 'مثال: راجع هذه القاعدة قبل الامتحان'):
+   raise AssertionError(f'Note input unexpectedly contained {actual!r}')
   ui.tap_node(field);time.sleep(.7)
   ui.adb('shell','input','text','fixture-note');time.sleep(.6)
  else:
