@@ -3539,7 +3539,7 @@ struct V3ExamView: View {
             if filterDifficulty != "all" { query.append(URLQueryItem(name: "difficulty", value: filterDifficulty)) }
             if filterState != "all" { query.append(URLQueryItem(name: "state", value: filterState)) }
             if filterShuffle { query.append(URLQueryItem(name: "shuffle", value: "1")) }
-            let d = try await APIClient.shared.request("mobile/exam.php", query: query)
+            let d = try await APIClient.shared.request("mobile/exam.php", query: query, fresh: true)
             var seenQuestions = Set<String>()
             let qs = jArray(d["questions"])
                 .map(Question.init)
