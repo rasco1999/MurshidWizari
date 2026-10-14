@@ -7,6 +7,7 @@ import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -20,7 +21,7 @@ import javax.crypto.spec.GCMParameterSpec
  */
 internal class OfflineExamBank(context: Context) {
     data class Topic(val id: Int, val name: String, val count: Int)
-    data class SyncResult(val confirmed: Int, val remaining: Int)
+    data class SyncResult(val confirmed: Int, val remaining: Int, val changedQuestions: Int = 0)
 
     private val prefs = context.getSharedPreferences("murshid_encrypted_offline_exams_v1", Context.MODE_PRIVATE)
     private val alias = "murshid_offline_exam_aes_gcm_v1"
@@ -140,6 +141,33 @@ internal class OfflineExamBank(context: Context) {
     private fun pending(uid: Int): JSONArray =
         read(pendingKey(uid))?.optJSONArray("items") ?: JSONArray()
 
+    /**
+     * A changed question must not be graded using an answer written for an older revision.
+     * Uses exact source content and option IDs, not cosmetic metadata such as image URL or year.
+     */
+    private fun questionSignature(item: JSONObject): String {
+        val parts = mutableListOf(
+            item.optInt("id").toString(),
+            item.optString("type"), item.optString("text"),
+            item.optString("meaning_word"), item.optString("correct_answer")
+        )
+        val opts = item.optJSONArray("options") ?: JSONArray()
+        parts.add(opts.length().toString())
+        for (i in 0 until opts.length()) {
+            val obj = opts.optJSONObject(i)
+            if (obj != null) {
+                parts.add(obj.optInt("id").toString())
+                parts.add(obj.optString("text"))
+            } else {
+                parts.add(opts.optString(i))
+            }
+        }
+        val canonical = parts.joinToString(separator = "\u001f")
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(canonical.toByteArray(StandardCharsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    }
+
     fun pendingCount(uid: Int): Int = if (uid <= 0) 0 else pending(uid).length()
 
     fun queued(uid: Int, questionId: Int): JSONObject? {
@@ -165,6 +193,7 @@ internal class OfflineExamBank(context: Context) {
         if (list.length() >= maxRecords) return false
         val row = JSONObject().put("chapter_id", chapterId).put("question_id", questionId)
             .put("question_index", questionIndex).put("answer", text.take(3000))
+            .put("question_signature", questionSignature(known))
             .put("option_id", optionId).put("created_at", System.currentTimeMillis())
         list.put(row)
         return write(pendingKey(uid), JSONObject().put("items", list))
@@ -189,6 +218,7 @@ internal class OfflineExamBank(context: Context) {
         if (uid <= 0 || csrf.isBlank()) return SyncResult(0, pendingCount(uid))
         val snapshot = pending(uid)
         var confirmed = 0
+        var changed = 0
         for (i in 0 until snapshot.length()) {
             val row = snapshot.optJSONObject(i) ?: continue
             val chapter = row.optInt("chapter_id")
@@ -197,11 +227,28 @@ internal class OfflineExamBank(context: Context) {
                 val serverExam = api.call("mobile/exam.php?chapter_id=" + chapter)
                 if (!serverExam.optBoolean("ok")) break
                 val live = serverExam.optJSONArray("questions") ?: JSONArray()
-                val found = (0 until live.length()).mapNotNull { live.optJSONObject(it) }
-                    .firstOrNull { it.optInt("id") == qid } ?: break
+                val matchedIndex = (0 until live.length()).firstOrNull {
+                    live.optJSONObject(it)?.optInt("id") == qid
+                }
+                if (matchedIndex == null) {
+                    changed++
+                    continue
+                }
+                val found = live.optJSONObject(matchedIndex) ?: break
                 if (found.optBoolean("submitted", false)) {
                     if (!acknowledge(uid, qid)) break
                     confirmed++
+                    continue
+                }
+                val downloaded = questions(uid, chapter)
+                val original = (0 until (downloaded?.length() ?: 0))
+                    .mapNotNull { downloaded?.optJSONObject(it) }
+                    .firstOrNull { it.optInt("id") == qid }
+                val expected = row.optString("question_signature")
+                    .ifBlank { original?.let(::questionSignature).orEmpty() }
+                // If no snapshot survives, do not optimistically replay unknown content.
+                if (expected.isBlank() || expected != questionSignature(found)) {
+                    changed++
                     continue
                 }
                 val answer = row.optString("answer")
@@ -209,7 +256,7 @@ internal class OfflineExamBank(context: Context) {
                     .put("submitted", true)
                 if (row.optInt("option_id") > 0) value.put("selected", row.optInt("option_id"))
                 val payload = JSONObject().put("csrf", csrf).put("chapter_id", chapter)
-                    .put("question_index", row.optInt("question_index"))
+                    .put("question_index", matchedIndex + 1)
                     .put("completed", false)
                     .put("answers", JSONObject().put(qid.toString(), value))
                 val response = api.call("api/progress.php", payload)
@@ -219,7 +266,7 @@ internal class OfflineExamBank(context: Context) {
                 confirmed++
             } catch (_: Exception) { break }
         }
-        return SyncResult(confirmed, pendingCount(uid))
+        return SyncResult(confirmed, pendingCount(uid), changed)
     }
 }
 
