@@ -37,6 +37,7 @@ class ServerError(val code: Int, override val message: String) : RuntimeExceptio
 }
 
 class MurshidApi(private val context: Context) {
+    val offline = OfflineStudyStore(context)
     private val cookies get() = CookieManager.getInstance()
 
     private fun url(path: String, query: Map<String, String>): URL {
