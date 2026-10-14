@@ -482,8 +482,7 @@ jobs:
           shasum -a 256 Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.ipa | tee Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.sha256
 
       - name: Publish iPhone IPA preview release
-        if: github.event_name != 'pull_request'
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ios-study-v49'
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ios-study-v49')
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
