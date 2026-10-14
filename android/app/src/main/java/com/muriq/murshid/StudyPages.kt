@@ -4,6 +4,9 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -12,7 +15,67 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import org.json.JSONObject
+
+
+/**
+ * Math symbols are integrated into the answer input, ABOVE the typing area
+ * rather than displayed as a second row of action buttons below the box.
+ * Caret position is preserved when inserting a symbol.
+ */
+@Composable
+fun InlineMathAnswer(
+    value: String,
+    onValueChange: (String) -> Unit,
+    enabled: Boolean,
+    hint: String = "اكتب الإجابة"
+) {
+    var field by remember { mutableStateOf(TextFieldValue(value, selection = TextRange(value.length))) }
+    LaunchedEffect(value) {
+        if (field.text != value) field = TextFieldValue(value, selection = TextRange(value.length))
+    }
+    val colors = MaterialTheme.colorScheme
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = colors.surface,
+        border = BorderStroke(1.dp, colors.outlineVariant)
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                listOf("√", "²", "³", "π", "(", ")", "×", "÷", "−", "=", "/").forEach { symbol ->
+                    TextButton(onClick = {
+                        val start = minOf(field.selection.start, field.selection.end).coerceIn(0, field.text.length)
+                        val end = maxOf(field.selection.start, field.selection.end).coerceIn(0, field.text.length)
+                        val newValue = field.text.substring(0, start) + symbol + field.text.substring(end)
+                        field = TextFieldValue(newValue, selection = TextRange(start + symbol.length))
+                        onValueChange(newValue)
+                    }, enabled = enabled, modifier = Modifier.widthIn(min = 35.dp).heightIn(min = 34.dp),
+                        contentPadding = PaddingValues(horizontal = 3.dp, vertical = 0.dp)) {
+                        Text(symbol, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+            HorizontalDivider(color = colors.outlineVariant)
+            BasicTextField(
+                value = field,
+                onValueChange = { field = it; onValueChange(it.text) },
+                enabled = enabled,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.onSurface),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 70.dp).padding(12.dp),
+                decorationBox = { inner ->
+                    Box {
+                        if (field.text.isEmpty()) Text(hint, color = colors.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium)
+                        inner()
+                    }
+                }
+            )
+        }
+    }
+}
 
 fun questionNeedsOptions(text: String): Boolean {
     val t = text.trim()
@@ -56,9 +119,18 @@ fun validQuestion(q: Json): Boolean {
     LaunchedEffect(route, tick, app.refresh) {
         loading = true
         try {
-            data = app.api.call("mobile/topics.php", query=mapOf("subject_id" to route.id.toString())).arr("topics")
+            val d = app.api.call("mobile/topics.php", query=mapOf("subject_id" to route.id.toString()))
+            data = d.arr("topics")
+            app.api.offline.saveTopics(route.id, d)
             error = ""
-        } catch(e:Exception) { error = e.message.orEmpty() }
+        } catch(e:Exception) {
+            val cached = if(e is ServerError && e.isSessionExpired) null else app.api.offline.topics(route.id)
+            if (cached != null) {
+                data = cached.arr("topics")
+                app.offlineMode = true
+                error = ""
+            } else error = e.message.orEmpty()
+        }
         finally { loading=false }
     }
     PageColumn {
@@ -111,7 +183,17 @@ fun validQuestion(q: Json): Boolean {
             data = d.arr("questions").filter(::validQuestion)
             current = 0
             app.csrf = d.str("csrf").ifBlank { app.csrf }
-        } catch(e:Exception) { error = e.message.orEmpty() }
+            // Only cache complete, unfiltered topic snapshots.
+            if(type=="all" && state=="all" && year=="all" && round=="all" &&
+                difficulty=="all" && !shuffle) app.api.offline.saveExam(route.id, d)
+        } catch(e:Exception) {
+            val cached = if(e is ServerError && e.isSessionExpired) null else app.api.offline.exam(route.id)
+            if (cached != null) {
+                data = cached.arr("questions").filter(::validQuestion)
+                current = 0
+                app.offlineMode = true
+            } else error = e.message.orEmpty()
+        }
         finally { loading=false }
     }
     val q = data.getOrNull(current)
@@ -202,6 +284,7 @@ fun validQuestion(q: Json): Boolean {
                 var entry by remember(id) { mutableStateOf(currentQuestion.obj("answer").str("text")) }
                 var submitted by remember(id) { mutableStateOf(currentQuestion.bool("submitted")) }
                 var grade by remember(id) { mutableStateOf(JSONObject()) }
+                var pendingLocal by remember(id) { mutableStateOf(app.api.offline.isQueued(id)) }
                 val options=currentQuestion.arr("options").map { it.str("text") }.filter { it.isNotBlank() }
                 val typeValue=currentQuestion.str("type")
                 val isChoice=options.isNotEmpty()
@@ -260,16 +343,29 @@ fun validQuestion(q: Json): Boolean {
                     }
                     Panel {
                         Text("إجابتك",fontWeight=FontWeight.Bold)
+                        val mathQuestion = typeValue == "calculation" ||
+                            (typeValue in listOf("text","fill") &&
+                              Regex("احسب|أوجد|اوجد|معادلة|جذر|تكامل|مساحة|حجم|ناتج|قيمة س")
+                                .containsMatchIn(currentQuestion.str("text")))
                         when {
                             isChoice -> ChoiceOptions(entry,options.map {it to it},enabled=!submitted){ selected ->
                                 entry=selected
                                 app.job {
-                                    val result=app.api.call("api/progress.php",data=payload("csrf" to app.csrf,
-                                        "chapter_id" to route.id,"question_index" to current+1,
-                                        "completed" to (current==data.lastIndex),
-                                        "answers" to payload(id.toString() to payload("text" to selected,"selected_text" to selected,"submitted" to true))))
-                                    grade=result.obj("grades").obj(id.toString())
-                                    if(grade.length()>0) submitted=true
+                                    try {
+                                        if (app.offlineMode) throw java.io.IOException("Offline mode")
+                                        val result=app.api.call("api/progress.php",data=payload("csrf" to app.csrf,
+                                            "chapter_id" to route.id,"question_index" to current+1,
+                                            "completed" to (current==data.lastIndex),
+                                            "answers" to payload(id.toString() to payload("text" to selected,"selected_text" to selected,"submitted" to true))))
+                                        grade=result.obj("grades").obj(id.toString())
+                                        if(grade.length()>0) submitted=true
+                                    } catch(e:Exception) {
+                                        if (e is ServerError) throw e
+                                        if (app.api.offline.enqueue(route.id,id,current+1,selected)) {
+                                            submitted=true; pendingLocal=true; app.offlineMode=true
+                                            app.pendingSync=app.api.offline.pendingCount()
+                                        } else app.show("لا يمكن حفظ إجابة إضافية دون إنترنت؛ تحقق من حصة الأسئلة أو الاتصال.")
+                                    }
                                 }
                             }
                             typeValue=="match" && items.isNotEmpty() -> items.forEach { m->
@@ -300,28 +396,50 @@ fun validQuestion(q: Json): Boolean {
                                                 modifier=Modifier.fillMaxWidth(),enabled=!submitted)
                                         }
                                     } else {
-                                        OutlinedTextField(specialMap[key].orEmpty(),{specialMap[key]=it},
-                                            label={Text(stage.str("prompt").ifBlank {stage.str("label").ifBlank {"الإجابة"}})},
-                                            modifier=Modifier.fillMaxWidth(),enabled=!submitted)
+                                        if(typeValue=="calculation")
+                                            InlineMathAnswer(specialMap[key].orEmpty(),{specialMap[key]=it},
+                                                enabled=!submitted,
+                                                hint=stage.str("prompt").ifBlank {stage.str("label").ifBlank {"الإجابة"}})
+                                        else
+                                            OutlinedTextField(specialMap[key].orEmpty(),{specialMap[key]=it},
+                                                label={Text(stage.str("prompt").ifBlank {stage.str("label").ifBlank {"الإجابة"}})},
+                                                modifier=Modifier.fillMaxWidth(),enabled=!submitted)
                                     }
                                 }
                             }
-                            else -> OutlinedTextField(entry,{entry=it}, enabled=!submitted,
-                                label={Text("اكتب الإجابة")},modifier=Modifier.fillMaxWidth(),minLines=3)
+                            else -> if(mathQuestion)
+                                InlineMathAnswer(entry,{entry=it},enabled=!submitted)
+                            else
+                                OutlinedTextField(entry,{entry=it}, enabled=!submitted,
+                                    label={Text("اكتب الإجابة")},modifier=Modifier.fillMaxWidth(),minLines=3)
                         }
                         if(!submitted && !isChoice) Action("إرسال الإجابة",enabled=complete && !app.busy) {
                             val answer=encoded()
                             app.job {
-                                val result=app.api.call("api/progress.php",data=payload("csrf" to app.csrf,
-                                    "chapter_id" to route.id,"question_index" to current+1,
-                                    "completed" to (current==data.lastIndex),
-                                    "answers" to payload(id.toString() to payload("text" to answer,"selected_text" to answer,"submitted" to true))))
-                                grade=result.obj("grades").obj(id.toString())
-                                if(grade.length()>0) submitted=true
+                                try {
+                                    if(app.offlineMode) throw java.io.IOException("Offline mode")
+                                    val result=app.api.call("api/progress.php",data=payload("csrf" to app.csrf,
+                                        "chapter_id" to route.id,"question_index" to current+1,
+                                        "completed" to (current==data.lastIndex),
+                                        "answers" to payload(id.toString() to payload("text" to answer,"selected_text" to answer,"submitted" to true))))
+                                    grade=result.obj("grades").obj(id.toString())
+                                    if(grade.length()>0) submitted=true
+                                } catch(e:Exception) {
+                                    if (e is ServerError) throw e
+                                    if (app.api.offline.enqueue(route.id,id,current+1,answer)) {
+                                        submitted=true; pendingLocal=true; app.offlineMode=true
+                                        app.pendingSync=app.api.offline.pendingCount()
+                                    } else app.show("تعذر حفظ الإجابة. لا يمكن تجاوز حصة الأسئلة دون إنترنت.")
+                                }
                             }
                         }
                     }
                     if(submitted) Panel {
+                        if(pendingLocal) {
+                            Text("تم حفظ الإجابة على الجهاز ✓", color=MaterialTheme.colorScheme.primary,
+                                fontWeight=FontWeight.Bold)
+                            Text("النتيجة والنقاط ستُحسبان على الخادم بعد المزامنة. لا توجد درجة نهائية دون إنترنت.")
+                        } else {
                         val correct=if(grade.length()>0)grade.bool("is_correct") else currentQuestion.obj("answer").bool("correct")
                         Text(if(correct)"إجابة صحيحة ✓" else "راجع الإجابة الصحيحة",
                             color=if(correct) androidx.compose.ui.graphics.Color(0xFF15803D) else MaterialTheme.colorScheme.error,
@@ -330,6 +448,7 @@ fun validQuestion(q: Json): Boolean {
                         Text("الإجابة النموذجية: $answer")
                         val explanation=grade.str("explanation").ifBlank {currentQuestion.str("explanation")}
                         if(explanation.isNotBlank())Text(explanation)
+                        }
                     }
                 }
                 Row(Modifier.fillMaxWidth().padding(14.dp),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
