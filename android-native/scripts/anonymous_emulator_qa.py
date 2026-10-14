@@ -106,7 +106,7 @@ def tap_node(node: ET.Element) -> None:
 
 def reveal(text: str, width: int, height: int):
     recovered_system_ui = 0
-    for attempt in range(10):
+    for attempt in range(6):
         root, _ = ui_tree()
         # An occasional newly booted emulator presents an operating-system ANR
         # dialog before the app login test. Recover only this infrastructure
@@ -133,7 +133,7 @@ def reveal(text: str, width: int, height: int):
                         0 <= (left + right) // 2 <= width):
                     return node
         # Scroll the native login form to reach buttons below the viewport.
-        if attempt < 9:
+        if attempt < 5:
             adb("shell", "input", "swipe", str(width // 2), str(height * 4 // 5),
                 str(width // 2), str(height // 4), "350")
             time.sleep(0.5)
