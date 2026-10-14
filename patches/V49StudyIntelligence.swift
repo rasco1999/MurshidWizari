@@ -1,5 +1,4 @@
 import SwiftUI
-import AVFoundation
 import LocalAuthentication
 
 // MARK: - iPhone-only v4.9: previously graded questions, never an offline paid exam
@@ -198,6 +197,35 @@ final class V49StudyStore: ObservableObject {
         save()
     }
 
+    struct SubjectMastery: Identifiable {
+        var id: String { subject }
+        let subject: String
+        let count: Int
+        let mastered: Int
+        let due: Int
+        var percent: Int { count == 0 ? 0 : (mastered * 100 / count) }
+    }
+
+    // An explainable ON-DEVICE heuristic, not an academic grade.
+    var subjectMastery: [SubjectMastery] {
+        let groups = Dictionary(grouping: records.filter { !$0.subjectName.isEmpty },
+                                by: { $0.subjectName })
+        return groups.map { subject, items in
+            SubjectMastery(subject: subject, count: items.count,
+                           mastered: items.filter { $0.successfulReviews >= 3 }.count,
+                           due: items.filter { $0.dueAt <= Date() }.count)
+        }.sorted {
+            $0.percent == $1.percent ? $0.due > $1.due : $0.percent < $1.percent
+        }
+    }
+
+    var suggestedDailyTarget: Int {
+        guard !records.isEmpty else { return 10 }
+        let weak = records.filter { !$0.wasCorrect || $0.successfulReviews < 2 }.count
+        let goal = min(30, max(10, due.count + min(10, weak / 3)))
+        return min(30, ((goal + 4) / 5) * 5)
+    }
+
     var records: [V49StudyRecord] { archive?.records ?? [] }
     var due: [V49StudyRecord] {
         records.filter { $0.dueAt <= Date() }
@@ -237,31 +265,16 @@ final class V49StudyStore: ObservableObject {
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            // Cached exam-review content is private and must not be copied into cloud backups.
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            var protectedURL = url
+            try protectedURL.setResourceValues(values)
         } catch {
             // Local review is optional; a storage failure must not block paid exams.
             NSLog("Offline review cache unavailable: %@", String(describing: error))
         }
     }
-}
-
-@MainActor
-final class V49QuestionSpeech {
-    static let shared = V49QuestionSpeech()
-    private let synthesizer = AVSpeechSynthesizer()
-    private init() {}
-
-    func speak(_ text: String) {
-        synthesizer.stopSpeaking(at: .immediate)
-        let input = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(3200))
-        guard !input.isEmpty else { return }
-        let utterance = AVSpeechUtterance(string: input)
-        let arabicLetters = input.unicodeScalars.filter { (0x0600...0x06FF).contains($0.value) }.count
-        utterance.voice = AVSpeechSynthesisVoice(language: arabicLetters > 0 ? "ar-SA" : "en-US")
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.88
-        synthesizer.speak(utterance)
-    }
-
-    func stop() { synthesizer.stopSpeaking(at: .immediate) }
 }
 
 // MARK: - Smart review home (does not claim server rankings or academic grades)
@@ -292,19 +305,45 @@ struct V49StudyHubView: View {
                     V3MetricCard(title: "محفوظ للمراجعة", value: "\(store.records.count)", icon: "books.vertical")
                     V3MetricCard(title: "حان وقتها", value: "\(store.due.count)", icon: "alarm.fill")
                     V3MetricCard(title: "أيام المواظبة", value: "\(store.streak)", icon: "flame.fill")
-                    V3MetricCard(title: "تدريب اليوم", value: "\(store.todayReviews)/10", icon: "target")
+                    V3MetricCard(title: "تدريب اليوم", value: "\(store.todayReviews)/\(store.suggestedDailyTarget)", icon: "target")
                 }
 
                 MurshidCard {
                     VStack(alignment: .leading, spacing: 10) {
-                        Label("تحدي 10 مراجعات اليوم", systemImage: "sparkles")
+                        Label("هدف المراجعة المقترح: \(store.suggestedDailyTarget)", systemImage: "sparkles")
                             .font(.headline)
-                        ProgressView(value: Double(min(store.todayReviews, 10)), total: 10).tint(.murshidBlue)
-                        Text(store.todayReviews >= 10 ? "أتممت تحدي اليوم! 🎉" : "تبقّى \(10 - min(store.todayReviews, 10)) أسئلة للوصول إلى هدفك اليومي.")
+                        ProgressView(value: Double(min(store.todayReviews, store.suggestedDailyTarget)),
+                                     total: Double(store.suggestedDailyTarget)).tint(.murshidBlue)
+                        Text(store.todayReviews >= store.suggestedDailyTarget
+                             ? "أتممت هدف المراجعة اليوم! 🎉"
+                             : "تبقّى \(max(0, store.suggestedDailyTarget - store.todayReviews)) سؤالًا لهدف المراجعة المقترح.")
                             .font(.subheadline).foregroundStyle(.secondary)
-                        if store.todayReviews >= 10 {
-                            ShareLink(item: "أكملت تحدي 10 مراجعات اليوم في منصة المرشد الوزاري 📚🔥") {
+                        if store.todayReviews >= store.suggestedDailyTarget {
+                            ShareLink(item: "أكملت هدف المراجعة اليوم في منصة المرشد الوزاري 📚🔥") {
                                 Label("شارك إنجازك", systemImage: "square.and.arrow.up")
+                            }
+                        }
+                    }
+                }
+
+                if !store.subjectMastery.isEmpty {
+                    MurshidCard {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("إتقان المواد", systemImage: "chart.bar.fill").font(.headline)
+                            Text("مؤشر تقديري من تكرار المراجعة الناجحة، وليس درجة وزارية.")
+                                .font(.caption).foregroundStyle(.secondary)
+                            ForEach(Array(store.subjectMastery.prefix(6))) { item in
+                                VStack(alignment: .leading, spacing: 5) {
+                                    HStack {
+                                        Text(item.subject).font(.subheadline.bold())
+                                        Spacer()
+                                        Text("\(item.percent)%").font(.caption.monospacedDigit())
+                                    }
+                                    ProgressView(value: Double(item.percent), total: 100).tint(.murshidBlue)
+                                        .accessibilityLabel("إتقان \(item.subject): \(item.percent) بالمئة")
+                                    Text("\(item.mastered) متقنة من \(item.count) · \(item.due) للمراجعة")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }
@@ -395,10 +434,6 @@ struct V49RecallView: View {
                         VStack(alignment: .leading, spacing: 15) {
                             Text(q.topicName).font(.caption.bold()).foregroundStyle(Color.murshidBlue)
                             Text(q.question).font(.title3.bold()).lineSpacing(5).textSelection(.enabled)
-                            Button { V49QuestionSpeech.shared.speak(q.question) } label: {
-                                Label("استمع إلى السؤال", systemImage: "speaker.wave.2.fill")
-                            }
-                            .font(.subheadline)
                             if reveal {
                                 Divider()
                                 Text("الإجابة النموذجية").font(.caption.bold()).foregroundStyle(.secondary)
@@ -409,10 +444,6 @@ struct V49RecallView: View {
                                 } else {
                                     Text("لا يتوفر شرح معتمد لهذا السؤال حتى الآن.").font(.caption).foregroundStyle(.secondary)
                                 }
-                                Button { V49QuestionSpeech.shared.speak(q.correctAnswer + ". " + q.explanation) } label: {
-                                    Label("استمع إلى الإجابة والشرح", systemImage: "waveform")
-                                }
-                                .font(.subheadline)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -454,14 +485,12 @@ struct V49RecallView: View {
         .background(Color.murshidBackground.ignoresSafeArea())
         .navigationTitle("مراجعة نشطة")
         .navigationBarTitleDisplayMode(.inline)
-        .onDisappear { V49QuestionSpeech.shared.stop() }
     }
 
     private func finish(_ q: V49StudyRecord, remembered didRemember: Bool) {
         store.markRecall(questionID: q.id, remembered: didRemember)
         if didRemember { remembered += 1; haptic(.success) }
         else { needsReview += 1; haptic(.warning) }
-        V49QuestionSpeech.shared.stop()
         reveal = false
         index += 1
     }
