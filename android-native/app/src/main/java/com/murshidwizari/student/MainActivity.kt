@@ -3586,16 +3586,23 @@ class MainActivity : Activity() {
         var monthlyAmount = 0L
         for (i in 0 until plans.length()) {
             val plan = plans.optJSONObject(i) ?: continue
-            val id = plan.optString("id")
-            if (id.isBlank()) continue
-            validIds.add(id)
+            val id = SubscriptionPlanRules.identifier(plan.optString("id"), plan.optString("key"))
+            if (!SubscriptionPlanRules.selectable(id, plan.optLong("amount"))) continue
+            if (id !in validIds) validIds.add(id)
             if (id == "month1") monthlyAmount = plan.optLong("amount")
         }
-        if (paymentPlan !in validIds) paymentPlan = validIds.firstOrNull() ?: ""
+        paymentPlan = SubscriptionPlanRules.selected(validIds, paymentPlan)
+        if (validIds.isEmpty()) {
+            val errorCard = uiCard()
+            errorCard.addView(uiText("تعذر قراءة الباقات من الخادم. حاول تحديث الاشتراك.", 15f, tint = mutedText))
+            addUiCard(errorCard)
+            button("تحديث الباقات") { refreshSubscriptionStatus() }
+            return
+        }
         for (i in 0 until plans.length()) {
             val plan = plans.optJSONObject(i) ?: continue
-            val id = plan.optString("id")
-            if (id.isBlank()) continue
+            val id = SubscriptionPlanRules.identifier(plan.optString("id"), plan.optString("key"))
+            if (!SubscriptionPlanRules.selectable(id, plan.optLong("amount"))) continue
             val selected = id == paymentPlan
             val amount = plan.optLong("amount", 0)
             val formatter = java.text.NumberFormat.getNumberInstance(java.util.Locale("ar", "IQ"))
