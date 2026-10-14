@@ -84,9 +84,9 @@ internal class OfflineExamBank(context: Context) {
             now + 300_000L >= verified && now < expires && now - verified < maxAge
     }
 
-    private fun topicsKey(uid: Int) = "topics_\$uid"
-    private fun topicKey(uid: Int, chapter: Int) = "topic_\$uid\_\$chapter"
-    private fun pendingKey(uid: Int) = "pending_\$uid"
+    private fun topicsKey(uid: Int) = "topics_" + uid
+    private fun topicKey(uid: Int, chapter: Int) = "topic_" + uid + "_" + chapter
+    private fun pendingKey(uid: Int) = "pending_" + uid
 
     fun saveTopic(uid: Int, chapterId: Int, chapterName: String, questions: JSONArray): Boolean {
         if (!canOpen(uid) || chapterId <= 0 || questions.length() < 1 ||
@@ -180,7 +180,7 @@ internal class OfflineExamBank(context: Context) {
             val chapter = row.optInt("chapter_id")
             val qid = row.optInt("question_id")
             try {
-                val snapshot = api.call("mobile/exam.php?chapter_id=\$chapter")
+                val snapshot = api.call("mobile/exam.php?chapter_id=" + chapter)
                 if (!snapshot.optBoolean("ok")) { working.put(row); stopped = true; continue }
                 val live = snapshot.optJSONArray("questions") ?: JSONArray()
                 val found = (0 until live.length()).mapNotNull { live.optJSONObject(it) }
