@@ -54,6 +54,8 @@ import java.util.concurrent.Executor
 /** 100% Android native UI: no WebView, no embedded website, no hardcoded secrets. */
 class MainActivity : Activity() {
     private val typography by lazy { MurshidTypography(this) }
+    private val offlineExams by lazy { OfflineExamBank(this) }
+    private var offlineChapterId = 0
     private val jobs = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private lateinit var api: ApiClient
@@ -1097,6 +1099,7 @@ class MainActivity : Activity() {
         popupChecking = false; lastPopupPoll = 0L
         currentAdDialog?.dismiss(); currentAdDialog = null
         api.clear()
+        // Session expiry preserves encrypted pending answers for later re-authentication.
         csrf = ""; student = JSONObject(); homepage = JSONObject(); subscribed = false
         homeFeatureFlags = JSONObject()
         homeInsightsLoaded = false; homeInsights = JSONObject(); homeWeekly = JSONObject()
@@ -2501,6 +2504,20 @@ class MainActivity : Activity() {
         student = response.optJSONObject("user") ?: JSONObject()
         subscribed = response.optBoolean("subscribed")
         offlineCoachMode = false
+        val offlineUser = student.optInt("id", 0)
+        offlineExams.acceptVerifiedSubscription(offlineUser, subscribed,
+            response.optLong("subscription_expires_at_unix", 0L))
+        if (offlineUser > 0 && csrf.isNotBlank() && offlineExams.pendingCount(offlineUser) > 0) {
+            val token = csrf
+            val expectedGeneration = sessionGeneration
+            jobs.execute {
+                val report = offlineExams.sync(api, token, offlineUser)
+                main.post {
+                    if (expectedGeneration == sessionGeneration && student.optInt("id") == offlineUser &&
+                        report.confirmed > 0) message("تمت مزامنة ${report.confirmed} إجابة من الدراسة دون إنترنت.")
+                }
+            }
+        }
         OfflineCoachAccess(prefs).remember(student.optInt("id"))
         updateSchoolAdsBadge(response)
         StudentPush.attach(this, api, student.optInt("id"), csrf) { configured ->
@@ -2560,6 +2577,11 @@ class MainActivity : Activity() {
         addUiCard(welcome, bottom = 16)
         addUiCard(uiRow("مدربي الذكي · مراجعة دون إنترنت",
             "افتح دفتر الأسئلة المحفوظة", "brain") { coachScreen() }, bottom = 14)
+        if (offlineExams.topics(studentId).isNotEmpty()) {
+            addUiCard(uiRow("اختباراتي المحفوظة",
+                "حل الأسئلة المنزلة وتخزين الإجابات للمزامنة", "book") { offlineExamTopicsScreen() }, bottom = 14)
+            caption("إجابات تنتظر المزامنة: ${offlineExams.pendingCount(studentId)}")
+        }
         val count = OfflineCoachNotebook(prefs).cards(studentId).size
         caption(if (count > 0) "أسئلتك المحفوظة على الجهاز: $count"
             else "لا توجد أسئلة محفوظة بعد. اتصل بالإنترنت وأجب عن أسئلة الاختبارات أولاً.")
@@ -2800,6 +2822,9 @@ class MainActivity : Activity() {
             }
         }
 
+        if (offlineExams.topics(userId).isNotEmpty()) {
+            button("الاختبارات المحفوظة دون إنترنت", secondary = true) { offlineExamTopicsScreen() }
+        }
         if (cards.isNotEmpty()) {
             button(if (due > 0) "ابدأ مراجعة اليوم" else "استعرض دفتر المراجعة") {
                 val next = cards.firstOrNull { it.optLong("due_at", 0L) <= now } ?: cards.first()
@@ -3947,6 +3972,9 @@ class MainActivity : Activity() {
             csrf = result.optString("csrf", csrf)
             applyServerQuota(result)
             val fetchedQuestions = result.optJSONArray("questions") ?: JSONArray()
+            if (subscribed && student.optInt("id") > 0) {
+                offlineExams.saveTopic(student.optInt("id"), id, name, fetchedQuestions)
+            }
             examQuestions = JSONArray().apply {
                 for (i in 0 until fetchedQuestions.length()) {
                     val candidate = fetchedQuestions.optJSONObject(i) ?: continue
@@ -5343,6 +5371,7 @@ class MainActivity : Activity() {
                             StudentPush.detach(this@MainActivity)
                             intent.removeExtra(StudentPush.inboxExtra)
                             api.clear(); csrf = ""; student = JSONObject()
+                            offlineExams.clear() // Explicit logout clears private downloaded exams and un-synced answers.
                             OfflineCoachAccess(prefs).clear()
                             offlineCoachMode = false
                             homeFeatureFlags = JSONObject()
