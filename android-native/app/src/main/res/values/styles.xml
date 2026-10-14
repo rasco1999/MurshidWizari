@@ -2,11 +2,11 @@
     <!-- Native Android dialogs must respect the selected dark or light appearance. -->
     <style name="MurshidLight" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:colorAccent">#2D6CDF</item>
-        <item name="android:fontFamily">@font/noto_sans_arabic</item>
+        <item name="android:fontFamily">@font/cairo</item>
     </style>
     <style name="MurshidDark" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:colorAccent">#2D6CDF</item>
-        <item name="android:fontFamily">@font/noto_sans_arabic</item>
+        <item name="android:fontFamily">@font/cairo</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

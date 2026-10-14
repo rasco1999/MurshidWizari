@@ -2,62 +2,57 @@ package com.murshidwizari.student
 
 import android.content.Context
 import android.graphics.Typeface
-import android.text.SpannableString
-import android.text.Spanned
-import android.text.TextPaint
-import android.text.style.MetricAffectingSpan
+import android.os.Build
 import android.widget.TextView
 
-/** Character-script rules are pure, so they can be regression tested on the JVM. */
+/** Script detection remains JVM-testable, but Cairo shapes both Arabic and Latin.
+ * Splitting the same line across fonts caused visibly inconsistent Arabic metrics.
+ */
 internal object MurshidTextScript {
     private val westernRuns = Regex("[A-Za-z0-9]+(?:[._:/-][A-Za-z0-9]+)*")
 
     fun containsArabic(value: String): Boolean =
         value.any { Character.UnicodeScript.of(it.code) == Character.UnicodeScript.ARABIC }
 
-    /** start inclusive, end exclusive */
     fun latinRuns(value: String): List<IntRange> =
         westernRuns.findAll(value).map { it.range.first until (it.range.last + 1) }.toList()
 }
 
-/** Different script shapes, consistent metrics and weights on every Android manufacturer.
- *
- * Fonts come from Google Fonts under SIL OFL-1.1. Licenses are embedded in
- * assets/licenses alongside the fonts by the reproducible GitHub build process.
+/** Fixed typography scale (sp) designed around Cairo's tall Arabic ascenders.
+ * No scaling of large figures or accessibility settings is suppressed.
  */
-internal class MurshidTypography(context: Context) {
-    private val arabic by lazy { context.resources.getFont(R.font.noto_sans_arabic) }
-    private val latin by lazy { context.resources.getFont(R.font.inter) }
-    private val arabicBold by lazy { Typeface.create(arabic, Typeface.BOLD) }
-    private val latinBold by lazy { Typeface.create(latin, Typeface.BOLD) }
-
-    fun typeface(value: String, bold: Boolean = false): Typeface {
-        val arabicPrimary = MurshidTextScript.containsArabic(value)
-        return if (arabicPrimary) { if (bold) arabicBold else arabic }
-               else { if (bold) latinBold else latin }
-    }
-
-    /** For mixed Arabic/English sentences and amounts, Inter shapes Latin runs. */
-    fun format(value: String, bold: Boolean = false): CharSequence {
-        if (!MurshidTextScript.containsArabic(value)) return value
-        val runs = MurshidTextScript.latinRuns(value)
-        if (runs.isEmpty()) return value
-        val result = SpannableString(value)
-        val chosen = if (bold) latinBold else latin
-        for (run in runs) {
-            result.setSpan(MurshidFontSpan(chosen), run.first, run.last + 1,
-                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-        return result
-    }
-
-    fun apply(label: TextView, value: String, bold: Boolean = false) {
-        label.typeface = typeface(value, bold)
-        label.text = format(value, bold)
+internal object MurshidTypeScale {
+    fun sizeSp(requested: Float): Float = when {
+        requested <= 10f -> 11f             // bottom navigation and small status captions
+        requested < 12f -> 12f
+        requested >= 24f && requested < 27f -> 24f // title width on narrow screens
+        else -> requested
     }
 }
 
-private class MurshidFontSpan(private val typeface: Typeface): MetricAffectingSpan() {
-    override fun updateMeasureState(p: TextPaint) { p.typeface = typeface }
-    override fun updateDrawState(p: TextPaint) { p.typeface = typeface }
+/** Bundled Google Fonts Cairo, licensed under SIL Open Font License 1.1.
+ * This SINGLE family is used for Arabic, English, numbers, static labels
+ * and dynamic EditText content. No OEM/system font substitution is needed.
+ */
+internal class MurshidTypography(context: Context) {
+    private val regular by lazy { context.resources.getFont(R.font.cairo) }
+    private val semibold by lazy { weight(600) }
+    private val bold by lazy { weight(700) }
+
+    private fun weight(amount: Int): Typeface =
+        if (Build.VERSION.SDK_INT >= 28) Typeface.create(regular, amount, false)
+        else Typeface.create(regular, if (amount >= 700) Typeface.BOLD else Typeface.NORMAL)
+
+    fun typeface(value: String = "", bold: Boolean = false): Typeface =
+        if (bold) this.bold else regular
+
+    fun medium(): Typeface = semibold
+    fun strong(): Typeface = bold
+
+    fun apply(label: TextView, value: String, bold: Boolean = false) {
+        label.typeface = if (bold) this.bold else regular
+        label.text = value
+        // Cairo's dotted glyphs and Quranic marks need the ascent/descent font padding.
+        label.includeFontPadding = true
+    }
 }

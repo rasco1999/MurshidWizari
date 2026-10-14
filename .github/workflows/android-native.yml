@@ -51,13 +51,17 @@ jobs:
           test -n "$ANDROID_HOME"
           echo y | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;35.0.0"
-      - name: Install licensed Noto Sans Arabic and Inter fonts
+      - name: Install licensed Cairo font
         run: bash scripts/install_font_assets.sh
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
       - name: Verify exam rules and build native APK
         run: gradle --no-daemon testDebugUnitTest assembleDebug assembleQa assemblePreview assembleCandidate bundleCandidate --stacktrace
+      - name: Verify Cairo font and license embedded in preview APK
+        run: |
+          unzip -Z1 app/build/outputs/apk/preview/app-preview.apk | grep -F 'res/font/cairo.ttf'
+          unzip -Z1 app/build/outputs/apk/preview/app-preview.apk | grep -F 'assets/licenses/OFL_Cairo.txt'
       - name: Verify side-by-side preview application ID
         run: |
           test -s app/build/outputs/apk/preview/app-preview.apk
@@ -80,7 +84,7 @@ jobs:
           unzip -t app/build/outputs/bundle/candidate/app-candidate.aab >/dev/null
       - uses: actions/upload-artifact@v4
         with:
-          name: MurshidWizari-Play-AAB-Unsigned-Build49807
+          name: MurshidWizari-Play-AAB-Unsigned-Build49808
           path: android-native/app/build/outputs/bundle/candidate/app-candidate.aab
           if-no-files-found: error
 
