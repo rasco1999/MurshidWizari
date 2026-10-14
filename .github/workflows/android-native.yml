@@ -51,13 +51,56 @@ jobs:
           test -n "$ANDROID_HOME"
           echo y | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;35.0.0"
-      - name: Install licensed Noto Sans Arabic and Inter fonts
+      - name: Install licensed Cairo font
         run: bash scripts/install_font_assets.sh
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
       - name: Verify exam rules and build native APK
         run: gradle --no-daemon testDebugUnitTest assembleDebug assembleQa assemblePreview assembleCandidate bundleCandidate --stacktrace
+      - name: Verify Cairo is actually packaged into Android APK
+        run: |
+          unzip -Z1 app/build/outputs/apk/preview/app-preview.apk | grep -E '^res/font/cairo.*\\.ttf
+        run: |
+          test -s app/build/outputs/apk/preview/app-preview.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging app/build/outputs/apk/preview/app-preview.apk | grep -F "name='com.murshidwizari.student.preview'"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MurshidWizari-Native-Android-debug
+          path: android-native/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MurshidWizari-Student-Build498-Preview-Android
+          path: android-native/app/build/outputs/apk/preview/app-preview.apk
+          if-no-files-found: error
+
+      - name: Confirm Play candidate app bundle
+        run: |
+          test -s app/build/outputs/bundle/candidate/app-candidate.aab
+          unzip -t app/build/outputs/bundle/candidate/app-candidate.aab >/dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MurshidWizari-Play-AAB-Unsigned-Build49807
+          path: android-native/app/build/outputs/bundle/candidate/app-candidate.aab
+          if-no-files-found: error
+
+      - name: Collect unsigned candidate and signing verifier
+        run: |
+          mkdir -p candidate-artifact
+          cp app/build/outputs/apk/candidate/*.apk candidate-artifact/
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" candidate-artifact/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MurshidWizari-Student-4.8.18-candidate
+          path: android-native/candidate-artifact/
+          if-no-files-found: error
+
+          unzip -Z1 app/build/outputs/apk/preview/app-preview.apk | grep -F 'assets/licenses/OFL_Cairo.txt'
+          if unzip -Z1 app/build/outputs/apk/preview/app-preview.apk | grep -Eq 'res/font/(noto_sans_arabic|inter)'; then
+            echo "::error::Old typeface resource was packaged" && exit 1
+          fi
       - name: Verify side-by-side preview application ID
         run: |
           test -s app/build/outputs/apk/preview/app-preview.apk
