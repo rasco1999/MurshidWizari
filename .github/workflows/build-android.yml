@@ -2,6 +2,10 @@ name: Build Murshid Android Native APK
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'android/**'
+      - '.github/workflows/build-android.yml'
   push:
     branches: [main]
     paths:
@@ -55,6 +59,7 @@ jobs:
           retention-days: 14
           if-no-files-found: error
       - name: Release Android beta
+        if: github.ref == 'refs/heads/main'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -72,7 +77,7 @@ jobs:
 
   diagnostics:
     needs: android
-    if: always()
+    if: always() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
