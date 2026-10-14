@@ -4333,7 +4333,9 @@ class MainActivity : Activity() {
                 }
             }
         }
-        // Exam actions live in the top overflow menu, matching iOS.\n        // Back navigation is already present in the top bar.\n    }
+        // Exam actions live in the top overflow menu, matching iOS.
+        // Back navigation is already present in the top bar.
+    }
 
     private fun leaveExam() {
         examStartedAt = 0L
