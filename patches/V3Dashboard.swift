@@ -777,6 +777,7 @@ struct V3ContestView: View {
                 ScrollView {
                     LazyVStack(spacing: 16) {
                         V3IntroCard(eyebrow: "تحدي المليون", title: "تقدمك بين الطلاب", text: "الترتيب يعتمد على نقاط المنصة والإجابات الصحيحة ضمن فترة التحدي.", icon: "trophy.fill")
+                        scheduleCard
                         myRankCard
                         leaderboard(title: "متصدرو تحدي المليون", rows: jArray(contest["leaderboard"]), rankKey: "rank", xpKey: "xp")
                         leaderboard(title: "ترتيب الموسم", rows: jArray(season["leaderboard"]), rankKey: "rank", xpKey: "xp")
@@ -791,6 +792,37 @@ struct V3ContestView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
+    }
+
+    private var scheduleCard: some View {
+        let config = contest["config"] as? JSON ?? [:]
+        let phase = jString(config["phase"])
+        let label: String = phase == "scheduled" ? "لم يبدأ التحدي بعد" :
+            phase == "ended" ? "انتهى التحدي" :
+            (jBool(config["active"]) ? "التحدي جارٍ الآن" : "حالة التحدي غير متاحة")
+        return MurshidCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Label(label, systemImage: "calendar.badge.clock")
+                    .font(.headline).foregroundStyle(Color.murshidBlue)
+                Text("بداية التحدي: " + readableContestDate(jString(config["start_at"])))
+                Text("نهاية التحدي: " + readableContestDate(jString(config["end_at"])))
+                Text("الوقت المعروض بحسب توقيت بغداد. تحدد الإدارة المواعيد ويمكنك تحديث هذه الصفحة لمعرفة أي تغيير.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .font(.subheadline)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func readableContestDate(_ raw: String) -> String {
+        let format = DateFormatter()
+        format.locale = Locale(identifier: "en_US_POSIX")
+        format.timeZone = TimeZone(identifier: "Asia/Baghdad")!
+        format.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        guard let date = format.date(from: raw) else { return raw.isEmpty ? "لم يحدد بعد" : raw }
+        format.locale = Locale(identifier: "ar_IQ")
+        format.dateFormat = "dd/MM/yyyy  hh:mm a"
+        return format.string(from: date)
     }
 
     private var myRankCard: some View {

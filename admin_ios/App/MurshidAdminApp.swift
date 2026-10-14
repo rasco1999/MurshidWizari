@@ -920,6 +920,8 @@ private struct MoreScreen:View {
                             Divider().overlay(Ink.blue2)
                             NavigationLink{FreeMonthCampaignScreen(state:state)}label:{entry("إدارة المقاعد المجانية","gift.fill")}
                             Divider().overlay(Ink.blue2)
+                            NavigationLink{MillionScheduleAdminScreen(state:state)}label:{entry("موعد تحدي المليون","trophy.fill")}
+                            Divider().overlay(Ink.blue2)
                             NavigationLink{QuestionsScreen(state:state)}label:{entry("بنك الأسئلة","doc.text.fill")}
                             Divider().overlay(Ink.blue2)
                             NavigationLink{PredictionsAdminScreen(state:state)}label:{entry("إدارة المرشحات","scope")}
@@ -944,6 +946,111 @@ private struct MoreScreen:View {
         HStack{Image(systemName:icon).frame(width:32).foregroundStyle(Ink.gold);Text(title).fontWeight(.medium);Spacer();Image(systemName:"chevron.left").foregroundStyle(Ink.faded)}.padding(.vertical,9)
     }
 }
+
+// MARK: - Million contest schedule: single source of truth on production server.
+private struct MillionScheduleAdminScreen: View {
+    @ObservedObject var state: AdminState
+    @State private var started = Date()
+    @State private var ends = Date().addingTimeInterval(30 * 86400)
+    @State private var loading = true
+    @State private var saving = false
+    @State private var errorMessage = ""
+    @State private var successMessage = ""
+    @State private var phase = ""
+    private let baghdad = TimeZone(identifier: "Asia/Baghdad")!
+
+    private func formatter() -> DateFormatter {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = baghdad
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return f
+    }
+    private var phaseLabel: String {
+        switch phase {
+        case "scheduled": return "لم يبدأ التحدي بعد"
+        case "active": return "التحدي جارٍ الآن"
+        case "ended": return "انتهى التحدي"
+        default: return "حالة التحدي غير متاحة"
+        }
+    }
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 16) {
+                ScreenTitle(text: "تحدي المليون", detail: "توقيت بداية المسابقة ونهايتها · بغداد")
+                GlassBox {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Label(phaseLabel, systemImage: "clock.badge.checkmark")
+                            .font(.headline).foregroundStyle(Ink.gold)
+                        Text("التحدي ظاهر للطلاب في كل الأوقات، لكن النقاط والترتيب يُحسبان خلال المدة التي تحددها هنا.")
+                            .font(.footnote).foregroundStyle(Ink.faded)
+                        DatePicker("بداية التحدي", selection: $started,
+                                   displayedComponents: [.date, .hourAndMinute])
+                        DatePicker("نهاية التحدي", selection: $ends,
+                                   displayedComponents: [.date, .hourAndMinute])
+                        Text("جميع المواعيد بتوقيت بغداد. لا يُحذف سجل النقاط السابق عند تعديل الفترة.")
+                            .font(.caption).foregroundStyle(Ink.faded)
+                        if !errorMessage.isEmpty {
+                            Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                                .font(.footnote).foregroundStyle(.orange)
+                        }
+                        if !successMessage.isEmpty {
+                            Label(successMessage, systemImage: "checkmark.circle.fill")
+                                .font(.footnote).foregroundStyle(.green)
+                        }
+                        Primary(title: saving ? "جاري الحفظ…" : "حفظ الموعد على الموقع",
+                                symbol: "checkmark.shield.fill") {
+                            Task { await save() }
+                        }.disabled(saving || loading || ends <= started)
+                    }
+                }
+                if loading { ProgressView("جاري جلب المواعيد…") }
+                Button {
+                    Task { await load() }
+                } label: { Label("تحديث المواعيد من الخادم", systemImage: "arrow.clockwise") }
+                    .buttonStyle(.bordered)
+            }.padding(16)
+        }
+        .environment(\.timeZone, baghdad)
+        .adminBG()
+        .navigationTitle("تحدي المليون")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+        .refreshable { await load() }
+    }
+    @MainActor private func load() async {
+        loading = true; errorMessage = ""
+        defer { loading = false }
+        do {
+            let response = try await state.call("contest_schedule")
+            let schedule = response["schedule"] as? J ?? [:]
+            let f = formatter()
+            guard let start = f.date(from: s(schedule, "start_at", "")),
+                  let end = f.date(from: s(schedule, "end_at", "")) else {
+                errorMessage = "تعذر قراءة التواريخ. ثبّت تحديث الخدمة على الموقع."
+                return
+            }
+            started = start
+            ends = end
+            phase = s(schedule, "phase", "")
+        } catch { errorMessage = error.localizedDescription }
+    }
+    @MainActor private func save() async {
+        guard ends > started else { errorMessage = "يجب أن تسبق البداية النهاية."; return }
+        saving = true; errorMessage = ""; successMessage = ""
+        defer { saving = false }
+        let f = formatter()
+        do {
+            _ = try await state.call("contest_schedule_save", params: [
+                "start_at": f.string(from: started),
+                "end_at": f.string(from: ends)
+            ])
+            await load()
+            successMessage = "تم اعتماد موعد التحدي على الخادم."
+        } catch { errorMessage = error.localizedDescription }
+    }
+}
+
 private struct SubscriptionsScreen:View{
     @ObservedObject var state:AdminState
     @State private var chosen:J?
