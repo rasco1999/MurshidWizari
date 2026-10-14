@@ -146,26 +146,16 @@ internal class OfflineExamBank(context: Context) {
      * Uses exact source content and option IDs, not cosmetic metadata such as image URL or year.
      */
     private fun questionSignature(item: JSONObject): String {
-        val parts = mutableListOf(
-            item.optInt("id").toString(),
-            item.optString("type"), item.optString("text"),
-            item.optString("meaning_word"), item.optString("correct_answer")
-        )
-        val opts = item.optJSONArray("options") ?: JSONArray()
-        parts.add(opts.length().toString())
-        for (i in 0 until opts.length()) {
-            val obj = opts.optJSONObject(i)
-            if (obj != null) {
-                parts.add(obj.optInt("id").toString())
-                parts.add(obj.optString("text"))
-            } else {
-                parts.add(opts.optString(i))
-            }
+        val options = item.optJSONArray("options") ?: JSONArray()
+        val choices = (0 until options.length()).map { index ->
+            val obj = options.optJSONObject(index)
+            if (obj != null) obj.optInt("id") to obj.optString("text")
+            else 0 to options.optString(index)
         }
-        val canonical = parts.joinToString(separator = "\u001f")
-        val digest = MessageDigest.getInstance("SHA-256")
-            .digest(canonical.toByteArray(StandardCharsets.UTF_8))
-        return digest.joinToString("") { "%02x".format(it.toInt() and 0xff) }
+        return OfflineExamRules.signature(
+            item.optInt("id"), item.optString("type"), item.optString("text"),
+            item.optString("meaning_word"), item.optString("correct_answer"), choices
+        )
     }
 
     fun pendingCount(uid: Int): Int = if (uid <= 0) 0 else pending(uid).length()
@@ -283,6 +273,19 @@ internal class OfflineExamBank(context: Context) {
  * send plain text and misgrade them as zero during offline practice.
  */
 internal object OfflineExamRules {
+    fun signature(id: Int, type: String, question: String, meaning: String,
+                  answer: String, options: List<Pair<Int, String>>): String {
+        val fields = mutableListOf(id.toString(), type, question, meaning, answer,
+            options.size.toString())
+        options.forEach { (optionId, label) ->
+            fields.add(optionId.toString())
+            fields.add(label)
+        }
+        val digest = MessageDigest.getInstance("SHA-256").digest(
+            fields.joinToString(separator = "\u001f").toByteArray(StandardCharsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    }
+
     fun supported(type: String, optionsCount: Int): Boolean = when (type) {
         "mcq" -> optionsCount >= 2
         "true_false", "text", "fill", "meaning" -> true
