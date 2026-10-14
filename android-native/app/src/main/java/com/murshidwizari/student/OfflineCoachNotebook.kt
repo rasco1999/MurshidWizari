@@ -23,10 +23,19 @@ class OfflineCoachNotebook(private val prefs: SharedPreferences) {
         val raw = prefs.getString(key(userId), null) ?: return emptyList()
         return runCatching {
             val source = JSONArray(raw)
-            (0 until source.length()).mapNotNull { source.optJSONObject(it) }
-                .filter { it.optInt("id") > 0 && it.optString("question").isNotBlank() }
-                .sortedWith(compareBy<JSONObject> { it.optLong("due_at", 0L) }
-                    .thenByDescending { it.optLong("saved_at", 0L) })
+            val all = (0 until source.length()).mapNotNull { source.optJSONObject(it) }
+            val allowed = all.filter {
+                it.optInt("id") > 0 && it.optString("question").isNotBlank() &&
+                    !RetiredFrenchContent.isQuestion(it.optInt("id")) &&
+                    !EquationStudyRules.isFrenchSubject(0, it.optString("subject"))
+            }
+            // Permanently purge previously graded French questions, not only
+            // hide them from the coach UI.
+            if (allowed.size != all.size) {
+                prefs.edit().putString(key(userId), JSONArray(allowed).toString()).apply()
+            }
+            allowed.sortedWith(compareBy<JSONObject> { it.optLong("due_at", 0L) }
+                .thenByDescending { it.optLong("saved_at", 0L) })
         }.getOrDefault(emptyList())
     }
 
@@ -35,7 +44,9 @@ class OfflineCoachNotebook(private val prefs: SharedPreferences) {
         explanation: String, subject: String, wasCorrect: Boolean?,
         now: Long = System.currentTimeMillis()
     ): Boolean {
-        if (userId <= 0 || questionId <= 0 || question.isBlank() || correctAnswer.isBlank()) return false
+        if (userId <= 0 || questionId <= 0 || question.isBlank() || correctAnswer.isBlank() ||
+            RetiredFrenchContent.isQuestion(questionId) ||
+            EquationStudyRules.isFrenchSubject(0, subject)) return false
         val saved = cards(userId).toMutableList()
         val existing = saved.firstOrNull { it.optInt("id") == questionId }
         val entry = JSONObject().apply {

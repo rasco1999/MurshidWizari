@@ -3713,6 +3713,7 @@ class MainActivity : Activity() {
                 var shown = 0
                 for (i in 0 until topics.length()) {
                     val topic = topics.optJSONObject(i) ?: continue
+                    if (RetiredFrenchContent.isChapter(topic.optInt("id"))) continue
                     val count = topic.optInt("count")
                     val name = topic.optString("name")
                     if (!name.contains(query.trim(), ignoreCase = true)) continue
@@ -3803,6 +3804,11 @@ class MainActivity : Activity() {
     }
 
     private fun loadExam(id: Int, name: String, fromSearch: Boolean = false, targetText: String = "") {
+        if (RetiredFrenchContent.isChapter(id) ||
+            EquationStudyRules.isFrenchSubject(topicsSubjectId,topicsSubjectName)) {
+            message("المادة الفرنسية حُذفت من المنهج الحالي.")
+            return
+        }
         if (chapterId != id || examStartedAt == 0L) examStartedAt = SystemClock.elapsedRealtime()
         examFromSearch = fromSearch
         examSearchTarget = if (fromSearch) targetText else ""
@@ -3813,7 +3819,13 @@ class MainActivity : Activity() {
                 expectedScreenGeneration != screenGeneration) return@fetch
             csrf = result.optString("csrf", csrf)
             applyServerQuota(result)
-            examQuestions = result.optJSONArray("questions") ?: JSONArray()
+            val fetchedQuestions = result.optJSONArray("questions") ?: JSONArray()
+            examQuestions = JSONArray().apply {
+                for (i in 0 until fetchedQuestions.length()) {
+                    val candidate = fetchedQuestions.optJSONObject(i) ?: continue
+                    if (!RetiredFrenchContent.isQuestion(candidate.optInt("id"))) put(candidate)
+                }
+            }
             submissionUncertain = false
             examIssues.clear()
             val seen = HashSet<String>()

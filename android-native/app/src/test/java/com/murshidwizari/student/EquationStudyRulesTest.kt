@@ -20,6 +20,17 @@ class EquationStudyRulesTest {
         assertFalse(EquationStudyRules.applies("متى ولد الجواهري عام 1899؟", "اللغة العربية"))
         assertFalse(EquationStudyRules.applies("How did the canary sing? Because it was hungry.", "اللغة الإنكليزية"))
     }
+    @Test fun archivedFrenchIdentifiersBlockedIncludingOfflineNotebooks() {
+        assertTrue(RetiredFrenchContent.isQuestion(6278))
+        assertTrue(RetiredFrenchContent.isQuestion(30830))
+        assertTrue(RetiredFrenchContent.isQuestion(26747))
+        assertFalse(RetiredFrenchContent.isQuestion(26746))
+        assertFalse(RetiredFrenchContent.isQuestion(0))
+        assertTrue(RetiredFrenchContent.isChapter(22))
+        assertTrue(RetiredFrenchContent.isChapter(1507))
+        assertFalse(RetiredFrenchContent.isChapter(21))
+    }
+
     @Test fun frenchSubjectsHiddenAcrossGrades() {
         for(id in listOf(33,36,40)) assertTrue(EquationStudyRules.isFrenchSubject(id,"اللغة الفرنسية"))
         assertTrue(EquationStudyRules.isFrenchSubject(0,"French"))
