@@ -72,10 +72,16 @@ object DailyStudyReminder {
             Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        // On-device due count only; never show question text, name or an academic grade.
+        val userId = OfflineCoachAccess(preferences).studentId()
+        val due = if (userId > 0) OfflineCoachNotebook(preferences).cards(userId)
+            .count { it.optLong("due_at", 0L) <= System.currentTimeMillis() } else 0
+        val reminder = if (due > 0) "لديك $due أسئلة محفوظة حان وقت مراجعتها."
+            else "حتى 10 دقائق اليوم تصنع فرقًا. افتح المرشد وواصل من حيث توقفت."
         val notification = Notification.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_study_notification)
             .setContentTitle("وقت مراجعة قصيرة 📚")
-            .setContentText("حتى 10 دقائق اليوم تصنع فرقًا. افتح المرشد وواصل من حيث توقفت.")
+            .setContentText(reminder)
             .setContentIntent(openApp)
             .setAutoCancel(true)
             .build()

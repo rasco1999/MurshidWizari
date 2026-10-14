@@ -1108,10 +1108,14 @@ class MainActivity : Activity() {
     private fun fetch(path: String, body: JSONObject? = null, showError: Boolean = true, done: (JSONObject) -> Unit) {
         val generation = sessionGeneration
         jobs.execute {
+            val startedAt = SystemClock.elapsedRealtime()
             val result = try { api.call(path, body) } catch (e: Exception) {
                 JSONObject().put("ok", false).put("network_error", true)
                     .put("message", NetworkRules.message(e, body != null))
             }
+            // Local aggregates only: never store account or question contents.
+            LocalReliability(prefs).record(path, SystemClock.elapsedRealtime() - startedAt,
+                result.optBoolean("ok"), result.optBoolean("network_error"))
             main.post {
                 if (generation != sessionGeneration || isFinishing || isDestroyed) return@post
                 if (result.optBoolean("session_expired")) { expireSession(); return@post }
@@ -2728,6 +2732,16 @@ class MainActivity : Activity() {
     /** The coach keeps an on-device notebook, separate from the server's review_schedule.
      *  Reading and rating these cards is offline and does not submit an exam answer.
      */
+    private fun localLearningReviews(): List<LearningInsights.Review> =
+        OfflineCoachNotebook(prefs).cards(student.optInt("id"))
+            .map { card -> LearningInsights.Review(
+                subject = card.optString("subject"),
+                successfulReviews = card.optInt("level", 0),
+                wasCorrect = if (card.has("graded_correct")) card.optBoolean("graded_correct") else null,
+                dueAt = card.optLong("due_at", 0L),
+                lastReviewedAt = card.optLong("last_reviewed_at", 0L)
+            ) }
+
     private fun coachScreen() {
         activeScreen = "coach"
         base("مدربي الذكي", true)
@@ -2756,6 +2770,35 @@ class MainActivity : Activity() {
             14f, tint = mutedText),
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
         addUiCard(status)
+
+        // Local estimation, never an official exam grade or result.
+        val reviewSignals = localLearningReviews()
+        val studyGoal = LearningInsights.suggestedDailyTarget(reviewSignals, now)
+        val summary = uiCard()
+        summary.addView(uiText("هدف دراسة مقترح: $studyGoal سؤال يومياً", 17f, true, blue))
+        summary.addView(uiText(LearningInsights.nextReview(reviewSignals, now), 13f, tint = mutedText),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        summary.addView(uiText("الاقتراح مبني على دفتر المراجعة المحلي وليس نتيجة الامتحان الرسمية.",
+            11f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+        addUiCard(summary, bottom = 14)
+
+        val masteryGroups = LearningInsights.mastery(reviewSignals, now).take(6)
+        if (masteryGroups.isNotEmpty()) {
+            sectionHeader("إتقان المواد", "تقدير محلي يعتمد عدد المراجعات الناجحة", "chart")
+            masteryGroups.forEach { group ->
+                val subjectCard = uiCard()
+                subjectCard.addView(uiText("${group.subject} · ${group.percent}%", 16f, true))
+                subjectCard.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+                    max = 100
+                    progress = group.percent
+                    progressTintList = ColorStateList.valueOf(blue)
+                    contentDescription = "إتقان ${group.subject}: ${group.percent} بالمئة"
+                }, LinearLayout.LayoutParams(-1, dp(6)).apply { topMargin = dp(8) })
+                subjectCard.addView(uiText("${group.secure} متقنة من ${group.total} · ${group.due} للمراجعة",
+                    12f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+                addUiCard(subjectCard, bottom = 8)
+            }
+        }
 
         if (cards.isNotEmpty()) {
             button(if (due > 0) "ابدأ مراجعة اليوم" else "استعرض دفتر المراجعة") {
@@ -5214,6 +5257,9 @@ class MainActivity : Activity() {
                 notificationsScreen()
             }
             accountSetting(services, "خدمة العملاء", "محادثة مباشرة مع الدعم", "chat") { supportScreen() }
+            accountSetting(services, "تشخيص الأداء", "إحصاءات محلية بلا بيانات شخصية", "chart") {
+                performanceDiagnosticsScreen()
+            }
             addUiCard(services, bottom = 16)
             fetch("mobile/notifications.php", showError = false) { notices ->
                 if (activeScreen == "account" && notices.optBoolean("ok")) {
@@ -5316,6 +5362,45 @@ class MainActivity : Activity() {
             })
             addUiCard(logoutCard, bottom = 16)
 
+        }
+    }
+
+    /** Counts only functional categories, never request URLs or personal details. */
+    private fun performanceDiagnosticsScreen() {
+        activeScreen = "performance_diagnostics"
+        base("تشخيص الأداء", true)
+        caption("هذه الإحصاءات محفوظة على جهازك فقط. لا تتضمن إجابات أو أسماء أو بيانات دخول.")
+        val metrics = LocalReliability(prefs)
+        val data = metrics.counters()
+        val titles = mapOf(
+            "bootstrap" to "تسجيل الدخول والجلسة",
+            "exam" to "تحميل الاختبارات",
+            "answers" to "إرسال الإجابات",
+            "study_plan" to "خطط الدراسة",
+            "review" to "المراجعات",
+            "notifications" to "الإشعارات",
+            "mobile_other" to "خدمات الطالب",
+            "api_other" to "خدمات أخرى",
+            "other" to "اتصالات أخرى"
+        )
+        if (data.length() == 0) caption("لا توجد قياسات بعد. استخدم التطبيق ثم راجع هذه الصفحة.")
+        for ((category, title) in titles) {
+            val row = data.optJSONObject(category) ?: continue
+            val card = uiCard()
+            card.addView(uiText(title, 16f, true))
+            card.addView(uiText("الطلبات: ${row.optInt("requests")} · الإخفاقات: ${row.optInt("errors")}", 13f),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+            card.addView(uiText("اتصال: ${row.optInt("network_errors")} · بطيئة: ${row.optInt("slow")}", 12f,
+                tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
+            addUiCard(card, bottom = 8)
+        }
+        button("مسح قياسات هذا الجهاز", secondary = true) {
+            AlertDialog.Builder(this).setTitle("حذف سجل الأداء؟")
+                .setMessage("سيحذف أعداد الطلبات فقط، ولن يؤثر على أي إجابة أو اشتراك.")
+                .setPositiveButton("حذف") { _, _ ->
+                    metrics.clear()
+                    performanceDiagnosticsScreen()
+                }.setNegativeButton("رجوع", null).show()
         }
     }
 
@@ -5445,7 +5530,9 @@ class MainActivity : Activity() {
         line("خطة جديدة", true)
         val planName = input("اسم الخطة").apply { setText("خطتي الوزارية") }
         var days = 30
-        var target = 20
+        val reviews = localLearningReviews()
+        var target = LearningInsights.suggestedDailyTarget(reviews, System.currentTimeMillis())
+        caption("الهدف المقترح $target سؤال يومياً، محسوب من مراجعاتك المحلية ويمكنك تغييره.")
         stepper("المدة (يوم)", days, 1, 365, 1) { days = it }
         stepper("الهدف اليومي (سؤال)", target, 5, 500, 5) { target = it }
         val create = button("إنشاء الخطة") {}
@@ -6951,6 +7038,7 @@ class MainActivity : Activity() {
         }
         when (activeScreen) {
             "coach_question" -> coachScreen()
+            "performance_diagnostics" -> accountScreen()
             "coach" -> if (offlineCoachMode) showOfflineCoachHome() else showHome(homepage)
             "offline_coach_home" -> moveTaskToBack(true)
             "bound_recovery" -> accountScreen()
