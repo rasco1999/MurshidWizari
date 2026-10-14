@@ -85,6 +85,13 @@ class OfflineStudyStore(context: Context) {
 
     fun pendingCount(): Int = pending().length()
 
+    fun queuedAnswer(questionId: Int): String? {
+        val list = pending()
+        return (0 until list.length()).mapNotNull { list.optJSONObject(it) }
+            .firstOrNull { it.optInt("question_id") == questionId }
+            ?.optString("answer")
+    }
+
     fun isQueued(questionId: Int): Boolean {
         val list = pending()
         return (0 until list.length()).any { list.optJSONObject(it)?.optInt("question_id") == questionId }
