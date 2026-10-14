@@ -45,10 +45,10 @@ jobs:
         run: |
           test -n "$ANDROID_HOME"
           echo y | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;35.0.0"
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.9'
+          gradle-version: '8.11.1'
       - name: Verify exam rules and build native APK
         run: gradle --no-daemon testDebugUnitTest assembleDebug assembleQa assemblePreview assembleCandidate bundleCandidate --stacktrace
       - name: Verify side-by-side preview application ID
@@ -73,7 +73,7 @@ jobs:
           unzip -t app/build/outputs/bundle/candidate/app-candidate.aab >/dev/null
       - uses: actions/upload-artifact@v4
         with:
-          name: MurshidWizari-Play-AAB-Unsigned-Build49803
+          name: MurshidWizari-Play-AAB-Unsigned-Build49804
           path: android-native/app/build/outputs/bundle/candidate/app-candidate.aab
           if-no-files-found: error
 
