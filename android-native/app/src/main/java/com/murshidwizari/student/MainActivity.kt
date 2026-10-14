@@ -2728,6 +2728,16 @@ class MainActivity : Activity() {
     /** The coach keeps an on-device notebook, separate from the server's review_schedule.
      *  Reading and rating these cards is offline and does not submit an exam answer.
      */
+    private fun localLearningReviews(): List<LearningInsights.Review> =
+        OfflineCoachNotebook(prefs).cards(student.optInt("id"))
+            .map { card -> LearningInsights.Review(
+                subject = card.optString("subject"),
+                successfulReviews = card.optInt("level", 0),
+                wasCorrect = if (card.has("graded_correct")) card.optBoolean("graded_correct") else null,
+                dueAt = card.optLong("due_at", 0L),
+                lastReviewedAt = card.optLong("last_reviewed_at", 0L)
+            ) }
+
     private fun coachScreen() {
         activeScreen = "coach"
         base("مدربي الذكي", true)
@@ -2756,6 +2766,35 @@ class MainActivity : Activity() {
             14f, tint = mutedText),
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
         addUiCard(status)
+
+        // Local estimation, never an official exam grade or result.
+        val reviewSignals = localLearningReviews()
+        val studyGoal = LearningInsights.suggestedDailyTarget(reviewSignals, now)
+        val summary = uiCard()
+        summary.addView(uiText("هدف دراسة مقترح: $studyGoal سؤال يومياً", 17f, true, blue))
+        summary.addView(uiText(LearningInsights.nextReview(reviewSignals, now), 13f, tint = mutedText),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        summary.addView(uiText("الاقتراح مبني على دفتر المراجعة المحلي وليس نتيجة الامتحان الرسمية.",
+            11f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+        addUiCard(summary, bottom = 14)
+
+        val masteryGroups = LearningInsights.mastery(reviewSignals, now).take(6)
+        if (masteryGroups.isNotEmpty()) {
+            sectionHeader("إتقان المواد", "تقدير محلي يعتمد عدد المراجعات الناجحة", "chart")
+            masteryGroups.forEach { group ->
+                val subjectCard = uiCard()
+                subjectCard.addView(uiText("${group.subject} · ${group.percent}%", 16f, true))
+                subjectCard.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+                    max = 100
+                    progress = group.percent
+                    progressTintList = ColorStateList.valueOf(blue)
+                    contentDescription = "إتقان ${group.subject}: ${group.percent} بالمئة"
+                }, LinearLayout.LayoutParams(-1, dp(6)).apply { topMargin = dp(8) })
+                subjectCard.addView(uiText("${group.secure} متقنة من ${group.total} · ${group.due} للمراجعة",
+                    12f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+                addUiCard(subjectCard, bottom = 8)
+            }
+        }
 
         if (cards.isNotEmpty()) {
             button(if (due > 0) "ابدأ مراجعة اليوم" else "استعرض دفتر المراجعة") {
@@ -5445,7 +5484,9 @@ class MainActivity : Activity() {
         line("خطة جديدة", true)
         val planName = input("اسم الخطة").apply { setText("خطتي الوزارية") }
         var days = 30
-        var target = 20
+        val reviews = localLearningReviews()
+        var target = LearningInsights.suggestedDailyTarget(reviews, System.currentTimeMillis())
+        caption("الهدف المقترح $target سؤال يومياً، محسوب من مراجعاتك المحلية ويمكنك تغييره.")
         stepper("المدة (يوم)", days, 1, 365, 1) { days = it }
         stepper("الهدف اليومي (سؤال)", target, 5, 500, 5) { target = it }
         val create = button("إنشاء الخطة") {}
