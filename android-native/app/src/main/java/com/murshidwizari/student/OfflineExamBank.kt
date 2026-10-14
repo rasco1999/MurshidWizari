@@ -199,6 +199,15 @@ internal class OfflineExamBank(context: Context) {
         return write(pendingKey(uid), JSONObject().put("items", list))
     }
 
+    /** Explicit student action: dismiss an unsent draft after a server-side revision.
+     * Never silently lose pending answers while syncing.
+     */
+    @Synchronized
+    fun discardPending(uid: Int, questionId: Int): Boolean {
+        if (uid <= 0 || questionId <= 0) return false
+        return acknowledge(uid, questionId)
+    }
+
     @Synchronized
     private fun acknowledge(uid: Int, questionId: Int): Boolean {
         val latest = pending(uid)
