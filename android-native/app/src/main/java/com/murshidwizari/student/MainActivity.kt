@@ -499,6 +499,13 @@ class MainActivity : Activity() {
             view.setPadding(safe.left, safe.top, safe.right, maxOf(safe.bottom, keyboard.bottom))
             insets
         }
+        // Screen content is added AFTER setupRoot() returns. Observing actual
+        // layouts makes every direct and dynamic TextView, Button, RadioButton,
+        // and EditText use the bundled Arabic/Inter fonts consistently.
+        // The typography cache avoids reapplying fonts to unchanged controls.
+        container.viewTreeObserver.addOnGlobalLayoutListener {
+            typography.styleTree(container)
+        }
         setProtectedContent(container)
     }
 
