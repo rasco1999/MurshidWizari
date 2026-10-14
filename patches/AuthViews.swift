@@ -1974,6 +1974,9 @@ struct V3HomeView: View {
                 NavigationLink(destination: ReviewView()) {
                     V3ToolCard(title: "راجع أخطاءك", subtitle: "مراجعة ذكية", icon: "brain.head.profile")
                 }
+                NavigationLink(destination: OfflineReviewStudyView()) {
+                    V3ToolCard(title: "مراجعتي المحفوظة", subtitle: "تعمل دون إنترنت", icon: "square.stack.fill")
+                }
                 NavigationLink(destination: V3FocusView()) {
                     V3ToolCard(title: "جلسة تركيز", subtitle: "25 · 45 · 60 دقيقة", icon: "timer")
                 }
@@ -2341,6 +2344,7 @@ struct V3SuccessView: View {
             V3SectionHeader(title: "طوّر مستواك", subtitle: "أدوات مبنية على بياناتك", icon: "wand.and.stars")
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                 NavigationLink(destination: ReviewView()) { V3ToolCard(title: "المراجعة الذكية", subtitle: "آخر الأخطاء", icon: "brain.head.profile") }
+                NavigationLink(destination: OfflineReviewStudyView()) { V3ToolCard(title: "مراجعتي دون إنترنت", subtitle: "تكرار متباعد", icon: "square.stack.fill") }
                 NavigationLink(destination: StudyPlanView()) { V3ToolCard(title: "خطة الدراسة", subtitle: "هدف يومي", icon: "calendar") }
                 NavigationLink(destination: AchievementsView()) { V3ToolCard(title: "الإنجازات", subtitle: "XP والمستوى", icon: "medal.fill") }
                 NavigationLink(destination: V3ContestView()) { V3ToolCard(title: "تحدي المليون", subtitle: "المتصدرون", icon: "trophy.fill") }
@@ -3506,6 +3510,12 @@ struct V3ExamView: View {
                     textAnswerFocused = false
                     if let grade {
                         withAnimation(.easeInOut(duration: 0.22)) { grades[q.id] = grade }
+                        // Store only acknowledged, server-graded questions for later local recall.
+                        _ = OfflineReviewNotebook.shared.remember(
+                            userID: app.user?.id ?? 0, questionID: q.id,
+                            question: q.text, answer: q.correctAnswer,
+                            explanation: q.explanation, subject: subject.name
+                        )
                     }
                     app.subscribed = jBool(d["subscribed"], default: app.subscribed)
                     app.freeUsed = jInt(d["free_used"], default: app.freeUsed)
