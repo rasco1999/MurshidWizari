@@ -444,7 +444,9 @@ jobs:
           test "$(grep -c '^struct V40QuestionSearchView' MurshidWizari/V40Features.swift)" -eq 1
           grep -Fq 'ShareLink' MurshidWizari/AuthViews.swift
           grep -Fq 'murshidQuestionRequiresChoices' MurshidWizari/AuthViews.swift
-          grep -Fq 'URLCache(memoryCapacity:' MurshidWizari/APIClient.swift
+          grep -Fq 'config.urlCache = nil' MurshidWizari/APIClient.swift
+          grep -Fq 'scopedCacheKey' MurshidWizari/APIClient.swift
+          grep -Fq 'ResponseCache.shared.clearAll()' MurshidWizari/APIClient.swift
           grep -Fq 'SecondaryButtonStyle' MurshidWizari/Theme.swift
           grep -Fq 'submitCurrent(answerOverride:' MurshidWizari/AuthViews.swift
           grep -Fq '.disabled(!isAnswered(questions[current]) || submitting)' MurshidWizari/AuthViews.swift

@@ -4,6 +4,7 @@ import Network
 import UserNotifications
 import Security
 import UIKit
+import CryptoKit
 
 @MainActor
 final class DeviceServices: ObservableObject {
@@ -185,6 +186,18 @@ final class ResponseCache {
     static let shared = ResponseCache()
     private let fm = FileManager.default
 
+    private init() {
+        // The v1 cache had unscoped keys. Never allow old plaintext responses
+        // to persist across app updates or logins.
+        let flag = "murshid_cache_v2_scoped_migrated"
+        if !UserDefaults.standard.bool(forKey: flag) {
+            if let root = fm.urls(for: .cachesDirectory, in: .userDomainMask).first {
+                try? fm.removeItem(at: root.appendingPathComponent("MurshidCache", isDirectory: true))
+            }
+            UserDefaults.standard.set(true, forKey: flag)
+        }
+    }
+
     private var base: URL {
         let root = fm.urls(for: .cachesDirectory, in: .userDomainMask).first!
         let dir = root.appendingPathComponent("MurshidCache", isDirectory: true)
@@ -193,19 +206,40 @@ final class ResponseCache {
     }
 
     func save(_ json: JSON, key: String) {
-        guard JSONSerialization.isValidJSONObject(json),
-              let data = try? JSONSerialization.data(withJSONObject: json) else { return }
-        try? data.write(to: fileURL(key), options: .atomic)
+        guard key.hasPrefix("v2:student:"),
+              JSONSerialization.isValidJSONObject(json),
+              let data = try? JSONSerialization.data(withJSONObject: json),
+              data.count <= 2_000_000 else { return }
+        let url = fileURL(key)
+        do {
+            try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            var resource = URLResourceValues()
+            resource.isExcludedFromBackup = true
+            var protected = url
+            try protected.setResourceValues(resource)
+        } catch {
+            // Cache failure never causes a paid or submitted request to fail.
+        }
     }
 
     func load(key: String) -> JSON? {
-        guard let data = try? Data(contentsOf: fileURL(key)),
+        guard key.hasPrefix("v2:student:"),
+              let data = try? Data(contentsOf: fileURL(key)),
+              data.count <= 2_000_000,
               let value = try? JSONSerialization.jsonObject(with: data) as? JSON else { return nil }
         return value
     }
 
+    func clearAll() {
+        if let root = fm.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            try? fm.removeItem(at: root.appendingPathComponent("MurshidCache", isDirectory: true))
+        }
+    }
+
     private func fileURL(_ key: String) -> URL {
-        let safe = Data(key.utf8).base64EncodedString().replacingOccurrences(of: "/", with: "_")
-        return base.appendingPathComponent(safe + ".json")
+        // Opaque, fixed-length filename; never include a raw student ID or URL in filenames.
+        let bytes = SHA256.hash(data: Data(key.utf8))
+        let digest = bytes.map { String(format: "%02x", $0) }.joined()
+        return base.appendingPathComponent(digest + ".json")
     }
 }
