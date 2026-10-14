@@ -26,8 +26,8 @@ class OfflineStudyStore(context: Context) {
         if ((data.optJSONObject("user")?.optInt("id", 0) ?: 0) <= 0) return null
         if (data.optBoolean("subscribed", false)) {
             // Subscription may expire during an offline interval.
-            val days = data.optInt("subscription_days_remaining", 0)
-            if (days <= 0 || System.currentTimeMillis() - whenSaved >= days.toLong() * day) return null
+            val expiresAt = data.optLong("subscription_expires_at_unix", 0L) * 1000L
+            if (expiresAt <= System.currentTimeMillis()) return null
         }
         return data
     }
