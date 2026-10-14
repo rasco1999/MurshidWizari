@@ -151,6 +151,7 @@ internal class OfflineExamBank(context: Context) {
         return null
     }
 
+    @Synchronized
     fun queue(uid: Int, chapterId: Int, questionId: Int, questionIndex: Int,
               text: String, optionId: Int): Boolean {
         if (!canOpen(uid) || questionId <= 0 || questionIndex <= 0 || text.isBlank() ||
@@ -169,52 +170,54 @@ internal class OfflineExamBank(context: Context) {
         return write(pendingKey(uid), JSONObject().put("items", list))
     }
 
-    /** Call from a serial background executor only. Every ambiguous answer is
-     * reconciled with mobile/exam.php before a possible resend.
+    @Synchronized
+    private fun acknowledge(uid: Int, questionId: Int): Boolean {
+        val latest = pending(uid)
+        val kept = JSONArray()
+        for (i in 0 until latest.length()) {
+            val entry = latest.optJSONObject(i) ?: continue
+            if (entry.optInt("question_id") != questionId) kept.put(entry)
+        }
+        return write(pendingKey(uid), JSONObject().put("items", kept))
+    }
+
+    /** Synchronize on a serial background executor. Reconcile each ambiguous
+     * question with the server BEFORE resending; preserve failures and all
+     * locally added entries atomically across app restarts.
      */
     fun sync(api: ApiClient, csrf: String, uid: Int): SyncResult {
         if (uid <= 0 || csrf.isBlank()) return SyncResult(0, pendingCount(uid))
-        val list = pending(uid)
+        val snapshot = pending(uid)
         var confirmed = 0
-        var working = JSONArray()
-        var stopped = false
-        for (i in 0 until list.length()) {
-            val row = list.optJSONObject(i) ?: continue
-            if (stopped) { working.put(row); continue }
+        for (i in 0 until snapshot.length()) {
+            val row = snapshot.optJSONObject(i) ?: continue
             val chapter = row.optInt("chapter_id")
             val qid = row.optInt("question_id")
             try {
-                val snapshot = api.call("mobile/exam.php?chapter_id=" + chapter)
-                if (!snapshot.optBoolean("ok")) { working.put(row); stopped = true; continue }
-                val live = snapshot.optJSONArray("questions") ?: JSONArray()
+                val serverExam = api.call("mobile/exam.php?chapter_id=" + chapter)
+                if (!serverExam.optBoolean("ok")) break
+                val live = serverExam.optJSONArray("questions") ?: JSONArray()
                 val found = (0 until live.length()).mapNotNull { live.optJSONObject(it) }
-                    .firstOrNull { it.optInt("id") == qid }
-                if (found == null) { working.put(row); stopped = true; continue }
+                    .firstOrNull { it.optInt("id") == qid } ?: break
                 if (found.optBoolean("submitted", false)) {
+                    if (!acknowledge(uid, qid)) break
                     confirmed++
-                    // Flush the confirmed prefix immediately, even if later requests fail.
-                } else {
-                    val answer = row.optString("answer")
-                    val value = JSONObject().put("text", answer).put("selected_text", answer)
-                        .put("submitted", true)
-                    if (row.optInt("option_id") > 0) value.put("selected", row.optInt("option_id"))
-                    val payload = JSONObject().put("csrf", csrf).put("chapter_id", chapter)
-                        .put("question_index", row.optInt("question_index"))
-                        .put("completed", false)
-                        .put("answers", JSONObject().put(qid.toString(), value))
-                    val response = api.call("api/progress.php", payload)
-                    if (response.optBoolean("ok") && response.optJSONObject("grades")?.has(qid.toString()) == true) {
-                        confirmed++
-                    } else { working.put(row); stopped = true }
+                    continue
                 }
-            } catch (_: Exception) { working.put(row); stopped = true }
-            // Persist every processed element together with the untouched suffix.
-            val suffix = JSONArray()
-            for (j in i + 1 until list.length()) list.optJSONObject(j)?.let { suffix.put(it) }
-            val checkpoint = JSONArray()
-            for (j in 0 until working.length()) checkpoint.put(working.optJSONObject(j))
-            for (j in 0 until suffix.length()) checkpoint.put(suffix.optJSONObject(j))
-            write(pendingKey(uid), JSONObject().put("items", checkpoint))
+                val answer = row.optString("answer")
+                val value = JSONObject().put("text", answer).put("selected_text", answer)
+                    .put("submitted", true)
+                if (row.optInt("option_id") > 0) value.put("selected", row.optInt("option_id"))
+                val payload = JSONObject().put("csrf", csrf).put("chapter_id", chapter)
+                    .put("question_index", row.optInt("question_index"))
+                    .put("completed", false)
+                    .put("answers", JSONObject().put(qid.toString(), value))
+                val response = api.call("api/progress.php", payload)
+                if (!response.optBoolean("ok") ||
+                    response.optJSONObject("grades")?.has(qid.toString()) != true) break
+                if (!acknowledge(uid, qid)) break
+                confirmed++
+            } catch (_: Exception) { break }
         }
         return SyncResult(confirmed, pendingCount(uid))
     }
@@ -225,7 +228,8 @@ internal class OfflineExamBank(context: Context) {
  */
 internal object OfflineExamRules {
     fun supported(type: String, optionsCount: Int): Boolean = when (type) {
-        "mcq", "true_false", "text", "fill", "meaning" -> true
+        "mcq" -> optionsCount >= 2
+        "true_false", "text", "fill", "meaning" -> true
         else -> false
     }
 }
