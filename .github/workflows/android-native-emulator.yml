@@ -13,7 +13,9 @@ permissions:
 
 concurrency:
   group: android-native-emulator-${{ github.ref }}
-  cancel-in-progress: true
+  # Retain running 4-device audits when a new source-only fix lands.
+  # Queue newer commits so at least one full audit can complete.
+  cancel-in-progress: false
 
 jobs:
   anonymous-qa:
