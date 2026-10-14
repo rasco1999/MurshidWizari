@@ -34,7 +34,8 @@ internal object MurshidTextScript {
  */
 internal class MurshidTypography(context: Context) {
     private data class Snapshot(
-        val value: String, val hint: String, val bold: Boolean, val requestedFace: Typeface
+        val textHash: Int, val textLength: Int, val hintHash: Int,
+        val bold: Boolean, val requestedFace: Typeface
     )
 
     // Weak refs avoid retaining screens and account views across navigation.
@@ -67,7 +68,8 @@ internal class MurshidTypography(context: Context) {
     fun apply(label: TextView, value: String, bold: Boolean = false) {
         label.typeface = typeface(value, bold)
         label.text = format(value, bold)
-        styled[label] = Snapshot(value, label.hint?.toString().orEmpty(), bold, label.typeface)
+        styled[label] = Snapshot(value.hashCode(), value.length,
+            label.hint?.toString().orEmpty().hashCode(), bold, label.typeface)
     }
 
     /**
@@ -84,7 +86,8 @@ internal class MurshidTypography(context: Context) {
             val previous = styled[view]
             val bold = previous?.bold ?: (view.typeface?.isBold == true)
             val wanted = typeface(primary, bold)
-            if (previous == null || previous.value != value || previous.hint != hint ||
+            if (previous == null || previous.textHash != value.hashCode() ||
+                previous.textLength != value.length || previous.hintHash != hint.hashCode() ||
                 previous.bold != bold || view.typeface !== wanted) {
                 // Editable text must not be replaced: it would reset input methods
                 // and can interfere with selecting/copying answers.
@@ -100,7 +103,8 @@ internal class MurshidTypography(context: Context) {
                             Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                     view.text = formatted
                 }
-                styled[view] = Snapshot(value, hint, bold, wanted)
+                // Keep signatures rather than copies of potentially sensitive edit text.
+                styled[view] = Snapshot(value.hashCode(), value.length, hint.hashCode(), bold, wanted)
             }
         }
         if (view is ViewGroup) {
