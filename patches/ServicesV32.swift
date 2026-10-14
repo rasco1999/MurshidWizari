@@ -186,6 +186,18 @@ final class ResponseCache {
     static let shared = ResponseCache()
     private let fm = FileManager.default
 
+    private init() {
+        // The v1 cache had unscoped keys. Never allow old plaintext responses
+        // to persist across app updates or logins.
+        let flag = "murshid_cache_v2_scoped_migrated"
+        if !UserDefaults.standard.bool(forKey: flag) {
+            if let root = fm.urls(for: .cachesDirectory, in: .userDomainMask).first {
+                try? fm.removeItem(at: root.appendingPathComponent("MurshidCache", isDirectory: true))
+            }
+            UserDefaults.standard.set(true, forKey: flag)
+        }
+    }
+
     private var base: URL {
         let root = fm.urls(for: .cachesDirectory, in: .userDomainMask).first!
         let dir = root.appendingPathComponent("MurshidCache", isDirectory: true)
