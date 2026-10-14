@@ -21,9 +21,9 @@ class OfflineStudyStore(context: Context) {
     fun profile(): JSONObject? {
         val wrapper = profileRaw() ?: return null
         val whenSaved = wrapper.optLong("saved_at", 0L)
-        if (whenSaved <= 0 || System.currentTimeMillis() - whenSaved !in 0..lifetime) return null
+        if (whenSaved <= 0 || System.currentTimeMillis() - whenSaved !in 0L..lifetime) return null
         val data = wrapper.optJSONObject("data") ?: return null
-        if (data.optJSONObject("user")?.optInt("id", 0) ?: 0 <= 0) return null
+        if ((data.optJSONObject("user")?.optInt("id", 0) ?: 0) <= 0) return null
         if (data.optBoolean("subscribed", false)) {
             // Subscription may expire during an offline interval.
             val days = data.optInt("subscription_days_remaining", 0)
@@ -57,7 +57,24 @@ class OfflineStudyStore(context: Context) {
         return try {
             val wrapper = JSONObject(prefs.getString("exam_${owner}_${chapterId}", "") ?: "")
             val saved = wrapper.optLong("saved_at")
-            if (System.currentTimeMillis() - saved !in 0..lifetime) null
+            if (System.currentTimeMillis() - saved !in 0L..lifetime) null
+            else wrapper.optJSONObject("data")
+        } catch (_: Exception) { null }
+    }
+
+    fun saveTopics(subjectId: Int, data: JSONObject) {
+        val owner = profile()?.optJSONObject("user")?.optInt("id", 0) ?: return
+        if (subjectId <= 0 || !data.optBoolean("ok", false)) return
+        prefs.edit().putString("topics_${owner}_${subjectId}", JSONObject()
+            .put("saved_at", System.currentTimeMillis()).put("data", data).toString()).apply()
+    }
+
+    fun topics(subjectId: Int): JSONObject? {
+        val owner = profile()?.optJSONObject("user")?.optInt("id", 0) ?: return null
+        return try {
+            val wrapper = JSONObject(prefs.getString("topics_${owner}_${subjectId}", "") ?: "")
+            val saved = wrapper.optLong("saved_at")
+            if (System.currentTimeMillis() - saved !in 0L..lifetime) null
             else wrapper.optJSONObject("data")
         } catch (_: Exception) { null }
     }
