@@ -16,6 +16,12 @@ class MurshidTextScriptTest {
         assertEquals(listOf("95", "MRI", "Build49807"), fragments)
     }
 
+    @Test fun arabicIndicNumberOnlyUsesArabicTypeface() {
+        assertTrue(MurshidTextScript.containsArabic("١٢٣٤٥"))
+        assertTrue(MurshidTextScript.containsArabic("۱۲۳۴۵"))
+        assertFalse(MurshidTextScript.containsArabic("12345"))
+    }
+
     @Test fun noLatinSpansForPureArabic() {
         assertTrue(MurshidTextScript.latinRuns("المرشد الوزاري").isEmpty())
     }
