@@ -56,6 +56,7 @@ class MainActivity : Activity() {
     private val typography by lazy { MurshidTypography(this) }
     private val offlineExams by lazy { OfflineExamBank(this) }
     private var offlineChapterId = 0
+    private var offlineSyncInFlight = false
     private val jobs = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private lateinit var api: ApiClient
@@ -2507,17 +2508,7 @@ class MainActivity : Activity() {
         val offlineUser = student.optInt("id", 0)
         offlineExams.acceptVerifiedSubscription(offlineUser, subscribed,
             response.optLong("subscription_expires_at_unix", 0L))
-        if (offlineUser > 0 && csrf.isNotBlank() && offlineExams.pendingCount(offlineUser) > 0) {
-            val token = csrf
-            val expectedGeneration = sessionGeneration
-            jobs.execute {
-                val report = offlineExams.sync(api, token, offlineUser)
-                main.post {
-                    if (expectedGeneration == sessionGeneration && student.optInt("id") == offlineUser &&
-                        report.confirmed > 0) message("تمت مزامنة ${report.confirmed} إجابة من الدراسة دون إنترنت.")
-                }
-            }
-        }
+        scheduleOfflineSync()
         OfflineCoachAccess(prefs).remember(student.optInt("id"))
         updateSchoolAdsBadge(response)
         StudentPush.attach(this, api, student.optInt("id"), csrf) { configured ->
@@ -2529,6 +2520,26 @@ class MainActivity : Activity() {
             }
         }
         main.post { openPushInboxIfReady() }
+    }
+
+    private fun scheduleOfflineSync() {
+        val uid = student.optInt("id")
+        if (offlineSyncInFlight || uid <= 0 || csrf.isBlank() ||
+            offlineCoachMode || offlineExams.pendingCount(uid) == 0) return
+        offlineSyncInFlight = true
+        val token = csrf
+        val gen = sessionGeneration
+        jobs.execute {
+            val report = offlineExams.sync(api, token, uid)
+            main.post {
+                offlineSyncInFlight = false
+                if (gen == sessionGeneration && student.optInt("id") == uid &&
+                    report.confirmed > 0) {
+                    message("تم تأكيد ${report.confirmed} إجابة من وضع عدم الاتصال. المتبقي ${report.remaining}.")
+                    if (activeScreen == "offline_exam_topics") offlineExamTopicsScreen()
+                }
+            }
+        }
     }
 
     private fun openPushInboxIfReady() {
@@ -2629,16 +2640,7 @@ class MainActivity : Activity() {
         if (!offlineCoachMode && offlineExams.pendingCount(userId) > 0) {
             button("مزامنة الإجابات الآن") {
                 if (csrf.isBlank()) { message("سجّل الدخول أولاً لمزامنة الإجابات."); return@button }
-                val uid = student.optInt("id")
-                jobs.execute {
-                    val outcome = offlineExams.sync(api, csrf, uid)
-                    main.post {
-                        if (student.optInt("id") == uid && activeScreen == "offline_exam_topics") {
-                            message("تم تأكيد ${outcome.confirmed} إجابة. المتبقي ${outcome.remaining}.")
-                            offlineExamTopicsScreen()
-                        }
-                    }
-                }
+                scheduleOfflineSync()
             }
         }
     }
@@ -7291,8 +7293,12 @@ class MainActivity : Activity() {
             if (old == true && !validated) message("انقطع اتصال الإنترنت. ستُحفظ الإجابات غير المرسلة في هذه الشاشة.")
             // System connectivity can change several times during cold start.
             // Do not obscure the welcome/guest/login screen with a transient toast.
-            if (old == false && validated && student.optInt("id") > 0)
-                message("عاد اتصال الإنترنت. يمكنك إعادة تحميل البيانات؛ لن تُعاد طلبات الحفظ تلقائياً.")
+            if (old == false && validated && student.optInt("id") > 0) {
+                if (!offlineCoachMode && offlineExams.pendingCount(student.optInt("id")) > 0 &&
+                    csrf.isNotBlank()) {
+                    scheduleOfflineSync() // The queue checks existing server events before every retry.
+                } else message("عاد اتصال الإنترنت. يمكنك تحديث البيانات بأمان.")
+            }
         }
     }
 
