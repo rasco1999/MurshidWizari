@@ -12,15 +12,15 @@ import org.json.JSONObject
  * questions. The website's coach.php remains a separate, server-side schedule.
  */
 class OfflineCoachNotebook(private val prefs: SharedPreferences) {
+    private val secure = SecureCoachStorage(prefs)
     companion object {
         const val MAX_CARDS = 150
     }
 
-    private fun key(userId: Int): String = "coach_notebook_v1_" + userId
 
     fun cards(userId: Int): List<JSONObject> {
         if (userId <= 0) return emptyList()
-        val raw = prefs.getString(key(userId), null) ?: return emptyList()
+        val raw = secure.read(userId) ?: return emptyList()
         return runCatching {
             val source = JSONArray(raw)
             val all = (0 until source.length()).mapNotNull { source.optJSONObject(it) }
@@ -32,7 +32,7 @@ class OfflineCoachNotebook(private val prefs: SharedPreferences) {
             // Permanently purge previously graded French questions, not only
             // hide them from the coach UI.
             if (allowed.size != all.size) {
-                prefs.edit().putString(key(userId), JSONArray(allowed).toString()).apply()
+                secure.write(userId, JSONArray(allowed).toString())
             }
             allowed.sortedWith(compareBy<JSONObject> { it.optLong("due_at", 0L) }
                 .thenByDescending { it.optLong("saved_at", 0L) })
@@ -66,8 +66,7 @@ class OfflineCoachNotebook(private val prefs: SharedPreferences) {
         // Keep the most recently introduced 150 records. Do not leak older
         // student/account content into the next user's notebook.
         val kept = saved.sortedByDescending { it.optLong("saved_at") }.take(MAX_CARDS)
-        prefs.edit().putString(key(userId), JSONArray(kept).toString()).apply()
-        return true
+        return secure.write(userId, JSONArray(kept).toString())
     }
 
     fun review(userId: Int, questionId: Int, mastered: Boolean, now: Long = System.currentTimeMillis()): Boolean {
@@ -77,8 +76,7 @@ class OfflineCoachNotebook(private val prefs: SharedPreferences) {
         current.put("level", CoachSchedule.nextLevel(level, mastered))
         current.put("due_at", CoachSchedule.nextDueAt(now, level, mastered))
         current.put("last_reviewed_at", now)
-        prefs.edit().putString(key(userId), JSONArray(saved).toString()).apply()
-        return true
+        return secure.write(userId, JSONArray(saved).toString())
     }
 }
 
