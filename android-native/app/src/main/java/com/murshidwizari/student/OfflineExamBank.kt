@@ -126,9 +126,9 @@ internal class OfflineExamBank(context: Context) {
         // Keep a bounded bank; preserve pending answers separately.
         val ordered = (0 until replaced.length()).mapNotNull { replaced.optJSONObject(it) }
             .sortedByDescending { it.optLong("saved_at", 0L) }
-        val protected = ordered.filter { it.optInt("id") in pinned }
-        val recent = protected + ordered.filter { it.optInt("id") !in pinned }
-            .take((12 - protected.size).coerceAtLeast(0))
+        val pinnedTopics = ordered.filter { it.optInt("id") in pinned }
+        val recent = pinnedTopics + ordered.filter { it.optInt("id") !in pinned }
+            .take((12 - pinnedTopics.size).coerceAtLeast(0))
         return write(topicsKey(uid), JSONObject().put("items", JSONArray(recent)))
     }
 
