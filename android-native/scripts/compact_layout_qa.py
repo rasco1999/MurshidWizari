@@ -29,9 +29,9 @@ def main():
             ui.adb('shell','wm','density',str(density));ui.adb('shell','settings','put','system','font_scale',str(scale))
             if name=='landscape':ui.adb('shell','settings','put','system','user_rotation','1')
             time.sleep(2)
+            ui.launch_native()
             png=ui.adb('exec-out','screencap','-p');actual=struct.unpack('>II',png[16:24]);assert actual==(w,h),(name,actual)
             (out/'display-dimensions.json').write_text(json.dumps({'expected':[w,h],'actual':actual}))
-            ui.launch_native()
             if name=='landscape':
                 (out/'00-guest.png').write_bytes(ui.adb('exec-out','screencap','-p'))
                 (out/'00-guest.xml').write_bytes(ui.ui_tree()[1])
