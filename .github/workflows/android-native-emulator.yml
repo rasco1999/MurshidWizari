@@ -20,7 +20,7 @@ concurrency:
 jobs:
   anonymous-qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -61,6 +61,7 @@ jobs:
           script: |
             python3 android-native/scripts/anonymous_emulator_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa"
             python3 android-native/scripts/student_fixture_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/student"
+            if [ "${{ matrix.api-level }}" = "35" ]; then python3 android-native/scripts/offline_exam_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/offline"; fi
             python3 android-native/scripts/specialized_exam_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/specialized"
             python3 android-native/scripts/biometric_lock_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/lock"
             python3 android-native/scripts/final_services_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/services"

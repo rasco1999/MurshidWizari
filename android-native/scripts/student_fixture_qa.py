@@ -114,7 +114,19 @@ class Handler(BaseHTTPRequestHandler):
   elif path=='/mobile/contest-instructions.php': data={'ok':True,'prize_iqd':1000000,'end_at':'2027-01-01','rules':[{'title':'قاعدة فحص افتراضية','text':'تأتي قواعد التحدي من الخادم.'}],'points':[]}
   elif path=='/api/grades.php': data={'ok':True,'grades':[{'id':1,'name':'السادس العلمي'}]}
   raw=json.dumps(data,ensure_ascii=False).encode()
-  self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Set-Cookie','fixture_session=synthetic; Path=/');self.end_headers();self.wfile.write(raw)
+  lose_reply=path=='/api/progress.php' and STATE.pop('lose_grade_reply_once',False)
+  if lose_reply: raw=json.dumps({'ok':False,'message':'Synthetic receipt lost after server acceptance'}).encode()
+  self.send_response(502 if lose_reply else 200);self.send_header('Content-Type','application/json');self.send_header('Set-Cookie','fixture_session=synthetic; Path=/');self.end_headers();self.wfile.write(raw)
+
+def wait_editable(seconds=16):
+ deadline=time.time()+seconds
+ while time.time()<deadline:
+  tree,_=ui.ui_tree()
+  field=next((n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText'
+      and n.attrib.get('enabled')!='false'),None)
+  if field is not None: return field
+  time.sleep(.35)
+ raise AssertionError('Expected editable native input after transition: '+repr(ui.visible_texts(tree)))
 
 def input_text(node,value):
  ui.tap_node(node);time.sleep(.35);ui.adb('shell','input','text',value)
@@ -328,7 +340,7 @@ def main():
  # settling. Verify the visible note field rather than assuming input worked.
  for attempt in range(4):
   tree,_=ui.ui_tree()
-  field=next(n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText')
+  field=wait_editable()
   actual=field.attrib.get('text','')
   if actual=='fixture-note': break
   # Android 8 accessibility may expose the hint as text even when
@@ -351,7 +363,7 @@ def main():
  button('التالي ›');ui.wait_for('اكتب ناتج أربعة زائد أربعة.');screenshot(args.output,'student-text-question')
  assert len(STATE['answers'])==1,'Opening/navigating questions must not submit answers'
  assert sum(1 for m,p in STATE['calls'] if p=='/api/progress.php')==1,'Exactly one grading request'
- tree,_=ui.ui_tree();field=next(n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText')
+ tree,_=ui.ui_tree();field=wait_editable()
  input_text(field,'8');hide_keyboard_if_visible()
  # A definitive application-level rejection must leave the form retryable.
  # This is not a timeout: uncertain submissions must still be reconciled.
@@ -448,7 +460,7 @@ def main():
  button('تأكيد الحساب');ui.wait_for('رمز التحقق غير صحيح.')
  assert STATE['invalid_code_count']==1 and not STATE['verified'],'Wrong OTP cannot activate'
  tree,_=ui.ui_tree()
- otp=next(n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText')
+ otp=wait_editable()
  ui.tap_node(otp)
  ui.adb('shell','input','keyevent','KEYCODE_MOVE_END')
  for _ in range(6):ui.adb('shell','input','keyevent','KEYCODE_DEL')
