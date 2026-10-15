@@ -89,9 +89,16 @@ internal class OfflineExamBank(context: Context) {
     private fun topicKey(uid: Int, chapter: Int) = "topic_" + uid + "_" + chapter
     private fun pendingKey(uid: Int) = "pending_" + uid
 
+    @Synchronized
     fun saveTopic(uid: Int, chapterId: Int, chapterName: String, questions: JSONArray): Boolean {
         if (!canOpen(uid) || chapterId <= 0 || questions.length() < 1 ||
             questions.length() > 250 || chapterName.isBlank()) return false
+        val drafts = pending(uid)
+        val pinned = (0 until drafts.length()).mapNotNull { drafts.optJSONObject(it) }
+            .map { it.optInt("chapter_id") }.toSet()
+        // Keep the exact question text that the student answered until every
+        // draft in this topic is confirmed or explicitly discarded.
+        if (chapterId in pinned || pinned.size >= 12) return false
         val raw = questions.toString()
         if (raw.length > 1_600_000) return false
         val filtered = JSONArray()
@@ -117,8 +124,11 @@ internal class OfflineExamBank(context: Context) {
         replaced.put(JSONObject().put("id", chapterId).put("name", chapterName.take(180))
             .put("count", filtered.length()).put("saved_at", System.currentTimeMillis()))
         // Keep a bounded bank; preserve pending answers separately.
-        val recent = (0 until replaced.length()).mapNotNull { replaced.optJSONObject(it) }
-            .sortedByDescending { it.optLong("saved_at", 0L) }.take(12)
+        val ordered = (0 until replaced.length()).mapNotNull { replaced.optJSONObject(it) }
+            .sortedByDescending { it.optLong("saved_at", 0L) }
+        val protected = ordered.filter { it.optInt("id") in pinned }
+        val recent = protected + ordered.filter { it.optInt("id") !in pinned }
+            .take((12 - protected.size).coerceAtLeast(0))
         return write(topicsKey(uid), JSONObject().put("items", JSONArray(recent)))
     }
 

@@ -13,9 +13,8 @@ permissions:
 
 concurrency:
   group: android-native-emulator-${{ github.ref }}
-  # Retain running 4-device audits when a new source-only fix lands.
-  # Queue newer commits so at least one full audit can complete.
-  cancel-in-progress: false
+  # Keep the latest source audit and avoid spending emulator time on superseded fixes.
+  cancel-in-progress: true
 
 jobs:
   anonymous-qa:
@@ -60,8 +59,8 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
             python3 android-native/scripts/anonymous_emulator_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa"
-            python3 android-native/scripts/student_fixture_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/student"
             if [ "${{ matrix.api-level }}" = "35" ]; then python3 android-native/scripts/offline_exam_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/offline"; fi
+            python3 android-native/scripts/student_fixture_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/student"
             python3 android-native/scripts/specialized_exam_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/specialized"
             python3 android-native/scripts/biometric_lock_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/lock"
             python3 android-native/scripts/final_services_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/services"
