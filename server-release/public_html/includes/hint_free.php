@@ -14,7 +14,9 @@ function murshid_strip_hints(mixed $value): mixed {
     if(!is_array($value)) return $value;
     foreach($value as $key=>$item) {
         $name=is_string($key) ? preg_replace('/([a-z])([A-Z])/', '$1_$2', $key) : '';
-        if(is_string($name) && preg_match('/(^|[_-])(?:hints?|clues?|tips?)($|[_-])/i', $name)) {
+        $compact=is_string($name) ? strtolower((string)preg_replace('/[_-]/', '', $name)) : '';
+        if(is_string($name) && (preg_match('/(^|[_-])(?:hints?|clues?|tips?)($|[_-])/i', $name)
+            || in_array($compact, ['hinttext','hintmessage','wronghint','stephint','تلميح','تلميحات'], true))) {
             unset($value[$key]);
         } else {
             $value[$key]=murshid_strip_hints($item);

@@ -15,11 +15,11 @@ class ContentReviewRules(unittest.TestCase):
 
     def test_recursive_hint_filter_preserves_scoring_and_problem_keys(self):
         original = {'stages': [{'key': 'x', 'kind': 'number', 'label': 'x²', 'hint': '5',
-                                 'wrong_hint': '5', 'hintText': '5', 'correct': '4', 'unit': 'cm²'}],
+                                 'wrong_hint': '5', 'hintText': '5', 'hintmessage': '5', 'تلميح': '5', 'correct': '4', 'unit': 'cm²'}],
                     'answer': {'stages': {'x': '4'}}}
         removed = []
         cleaned = review.strip_hints(original, removed=removed)
-        self.assertEqual(len(removed), 3)
+        self.assertEqual(len(removed), 5)
         self.assertEqual(cleaned['stages'][0], {'key': 'x', 'kind': 'number', 'label': 'x²', 'correct': '4', 'unit': 'cm²'})
         self.assertEqual(cleaned['answer'], original['answer'])
         self.assertIn('hint', original['stages'][0])

@@ -43,7 +43,8 @@ def strip_hints(value, path='$', removed=None):
         out = {}
         for key, item in value.items():
             name = re.sub(r'([a-z])([A-Z])', r'\1_\2', key)
-            if HINT_KEY.search(name):
+            compact = re.sub(r'[_-]', '', name).lower()
+            if HINT_KEY.search(name) or compact in ('hinttext', 'hintmessage', 'wronghint', 'stephint', 'تلميح', 'تلميحات'):
                 removed.append(path + '.' + key)
             else:
                 out[key] = strip_hints(item, path + '.' + key, removed)
@@ -82,7 +83,9 @@ def findings(text):
         'ocr_fragment_needs_source': r'األ|اإل|اال|\bالسالم\b|مااأل',
         'replacement_character': '\ufffd',
         'control_character': r'[\x00-\x08\x0b\x0c\x0e-\x1f]',
-        'embedded_verification_or_answer': r'تحقق بصري|تدريب تحقق وزاري|هل الإجابة «|الإجابة عن «',
+        'private_use_glyph_needs_source': r'[\ue000-\uf8ff]',
+        'suspected_internal_ocr_word': r'التفاعالت|استعماالت|مااأل|ماتعني|مايأتي',
+        'embedded_verification_or_answer': r'تحقق بصري|تدريب تحقق وزاري|هل الإجابة «|الإجابة عن «|الإجابة\s+(?:المناسبة|الصحيحة)\s+للسؤال\s*[«“"]',
         'repeated_word_review': r'(?<!\w)([\u0621-\u064a]{2,})\s+\1(?!\w)',
     }
     for name, pattern in patterns.items():
@@ -174,6 +177,8 @@ def run(sql, output):
                 after = json.dumps(cleaned, ensure_ascii=False, separators=(',', ':'))
                 changes[field] = {'before': before, 'after': after}
                 q[field] = after
+        if len(re.findall(r'(?:^|\n)\s*(?:Q\.?\s*\d+|[AB]/)', q['question_text'], re.I)) > 1:
+            notes.append({'field': 'question_text', 'kind': 'multiple_subquestions_need_source_layout'})
         # A bank record is accounted for even when it has no machine-detected problem.
         published = str(q.get('status')) == '1' and q.get('moderation_status') in (None, 'approved')
         item = {

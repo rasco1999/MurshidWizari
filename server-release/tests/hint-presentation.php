@@ -7,7 +7,7 @@ function expect_same(mixed $got,mixed $expected): void {
 expect_same(murshid_without_inline_hints("احسب 2 + 3.\nتلميح: الناتج خمسة"),'احسب 2 + 3.');
 expect_same(murshid_without_inline_hints("Find x: x² = 4.\nHint: x = 2"),'Find x: x² = 4.');
 expect_same(murshid_without_inline_hints('ما معنى كلمة تلميح؟'),'ما معنى كلمة تلميح؟');
-$definition=['stages'=>[['key'=>'x','kind'=>'number','correct'=>'4','unit'=>'cm²','hint'=>'5','wrong_hint'=>'5','hintText'=>'5']]];
+$definition=['stages'=>[['key'=>'x','kind'=>'number','correct'=>'4','unit'=>'cm²','hint'=>'5','wrong_hint'=>'5','hintText'=>'5','hintmessage'=>'5','تلميح'=>'5']]];
 expect_same(murshid_strip_hints($definition),['stages'=>[['key'=>'x','kind'=>'number','correct'=>'4','unit'=>'cm²']]]);
 foreach(['P ≠ p؛ 10²؛ عِلْم','﴿قُلْ هُوَ اللَّهُ أَحَدٌ﴾','قال رسول الله ﷺ'] as $text)
     expect_same(murshid_without_inline_hints($text),$text);
