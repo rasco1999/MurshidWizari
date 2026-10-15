@@ -109,8 +109,9 @@ function android_fcm_access_token(): string {
     return $cached;
 }
 function android_fcm_payload(array $device, int $notificationId): array {
-    return ['message'=>['token'=>$device['token'],'data'=>[
-        'binding_id'=>$device['binding_id'],'notification_id'=>(string)$notificationId],
+    $data=['binding_id'=>$device['binding_id'],'notification_id'=>(string)$notificationId];
+    if(!empty($device['_school_ad']))$data['type']='school_ad';
+    return ['message'=>['token'=>$device['token'],'data'=>$data,
         'android'=>['priority'=>'HIGH','ttl'=>'86400s','collapse_key'=>'student-inbox']]];
 }
 function android_fcm_send(array $device, int $notificationId): array {
@@ -148,6 +149,9 @@ function android_fcm_dispatch(PDO $pdo, int $limit=40, ?callable $sender=null, ?
             $where=[$device['installation_id'],$device['binding_id'],$device['token_hash']];
             $result=['ok'=>true];
             if ((int)$next['unread']>0) {
+                $kind=$pdo->prepare('SELECT title FROM notifications WHERE id=? AND user_id=?');
+                $kind->execute([(int)$next['unread'],(int)$device['user_id']]);
+                $device['_school_ad']=(string)$kind->fetchColumn()==='إعلان مدرسة جديد';
                 try { $result=$sender($device,(int)$next['unread']); }
                 catch (Throwable $e) { $result=['ok'=>false]; }
             }
