@@ -9,7 +9,7 @@ function murshid_v53_generated_prompt(string $text): bool {
       'قيّم العبارة: إذا سُئلت','اختر صح أو خطأ للرابطة','تأكد من المراجعة: يقابل السؤال'] as $marker) {
         if (str_contains($text,$marker)) return true;
     }
-    return false;
+    return (bool)preg_match('/^\s*«.+»\s+هي\s+«.+»[.؟?]*\s*$/us',$text);
 }
 
 function murshid_v53_matching_definition(string $text): ?array {

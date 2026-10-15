@@ -34,5 +34,5 @@ internal object MatchingRules {
     fun generated(text: String): Boolean = listOf("الإجابة المناسبة للسؤال", "— هل الإجابة", "الإجابة عن «",
         "عند الإجابة عن «", "راجع المعلومة: يرتبط السؤال", "تدريب تثبيت: الجواب",
         "وفق المفهوم الدراسي، هل إجابة", "قيّم العبارة: إذا سُئلت", "اختر صح أو خطأ للرابطة",
-        "تأكد من المراجعة: يقابل السؤال").any { text.contains(it) }
+        "تأكد من المراجعة: يقابل السؤال").any { text.contains(it) } || Regex("^\\s*«.+»\\s+هي\\s+«.+»[.؟?]*\\s*$", RegexOption.DOT_MATCHES_ALL).matches(text)
 }

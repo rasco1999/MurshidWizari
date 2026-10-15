@@ -118,6 +118,7 @@ function topic_live_sql(string $alias='q'): string {
         ." AND $alias.question_text NOT LIKE 'الإجابة عن «%» هي «%'"
         ." AND $alias.question_text NOT LIKE 'صح أم خطأ: الإجابة عن «%» هي «%'"
         ." AND $alias.question_text NOT LIKE '%تدريب تحقق وزاري:%'"
+        ." AND $alias.question_text NOT LIKE '«%» هي «%'"
         ." AND $alias.question_text NOT LIKE '%الإجابة المناسبة للسؤال%'"
         ." AND $alias.question_text NOT LIKE '%عند الإجابة عن «%'"
         ." AND $alias.question_text NOT LIKE '%راجع المعلومة: يرتبط السؤال%'"

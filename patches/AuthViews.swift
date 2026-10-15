@@ -70,7 +70,7 @@ func murshidQuestionIsStudentReady(_ raw: String) -> Bool {
     let text = murshidQuestionDisplayText(raw)
     guard text.count >= 4 else { return false }
     let generated = ["الإجابة المناسبة للسؤال", "— هل الإجابة", "الإجابة عن «", "عند الإجابة عن «", "راجع المعلومة: يرتبط السؤال", "تدريب تثبيت: الجواب", "وفق المفهوم الدراسي، هل إجابة", "قيّم العبارة: إذا سُئلت", "اختر صح أو خطأ للرابطة", "تأكد من المراجعة: يقابل السؤال"]
-    if generated.contains(where: { raw.contains($0) }) { return false }
+    if generated.contains(where: { raw.contains($0) }) || raw.range(of: #"(?s)^\s*«.+»\s+هي\s+«.+»[.؟?]*\s*$"#, options: [.regularExpression]) != nil { return false }
 
     let blockedPatterns = [
         #"^\s*هل\s+(?:الإجابة|الاجابة|الجواب|الحل)\b"#,
