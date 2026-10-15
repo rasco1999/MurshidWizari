@@ -94,7 +94,7 @@ def findings(text):
 def literal(value):
     if value is None:
         return 'NULL'
-    return "CONVERT(0x" + str(value).encode('utf-8').hex() + " USING utf8mb4)"
+    return "CONVERT(X'" + str(value).encode('utf-8').hex() + "' USING utf8mb4)"
 
 
 def guarded_update(question, changes, reverse=False):

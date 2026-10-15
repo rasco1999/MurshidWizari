@@ -35,6 +35,8 @@ jobs:
         run: |
           set -euo pipefail
           php server-release/tests/runtime.php | tee server-release/test-results.txt
+          python3 server-release/tests/export_guard_fixture.py > /tmp/question-guard-fixture.json
+          php server-release/tests/guarded-question-update.php /tmp/question-guard-fixture.json | tee -a server-release/test-results.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:

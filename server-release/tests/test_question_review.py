@@ -40,6 +40,10 @@ class ContentReviewRules(unittest.TestCase):
         self.assertNotIn('correct_answer', sql)
         self.assertIn('question_version=5', review.guarded_update(q, changes, reverse=True))
 
+    def test_empty_and_null_sql_values_are_distinct(self):
+        self.assertEqual(review.literal(''), "CONVERT(X'' USING utf8mb4)")
+        self.assertEqual(review.literal(None), 'NULL')
+
 
 if __name__ == '__main__':
     unittest.main()
