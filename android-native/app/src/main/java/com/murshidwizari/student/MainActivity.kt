@@ -468,7 +468,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(appColor)
         }
-        headerHost = LinearLayout(this).apply {
+        headerHost = CompactColumn(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(horizontalPadding), 0, dp(horizontalPadding), 0)
         }
@@ -480,7 +480,7 @@ class MainActivity : Activity() {
         }
         contentScroll = scroll
         screenFrame = FrameLayout(this)
-        root = LinearLayout(this).apply {
+        root = CompactColumn(this).apply {
             orientation = LinearLayout.VERTICAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
             setPadding(dp(horizontalPadding), dp(topPadding), dp(horizontalPadding), dp(28))
@@ -492,7 +492,7 @@ class MainActivity : Activity() {
             VisualRules.showExamNavigation(questionIndex, examQuestions.length())
         if (tab != null || examNavigation) {
             val footer = if (tab != null) mainTabBar(tab) else examNavigationFooter()
-            container.addView(footer, LinearLayout.LayoutParams(-1, dp(if (tab != null) 61 else 82)))
+            container.addView(footer, LinearLayout.LayoutParams(-1, dp(if (tab != null) CompactLayoutRules.navigationHeight(resources.configuration.fontScale) else 72)))
             container.viewTreeObserver.addOnGlobalLayoutListener {
                 val visible = Rect()
                 container.getWindowVisibleDisplayFrame(visible)
@@ -619,7 +619,7 @@ class MainActivity : Activity() {
             }
             row.addView(actionRow, LinearLayout.LayoutParams(dp(88), dp(44)))
         } else row.addView(Space(this), LinearLayout.LayoutParams(dp(72), dp(1)))
-        root.addView(row, LinearLayout.LayoutParams(-1, dp(52)).apply { bottomMargin = dp(10) })
+        root.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(6) })
     }
     private fun tabHeader(title: String, tab: String) {
         val row = LinearLayout(this).apply {
@@ -645,7 +645,7 @@ class MainActivity : Activity() {
             showHome(homepage)
         }, LinearLayout.LayoutParams(dp(42), dp(44)))
         else row.addView(Space(this), LinearLayout.LayoutParams(dp(42), dp(44)))
-        root.addView(row, LinearLayout.LayoutParams(-1, dp(52)).apply { bottomMargin = dp(12) })
+        root.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(6) })
     }
     private fun mainTabBar(active: String): View = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
@@ -760,7 +760,7 @@ class MainActivity : Activity() {
     }
     private fun title(text: String) {
         root.addView(TextView(this).apply {
-            typography.apply(this, text, true); textSize = MurshidTypeScale.sizeSp(25f)
+            typography.apply(this, text, true); textSize = MurshidTypeScale.sizeSp(22f)
             gravity = Gravity.CENTER
             setTextColor(accent)
             setPadding(dp(4), dp(10), dp(4), dp(20))
@@ -775,7 +775,7 @@ class MainActivity : Activity() {
     private fun uiText(value: String, size: Float, bold: Boolean = false,
                        tint: Int = textColor): TextView = TextView(this).apply {
         typography.apply(this, value, bold)
-        textSize = MurshidTypeScale.sizeSp(size)
+        textSize = CompactLayoutRules.heading(MurshidTypeScale.sizeSp(size))
         setTextColor(if (night && tint == blue) accentInk else tint)
         includeFontPadding = true
         setLineSpacing(dp(1).toFloat(), 1.03f)
@@ -888,7 +888,8 @@ class MainActivity : Activity() {
 
     /** Always two columns, including narrow iPhones; iOS uses two flexible grid columns. */
     private fun uiTwoColumnGrid(items: List<View>, parent: LinearLayout = root) {
-        items.chunked(VisualRules.homeColumns()).forEach { group ->
+        val columns = CompactLayoutRules.columns(resources.configuration.screenWidthDp, resources.configuration.fontScale)
+        items.chunked(columns).forEach { group ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 layoutDirection = View.LAYOUT_DIRECTION_RTL
@@ -900,7 +901,7 @@ class MainActivity : Activity() {
                     else marginStart = dp(VisualRules.gridSpacing / 2)
                 })
             }
-            if (group.size == 1) row.addView(Space(this), LinearLayout.LayoutParams(0, 1, 1f).apply {
+            if (group.size == 1 && columns == 2) row.addView(Space(this), LinearLayout.LayoutParams(0, 1, 1f).apply {
                 marginStart = dp(VisualRules.gridSpacing / 2)
             })
             parent.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
@@ -1429,26 +1430,38 @@ class MainActivity : Activity() {
         root.addView(policies)
     }
 
-    /** Shared SwiftUI AuthHeader: graduation mark, product name and subtitle. */
+    /** Compact Android auth identity; the form gets the available height. */
     private fun authHeader(subtitle: String, topPadding: Int = 16) {
         val header = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(dp(12), dp(topPadding), dp(12), dp(14))
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(2), dp(4), dp(2), dp(6))
         }
         val mark = FrameLayout(this).apply {
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(blue, navy))
-                .apply { cornerRadius = dp(24).toFloat() }
-            elevation = dp(6).toFloat()
+                .apply { cornerRadius = dp(16).toFloat() }
             contentDescription = "المرشد الوزاري"
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
         mark.addView(IosGlyphView(this, "graduation", Color.WHITE),
-            FrameLayout.LayoutParams(dp(38), dp(38), Gravity.CENTER))
-        header.addView(mark, LinearLayout.LayoutParams(dp(82), dp(82)).apply { bottomMargin = dp(14) })
-        header.addView(uiText("المرشد الوزاري", 30f, true).apply { gravity = Gravity.CENTER })
-        header.addView(uiText(subtitle, 15f, tint = mutedText).apply { gravity = Gravity.CENTER },
-            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
-        root.addView(header, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+            FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER))
+        header.addView(mark, LinearLayout.LayoutParams(dp(56), dp(56)).apply { marginEnd = dp(12) })
+        val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        labels.addView(uiText("المرشد الوزاري", 24f, true))
+        labels.addView(uiText(subtitle, 13f, tint = mutedText))
+        header.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
+        root.addView(header, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+        // Hide decorative branding while typing; no form state or focus is rebuilt.
+        root.viewTreeObserver.addOnGlobalLayoutListener {
+            val visible = Rect()
+            root.getWindowVisibleDisplayFrame(visible)
+            val ime = if (Build.VERSION.SDK_INT >= 30)
+                root.rootWindowInsets?.isVisible(WindowInsets.Type.ime()) == true
+                else root.rootView.height - visible.bottom > dp(150)
+            val desired = if (ime) View.GONE else View.VISIBLE
+            if (header.visibility != desired) header.visibility = desired
+        }
     }
 
     /** An RTL label with its SF-Symbol counterpart on the trailing/right edge. */
@@ -1468,7 +1481,7 @@ class MainActivity : Activity() {
         setTextColor(textColor)
         setHintTextColor(mutedText)
         setSingleLine(true)
-        minHeight = dp(54)
+        minHeight = dp(48)
         setPadding(dp(14), dp(9), dp(14), dp(9))
         inputType = if (secure) InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD else inputKind
         if (secure) transformationMethod = PasswordTransformationMethod.getInstance()
@@ -2087,7 +2100,7 @@ class MainActivity : Activity() {
         labels.forEachIndexed { index, label ->
             row.addView(uiText(label, 14f, tint = if (night) Color.WHITE else textColor).apply {
                 gravity = Gravity.CENTER
-                minHeight = dp(32)
+                minHeight = dp(48)
                 background = if (index == selected)
                     shape(if (night) Color.rgb(105, 105, 110) else Color.WHITE, dp(9).toFloat())
                 else shape(Color.TRANSPARENT, dp(9).toFloat())
@@ -2194,7 +2207,8 @@ class MainActivity : Activity() {
                 background = shape(if (active) blue
                     else if (night) Color.rgb(30, 30, 32) else Color.rgb(225, 225, 230),
                     dp(30).toFloat())
-            }, LinearLayout.LayoutParams(dp(30), dp(30)))
+                minHeight = dp(30)
+            }, LinearLayout.LayoutParams(dp(30), -2))
             if (index < 3) {
                 progress.addView(View(this).apply {
                     background = shape(if (index < draft.step) blue
@@ -2238,7 +2252,7 @@ class MainActivity : Activity() {
             val name = authV3Field("مثال: يونس محمد عباس", draft.fullName)
             registrationWatch(name) { draft.fullName = it }
             add(name, 10)
-            add(uiText("اكتب اسمك الثلاثي كما هو في بياناتك الرسمية. نتعامل تلقائيًا مع المسافات والرموز المخفية في لوحة المفاتيح.",
+            add(uiText("اكتب اسمك الثلاثي كما في بياناتك الرسمية.",
                 13f, tint = mutedText), 16)
 
             add(authFieldLabel("الصف الدراسي", "books"), 8)
@@ -2247,7 +2261,7 @@ class MainActivity : Activity() {
                 layoutDirection = View.LAYOUT_DIRECTION_RTL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(14), dp(4), dp(14), dp(4))
-                minimumHeight = dp(54)
+                minimumHeight = dp(48)
                 background = shape(if (night) Color.rgb(48, 48, 51) else Color.rgb(235, 235, 239),
                     dp(15).toFloat())
                 isClickable = true
@@ -5154,7 +5168,7 @@ class MainActivity : Activity() {
         }
         fun detail(value: String, size: Float, strong: Boolean, opacity: Int = 255) {
             details.addView(TextView(this).apply {
-                typography.apply(this, value, strong); textSize = MurshidTypeScale.sizeSp(size)
+                typography.apply(this, value, strong); textSize = CompactLayoutRules.heading(MurshidTypeScale.sizeSp(size))
                 setTextColor(Color.argb(opacity, 255,255,255))
                 setPadding(0, dp(3), 0, dp(3))
             })
@@ -5242,7 +5256,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             layoutDirection = View.LAYOUT_DIRECTION_RTL
             gravity = Gravity.CENTER_VERTICAL
-            minimumHeight = dp(54)
+            minimumHeight = dp(48)
         }
         row.addView(IosGlyphView(this, symbol, textColor),
             LinearLayout.LayoutParams(dp(23), dp(23)).apply { marginEnd = dp(12) })
