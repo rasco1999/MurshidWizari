@@ -18,15 +18,11 @@ if(session_status()===PHP_SESSION_NONE){
 require_once __DIR__ . '/topic_catalog.php';
 require_once __DIR__ . '/platform_layout.php';
 require_once __DIR__ . '/answer_grading_v2.php';
+require_once __DIR__ . '/hint_free.php';
 
 /** Strip all coaching / step hints from problem payloads, preserving correct answers and post-answer explanations. */
 function murshid_without_hints($value) {
-    if (!is_array($value)) return $value;
-    foreach ($value as $key => $item) {
-        if (is_string($key) && in_array(mb_strtolower($key,'UTF-8'), ['hint','wrong_hint','hints','hint_text','hintmessage'], true)) { unset($value[$key]); continue; }
-        $value[$key]=murshid_without_hints($item);
-    }
-    return $value;
+    return murshid_strip_hints($value);
 }
 
 function MAD_TYPES(): array {
@@ -845,7 +841,7 @@ function public_question_ministerial_label(array $question): array {
  * يخفي البادئات التحريرية/التدريبية الزائدة من بداية السؤال من دون تعديل أصل السؤال في قاعدة البيانات.
  */
 function public_question_display_text(?string $text): string {
-    $text=trim((string)$text);
+    $text=murshid_without_inline_hints((string)$text);
     if($text==='') return '';
 
     // صيغة تعريف المصطلح تحتاج إبقاء فعل السؤال بعد حذف ترقيم التحرير.

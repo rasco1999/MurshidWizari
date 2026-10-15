@@ -543,7 +543,7 @@ function render(){
     <div class="question-meta"><div class="question-counter"><span>السؤال</span><b>${index+1}<small> من ${QUESTIONS.length}</small></b></div><span class="q-verified">وزاري</span></div>
     <div class="question-tools" aria-label="أدوات السؤال"><button type="button" class="question-tool ${FAVORITES.has(Number(q.id))?'active':''}" onclick="toggleFavorite(${Number(q.id)})">${FAVORITES.has(Number(q.id))?'★ محفوظ':'☆ حفظ'}</button><button type="button" class="question-tool" onclick="reportQuestion(${Number(q.id)})">⚑ إبلاغ</button></div>
     <div class="exam-progress" aria-label="تقدم الاختبار ${progressPct}%"><i style="width:${progressPct}%"></i></div>
-    ${q.ministerial_badge ? `<div class="question-ministerial-badge ${q.ministerial_badge.kind === 'practice' ? 'practice' : ''}">${esc(q.ministerial_badge.label)}</div>` : ''}
+
     <div class="question-text" dir="auto">${prompt}</div>
     <div class="answers">`;
 

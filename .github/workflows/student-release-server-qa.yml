@@ -24,6 +24,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Syntax-check every changed PHP file
         run: find server-release/public_html -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Verify question proofreading guards and actual hint removal
+        run: |
+          python3 -m unittest discover -s server-release/tests -p test_question_review.py -v
+          php server-release/tests/hint-presentation.php
       - name: Exercise real grading, quotas, expiry and publication queues
         env:
           RELEASE_TEST_DSN: 'mysql:host=127.0.0.1;port=3306;dbname=murshid_release_test;charset=utf8mb4'
