@@ -18,6 +18,9 @@ assert(V50OfflineRules.feedback(question(), answer: "9") == .incorrect)
 assert(V50OfflineRules.feedback(question(answer: "علي"), answer: "عَلِيّ.") == .correct)
 assert(V50OfflineRules.feedback(question(answer: "ان الله"), answer: "إن الله") == .needsServer)
 assert(V50OfflineRules.feedback(question(answer: "2*x"), answer: "x+x") == .needsServer)
+assert(V50OfflineRules.feedback(question(answer: "23"), answer: "2+3") == .needsServer)
+assert(V50OfflineRules.feedback(question(answer: "102"), answer: "10^2") == .needsServer)
+assert(V50OfflineRules.feedback(question(answer: "15"), answer: "1,5") == .needsServer)
 assert(V50OfflineRules.revision(question()) == V50OfflineRules.revision(question()))
 assert(V50OfflineRules.revision(question()) != V50OfflineRules.revision(question("سؤال تغيّر")))
 assert(V50OfflineRules.revision(question()) != V50OfflineRules.revision(question(answer: "9")))
@@ -26,7 +29,7 @@ let answer = V50OfflineAnswer(chapterID: 1, questionID: 101, serverIndex: 1,
 let encoded = try JSONEncoder().encode(answer)
 let decoded = try JSONDecoder().decode(V50OfflineAnswer.self, from: encoded)
 assert(decoded.revision == answer.revision)
-print("PASS 13 iOS offline eligibility, feedback, exact-revision and durable-answer checks")
+print("PASS 15 iOS offline eligibility, feedback, exact-revision and durable-answer checks")
 '''
 with tempfile.TemporaryDirectory() as directory:
     file = Path(directory) / "offline_rules.swift"

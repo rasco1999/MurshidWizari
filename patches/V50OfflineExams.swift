@@ -68,9 +68,9 @@ enum V50OfflineRules {
         for scalar in value.precomposedStringWithCanonicalMapping.unicodeScalars {
             if let index = digits.firstIndex(of: scalar) { text += String(index % 10) }
             else if (0x064b...0x0652).contains(scalar.value) || scalar.value == 0x0670 || scalar.value == 0x0640 { continue }
-            else if CharacterSet.alphanumerics.contains(scalar) || ".-/".unicodeScalars.contains(scalar) {
-                text += String(scalar).lowercased()
-            } else if CharacterSet.whitespacesAndNewlines.contains(scalar) { text += " " }
+            else if CharacterSet.whitespacesAndNewlines.contains(scalar) { text += " " }
+            // Preserve operators and punctuation: "2+3" must never become "23".
+            else { text += String(scalar).lowercased() }
         }
         var result = text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
         while result.last == "." || result.last == " " { result.removeLast() }
