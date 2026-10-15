@@ -195,18 +195,35 @@ internal class OfflineExamBank(context: Context) {
     @Synchronized
     fun discardPending(uid: Int, questionId: Int): Boolean {
         if (uid <= 0 || questionId <= 0) return false
-        return acknowledge(uid, questionId)
+        return acknowledge(uid, questionId, accepted = false)
     }
 
     @Synchronized
-    private fun acknowledge(uid: Int, questionId: Int): Boolean {
+    private fun acknowledge(uid: Int, questionId: Int, accepted: Boolean = true): Boolean {
         val latest = pending(uid)
         val kept = JSONArray()
         for (i in 0 until latest.length()) {
             val entry = latest.optJSONObject(i) ?: continue
             if (entry.optInt("question_id") != questionId) kept.put(entry)
         }
-        return write(pendingKey(uid), JSONObject().put("items", kept))
+        // Update the cached receipt and remove the queue entry in one disk commit.
+        // A confirmed answer must remain answered after an offline process restart.
+        return runCatching {
+            val editor = prefs.edit().putString(pendingKey(uid), encode(JSONObject().put("items", kept)))
+            if (accepted) {
+                val entry = (0 until latest.length()).mapNotNull { latest.optJSONObject(it) }
+                    .firstOrNull { it.optInt("question_id") == questionId }
+                val chapter = entry?.optInt("chapter_id") ?: 0
+                val cached = read(topicKey(uid, chapter))
+                val items = cached?.optJSONArray("questions")
+                for (i in 0 until (items?.length() ?: 0)) {
+                    val item = items?.optJSONObject(i) ?: continue
+                    if (item.optInt("id") == questionId) item.put("submitted", true)
+                }
+                if (cached != null) editor.putString(topicKey(uid, chapter), encode(cached))
+            }
+            editor.commit()
+        }.getOrDefault(false)
     }
 
     /** Synchronize on a serial background executor. Reconcile each ambiguous

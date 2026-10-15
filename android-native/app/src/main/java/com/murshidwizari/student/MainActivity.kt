@@ -2694,6 +2694,18 @@ class MainActivity : Activity() {
             if (queued != null) {
                 accepted.addView(uiText("إجابتك: ${queued.optString("answer")}", 15f),
                     LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+                val choiceLabels = (0 until options.length()).map { i ->
+                    options.optJSONObject(i)?.optString("text") ?: options.optString(i)
+                }.ifEmpty { if (type == "true_false") listOf("صح", "خطأ") else emptyList() }
+                val practice = OfflinePracticeRules.evaluate(type, queued.optString("answer"),
+                    question.optString("correct_answer"), choiceLabels)
+                val feedback = when (practice) {
+                    OfflinePracticeRules.Result.CORRECT -> "نتيجة تدريبية: إجابة صحيحة ✓"
+                    OfflinePracticeRules.Result.INCORRECT -> "نتيجة تدريبية: راجع الإجابة النموذجية"
+                    OfflinePracticeRules.Result.NEEDS_SERVER -> "تحتاج هذه الصيغة إلى تصحيح الخادم بعد الاتصال"
+                }
+                accepted.addView(uiText(feedback, 16f, true, blue),
+                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
                 accepted.addView(uiText("الدرجة والنقاط والرصيد ستُحدد من الخادم بعد المزامنة.",
                     13f, tint = mutedText))
                 val discardButton = makeButton("حذف هذه الإجابة المؤجلة", secondary = true) {
@@ -2946,6 +2958,16 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
         addUiCard(status)
 
+        if (offlineExams.topics(userId).isNotEmpty()) {
+            button("الاختبارات المحفوظة دون إنترنت", secondary = true) { offlineExamTopicsScreen() }
+        }
+        if (cards.isNotEmpty()) {
+            button(if (due > 0) "ابدأ مراجعة اليوم" else "استعرض دفتر المراجعة") {
+                val next = cards.firstOrNull { it.optLong("due_at", 0L) <= now } ?: cards.first()
+                coachQuestionScreen(next.optInt("id"))
+            }
+        }
+
         // Local estimation, never an official exam grade or result.
         val reviewSignals = localLearningReviews()
         val studyGoal = LearningInsights.suggestedDailyTarget(reviewSignals, now)
@@ -2975,14 +2997,7 @@ class MainActivity : Activity() {
             }
         }
 
-        if (offlineExams.topics(userId).isNotEmpty()) {
-            button("الاختبارات المحفوظة دون إنترنت", secondary = true) { offlineExamTopicsScreen() }
-        }
         if (cards.isNotEmpty()) {
-            button(if (due > 0) "ابدأ مراجعة اليوم" else "استعرض دفتر المراجعة") {
-                val next = cards.firstOrNull { it.optLong("due_at", 0L) <= now } ?: cards.first()
-                coachQuestionScreen(next.optInt("id"))
-            }
             sectionHeader("أسئلتي المحفوظة", "تُعرض من ذاكرة الجهاز حتى دون إنترنت", "brain")
             cards.take(18).forEach { card ->
                 val label = card.optString("question").replace("\n", " ").take(95)

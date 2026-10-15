@@ -11,7 +11,7 @@ STATE={'notes':{},'answers':{},'calls':[],'reject_once':False,'logout_reject_onc
        'registered':False,'verified':False,'resend_count':0,'invalid_code_count':0,
        'registered_methods':[],'verified_methods':[],'subscription_active':True,
        'checkout_payload':None,'checkout_requests':0,'redeem_requests':0}
-BOOT={'ok':True,'csrf':'synthetic-csrf','user':USER,'subscribed':True,'free_remaining':15,'free_limit':15,
+BOOT={'ok':True,'csrf':'synthetic-csrf','user':USER,'subscribed':True,'free_remaining':15,'free_limit':15,'subscription_expires_at_unix':int(time.time())+7*86400,
       'plans':[{'id':'month1','label':'شهر واحد','amount':8000},{'id':'month3','label':'3 أشهر','amount':15000}],
       'subjects':SUBJECTS,'stats':{},'ads':[{'id':1,'school':'مدرسة افتراضية','text':'إعلان محلي للتحقق من عرض الإعلانات','active':True}]}
 QUESTIONS=[{'id':101,'text':'ما حاصل جمع اثنين وثلاثة؟','type':'mcq','options':[{'id':1,'text':'خمسة'},{'id':2,'text':'ستة'}],'correct_answer':'خمسة','explanation':'نجمع اثنين مع ثلاثة فيكون الناتج خمسة.','submitted':False}, {'id':102,'text':'اكتب ناتج أربعة زائد أربعة.','type':'text','correct_answer':'8','explanation':'أربعة مضافاً إليها أربعة تساوي ثمانية.','submitted':False}]
@@ -372,7 +372,7 @@ def main():
  button('الرئيسية');ui.wait_for('حسابي')
  ui.reveal('مدربي الذكي · مراجعة دون إنترنت',393,852)
  button('مدربي الذكي · مراجعة دون إنترنت')
- ui.wait_for('أسئلتي المحفوظة')
+ ui.wait_for('مراجعة اليوم')
  screenshot(args.output,'student-coach-saved')
  # The self-review session remains local and cannot consume a free answer.
  prior_grades=sum(1 for m,p in STATE['calls'] if p=='/api/progress.php')
@@ -382,7 +382,7 @@ def main():
  ui.wait_for('الإجابة الصحيحة')
  screenshot(args.output,'student-coach-revealed')
  button('أتقنت هذا السؤال')
- ui.wait_for('أسئلتي المحفوظة')
+ ui.wait_for('مراجعة اليوم')
  assert sum(1 for m,p in STATE['calls'] if p=='/api/progress.php')==prior_grades, (
   'The local coach must never send a billable answer')
  back();ui.wait_for('حسابي')
@@ -402,11 +402,11 @@ def main():
  assert sum(1 for _,p in STATE['calls'] if p=='/mobile/bootstrap.php')==bootstrap_before,(
   'Airplane-mode offline access must not contact the server')
  button('مدربي الذكي · مراجعة دون إنترنت')
- ui.wait_for('أسئلتي المحفوظة')
+ ui.wait_for('مراجعة اليوم')
  button('ما حاصل جمع اثنين وثلاثة؟')
  ui.wait_for('جلسة مراجعة')
  screenshot(args.output,'student-offline-coach')
- back();ui.wait_for('أسئلتي المحفوظة')
+ back();ui.wait_for('مراجعة اليوم')
  back();ui.wait_for('وضع المراجعة دون إنترنت')
  ui.adb('shell','svc','wifi','enable')
  ui.adb('shell','svc','data','enable')

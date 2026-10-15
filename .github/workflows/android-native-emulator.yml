@@ -3,7 +3,7 @@ name: Android Native Anonymous Emulator Smoke
 on:
   workflow_dispatch:
   push:
-    branches: [android-native]
+    branches: [android-native, work/complete-student-apps-20261015]
     paths:
       - 'android-native/**'
       - '.github/workflows/android-native-emulator.yml'

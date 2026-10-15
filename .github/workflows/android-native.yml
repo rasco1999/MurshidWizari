@@ -2,12 +2,12 @@ name: Android Native Debug APK
 on:
   workflow_dispatch:
   pull_request:
-    branches: [android-native]
+    branches: [android-native, work/complete-student-apps-20261015]
     paths:
       - 'android-native/**'
       - '.github/workflows/android-native.yml'
   push:
-    branches: [android-native]
+    branches: [android-native, work/complete-student-apps-20261015]
     paths:
       - 'android-native/**'
       - '.github/workflows/android-native.yml'
