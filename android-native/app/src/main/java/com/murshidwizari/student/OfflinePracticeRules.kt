@@ -14,14 +14,13 @@ internal object OfflinePracticeRules {
                 val index = digits.indexOf(c)
                 when {
                     index >= 0 -> append(('0'.code + index % 10).toChar())
-                    c in '\u064b'..'\u0652' || c == '\u0670' || c == '\u0640' -> Unit
                     c.isWhitespace() -> append(' ')
-                    // Operators and punctuation carry meaning. Removing '+'
-                    // would falsely make "2+3" equal to the number "23".
-                    else -> append(c.lowercaseChar())
+                    // Case, Arabic vowels and operators can change the answer.
+                    // Leave linguistic equivalence to the authoritative server.
+                    else -> append(c)
                 }
             }
-        }.trim().replace(Regex("\\s+"), " ").trimEnd('.', ' ')
+        }.trim().replace(Regex("\\s+"), " ")
     }
 
     fun evaluate(type: String, answer: String, expected: String,

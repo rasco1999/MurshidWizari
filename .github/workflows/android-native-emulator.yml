@@ -1,4 +1,4 @@
-name: Android API35 Focused Student Release QA
+name: Android Targeted Student Release QA
 
 on:
   workflow_dispatch:
@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        api-level: [35]
+        api-level: [26, 29, 35]
     steps:
       - uses: actions/checkout@v4
       - name: Verify scroll-aware UI harness

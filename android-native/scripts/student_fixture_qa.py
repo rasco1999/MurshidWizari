@@ -240,6 +240,8 @@ def main():
  server=ThreadingHTTPServer(('127.0.0.1',8765),Handler);threading.Thread(target=server.serve_forever,daemon=True).start()
  ui.PACKAGE='com.murshidwizari.student.qa'
  ui.adb('reverse','tcp:8765','tcp:8765');ui.adb('install','-r','android-native/app/build/outputs/apk/qa/app-qa.apk')
+ ui.adb('shell','am','force-stop',ui.PACKAGE)
+ ui.adb('shell','pm','clear',ui.PACKAGE)
  ui.adb('shell','wm','size','393x852');ui.adb('shell','wm','density','160');ui.adb('shell','settings','put','system','font_scale','1.0')
  ui.launch_native();ui.enter_login(393,852)
  login_field(0,'student@example.test');login_field(1,'fixture-pass')
@@ -531,6 +533,9 @@ def main():
  button('تفعيل الاشتراك');time.sleep(.6)
  assert STATE['redeem_requests']==0,'Malformed code must not contact the redemption endpoint'
  hide_keyboard_if_visible()
+ # Recreate the account view after the invalid-code field loses IME focus.
+ # Android 10 can otherwise restore a scroll offset below its services card.
+ button('حسابي');ui.wait_for('تفعيل الاشتراك بكود')
  # Hiding the IME can retain a scroll offset below the inbox row. Start at
  # the account top before searching downward for the unread count.
  for _ in range(4):
