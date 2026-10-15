@@ -3043,7 +3043,7 @@ class MainActivity : Activity() {
                         correctAnswer = item.optString("correct_answer"),
                         explanation = item.optString("explanation"),
                         subject = item.optString("subject_name") + " · " + item.optString("chapter_name"),
-                        wasCorrect = false
+                        wasCorrect = false, matching = item.optJSONObject("english_match")
                     )) imported++
                 }
                 message("تم تحديث " + imported + " سؤالًا من سجل أخطائك.")
@@ -3065,6 +3065,9 @@ class MainActivity : Activity() {
         sectionHeader("راجع وتذكّر", card.optString("subject"), "brain")
         val prompt = uiCard()
         prompt.addView(uiText(card.optString("question"), 20f, true))
+        matchingDefinition(card.optJSONObject("english_match"))?.let {
+            matchingEditor(it,"",false,prompt) { _ -> Unit }
+        }
         addUiCard(prompt, bottom = 15)
 
         val revealed = uiCard()
@@ -4679,7 +4682,8 @@ class MainActivity : Activity() {
                     correctAnswer = correctAnswer,
                     explanation = explanation,
                     subject = chapterName,
-                    wasCorrect = ExamRules.knownBoolean(grade.opt("is_correct"))
+                    wasCorrect = ExamRules.knownBoolean(grade.opt("is_correct")),
+                    matching = question.optJSONObject("english_match")
                 )
             }
             if (activeScreen == "exam" && sentChapterId == chapterId && questionIndex == sentIndex) {

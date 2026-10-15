@@ -10,6 +10,8 @@ final class DeviceServices: ObservableObject {
     static let shared = DeviceServices()
 
     @Published var isOnline = true
+    // Start conservatively until NWPathMonitor identifies Wi-Fi or cellular.
+    @Published var isMeteredConnection = true
     @Published var isLocked = false
     @Published var biometricAvailable = false
 
@@ -33,9 +35,17 @@ final class DeviceServices: ObservableObject {
     }
 
     func startNetworkMonitor() {
+        #if V498_QA
+        // Simulator-only deterministic airplane-mode coverage. Not in production.
+        if ProcessInfo.processInfo.arguments.contains("V498_QA_FORCE_OFFLINE") {
+            isOnline = false
+            return
+        }
+        #endif
         monitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
                 self?.isOnline = path.status == .satisfied
+                self?.isMeteredConnection = path.isExpensive || path.isConstrained
             }
         }
         monitor.start(queue: queue)
@@ -181,28 +191,57 @@ final class KeychainVault {
 final class ResponseCache {
     static let shared = ResponseCache()
     private let fm = FileManager.default
+    private let ttl: TimeInterval = 24 * 60 * 60
+
+    private init() {
+        // Legacy unscoped caches could expose one student's progress to another
+        // student signed in later on the same device. Never read them again.
+        if let root = fm.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            try? fm.removeItem(at: root.appendingPathComponent("MurshidCache", isDirectory: true))
+        }
+    }
 
     private var base: URL {
         let root = fm.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        let dir = root.appendingPathComponent("MurshidCache", isDirectory: true)
+        let dir = root.appendingPathComponent("MurshidCacheScopedV2", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }
 
+    private func fileURL(_ key: String, userID: Int) -> URL {
+        let safe = Data(key.utf8).base64EncodedString().replacingOccurrences(of: "/", with: "_")
+        return base.appendingPathComponent("u\(userID)_" + safe + ".json")
+    }
+
     func save(_ json: JSON, key: String) {
-        guard JSONSerialization.isValidJSONObject(json),
+        guard let userID = AppSession.shared.user?.id, userID > 0,
+              JSONSerialization.isValidJSONObject(json),
               let data = try? JSONSerialization.data(withJSONObject: json) else { return }
-        try? data.write(to: fileURL(key), options: .atomic)
+        let destination = fileURL(key, userID: userID)
+        try? data.write(to: destination, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        var scoped = destination
+        try? scoped.setResourceValues(values)
     }
 
     func load(key: String) -> JSON? {
-        guard let data = try? Data(contentsOf: fileURL(key)),
+        guard let userID = AppSession.shared.user?.id, userID > 0 else { return nil }
+        let destination = fileURL(key, userID: userID)
+        guard let attrs = try? fm.attributesOfItem(atPath: destination.path),
+              let modified = attrs[.modificationDate] as? Date,
+              Date().timeIntervalSince(modified) >= 0,
+              Date().timeIntervalSince(modified) < ttl,
+              let data = try? Data(contentsOf: destination),
               let value = try? JSONSerialization.jsonObject(with: data) as? JSON else { return nil }
         return value
     }
 
-    private func fileURL(_ key: String) -> URL {
-        let safe = Data(key.utf8).base64EncodedString().replacingOccurrences(of: "/", with: "_")
-        return base.appendingPathComponent(safe + ".json")
+    func clearForCurrentUser() {
+        guard let userID = AppSession.shared.user?.id, userID > 0,
+              let entries = try? fm.contentsOfDirectory(at: base, includingPropertiesForKeys: nil) else { return }
+        for url in entries where url.lastPathComponent.hasPrefix("u\(userID)_") {
+            try? fm.removeItem(at: url)
+        }
     }
 }

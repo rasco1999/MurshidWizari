@@ -1,10 +1,65 @@
 import SwiftUI
 import UIKit
 
+// Student color themes are stored on the device; accounts and subscriptions
+// remain independent of the selected appearance.
+enum StudentPalette: String, CaseIterable, Identifiable {
+    case aurora, orchid, royal
+
+    var id: String { rawValue }
+    static var current: StudentPalette {
+        StudentPalette(rawValue: UserDefaults.standard.string(forKey: "student_palette") ?? "royal") ?? .royal
+    }
+    var title: String {
+        switch self {
+        case .aurora: return "أورورا"
+        case .orchid: return "بنفسجي"
+        case .royal: return "ملكي"
+        }
+    }
+    var detail: String {
+        switch self {
+        case .aurora: return "فيروزي وأزرق"
+        case .orchid: return "بنفسجي ووردي"
+        case .royal: return "أزرق وذهبي"
+        }
+    }
+    var navy: Color {
+        switch self {
+        case .aurora: return Color(red: 0.025, green: 0.153, blue: 0.204)
+        case .orchid: return Color(red: 0.126, green: 0.081, blue: 0.239)
+        case .royal: return Color(red: 11/255, green: 31/255, blue: 51/255)
+        }
+    }
+    // Keep the primary action color dark enough for white button labels.
+    var primary: Color {
+        switch self {
+        case .aurora: return Color(red: 0.035, green: 0.447, blue: 0.457)
+        case .orchid: return Color(red: 0.425, green: 0.282, blue: 0.650)
+        case .royal: return Color(red: 45/255, green: 108/255, blue: 223/255)
+        }
+    }
+    var accent: Color {
+        switch self {
+        case .aurora: return Color(red: 0.37, green: 0.91, blue: 0.78)
+        case .orchid: return Color(red: 0.99, green: 0.64, blue: 0.82)
+        case .royal: return Color(red: 245/255, green: 184/255, blue: 61/255)
+        }
+    }
+    var secondary: Color {
+        switch self {
+        case .aurora: return Color(red: 0.22, green: 0.67, blue: 0.91)
+        case .orchid: return Color(red: 0.73, green: 0.43, blue: 0.88)
+        case .royal: return Color(red: 0.09, green: 0.28, blue: 0.68)
+        }
+    }
+}
+
 extension Color {
-    static let murshidNavy = Color(red: 11/255, green: 31/255, blue: 51/255)
-    static let murshidBlue = Color(red: 45/255, green: 108/255, blue: 223/255)
-    static let murshidGold = Color(red: 245/255, green: 184/255, blue: 61/255)
+    static var murshidNavy: Color { StudentPalette.current.navy }
+    static var murshidBlue: Color { StudentPalette.current.primary }
+    static var murshidGold: Color { StudentPalette.current.accent }
+    static var murshidAccentSecondary: Color { StudentPalette.current.secondary }
     static let murshidSurface = Color(uiColor: .secondarySystemGroupedBackground)
     static let murshidBackground = Color(uiColor: .systemGroupedBackground)
 }
@@ -21,7 +76,7 @@ struct MurshidCard<Content: View>: View {
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(Color.primary.opacity(0.055), lineWidth: 1)
+                    .stroke(Color.murshidBlue.opacity(0.14), lineWidth: 1)
             )
             .shadow(color: Color.black.opacity(0.035), radius: 10, y: 4)
     }
@@ -38,7 +93,7 @@ struct PrimaryButtonStyle: ButtonStyle {
             .foregroundStyle(.white)
             .background(
                 LinearGradient(
-                    colors: [.murshidBlue, Color(red: 0.09, green: 0.28, blue: 0.68)],
+                    colors: [.murshidBlue, .murshidAccentSecondary],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )

@@ -26,6 +26,7 @@ struct V3ExamView: View {
     @State private var reportReason = "wrong_answer"
     @State private var reportMessage = ""
     @State private var reporting = false
+    @State private var qualityNotice = ""
 
     var body: some View {
         Group {
@@ -98,6 +99,9 @@ struct V3ExamView: View {
                 ScrollView {
                     VStack(spacing: 15) {
                         progressHeader.id("top")
+                        if !qualityNotice.isEmpty {
+                            V3InlineMessage(text: qualityNotice, icon: "exclamationmark.triangle.fill", tone: .warning)
+                        }
                         questionCard(questions[current])
                         answerArea(questions[current])
                         feedbackArea(questions[current])
@@ -418,13 +422,18 @@ struct V3ExamView: View {
     }
 
     private func load() async {
-        await MainActor.run { loading = true; error = ""; startedAt = Date() }
+        await MainActor.run { loading = true; error = ""; qualityNotice = ""; startedAt = Date() }
         do {
             let d = try await APIClient.shared.request("mobile/exam.php", query: [URLQueryItem(name: "chapter_id", value: "\(topic.id)")])
             let qs = jArray(d["questions"]).map(Question.init)
             await MainActor.run {
                 questions = qs
+                let quality = V49QuestionQuality.qualitySummary(qs)
+                if quality.invalid + quality.duplicate > 0 {
+                    qualityNotice = "رُصد \(quality.invalid) سؤال غير مكتمل و\(quality.duplicate) سؤال مكرر. يمكنك الإبلاغ عنها من زر البلاغ؛ ترتيب الاختبار الرسمي محفوظ."
+                }
                 for q in qs where !q.storedAnswer.isEmpty { answers[q.id] = q.storedAnswer }
+                V49StudyStore.shared.rememberPreviouslyGraded(qs, subject: subject, topic: topic)
                 app.subscribed = jBool(d["subscribed"])
                 app.freeUsed = jInt(d["free_used"])
                 app.freeRemaining = d["free_remaining"] is NSNull ? nil : jInt(d["free_remaining"])
@@ -524,6 +533,10 @@ struct V3ExamView: View {
                 if let g = d["grades"] as? JSON { grade = g[String(q.id)] as? JSON }
                 await MainActor.run {
                     if let grade { grades[q.id] = grade }
+                    if let grade, grade["is_correct"] != nil {
+                        V49StudyStore.shared.rememberGraded(q, subject: subject, topic: topic,
+                                                             answer: answer, correct: jBool(grade["is_correct"]))
+                    }
                     app.subscribed = jBool(d["subscribed"], default: app.subscribed)
                     app.freeUsed = jInt(d["free_used"], default: app.freeUsed)
                     app.freeRemaining = d["free_remaining"] is NSNull ? nil : jInt(d["free_remaining"], default: app.freeRemaining ?? 0)

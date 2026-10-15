@@ -73,6 +73,12 @@ struct V49StudyRecord: Identifiable, Codable, Hashable {
     var lastPracticedAt: Date?
     var successfulReviews: Int
     var lapses: Int
+    var matchingLeft: [String: String]? = nil
+    var matchingRight: [String: String]? = nil
+    var matchingDefinition: JSON? {
+        guard let left = matchingLeft, let right = matchingRight else { return nil }
+        return ["left": left, "right": right]
+    }
 }
 
 struct V49StudyArchive: Codable {
@@ -234,7 +240,7 @@ final class V49StudyStore: ObservableObject {
         let key = V49QuestionQuality.normalized(q.text + " " + q.meaningWord)
         // Short common stems like "choose the correct answer" can legitimately
         // repeat with different choices, so never collapse those MCQs.
-        if q.options.isEmpty && q.matchItems.isEmpty && key.count > 30 {
+        if q.englishMatch == nil && q.options.isEmpty && q.matchItems.isEmpty && key.count > 30 {
             guard !archive.records.contains(where: {
                 $0.id != q.id && $0.topicID == topic.id &&
                 V49QuestionQuality.normalized($0.question) == key &&
@@ -254,7 +260,9 @@ final class V49StudyStore: ObservableObject {
             dueAt: old?.dueAt ?? (correct ? now.addingTimeInterval(2 * 86_400) : now),
             lastPracticedAt: old?.lastPracticedAt,
             successfulReviews: old?.successfulReviews ?? 0,
-            lapses: old?.lapses ?? 0
+            lapses: old?.lapses ?? 0,
+            matchingLeft: q.englishMatch.map { V53MatchingRules.labels($0, "left") },
+            matchingRight: q.englishMatch.map { V53MatchingRules.labels($0, "right") }
         )
         archive.records.removeAll(where: { $0.id == q.id })
         archive.records.insert(record, at: 0)
@@ -324,7 +332,7 @@ final class V49StudyStore: ObservableObject {
         return min(30, ((goal + 4) / 5) * 5)
     }
 
-    var records: [V49StudyRecord] { archive?.records ?? [] }
+    var records: [V49StudyRecord] { (archive?.records ?? []).filter { murshidQuestionIsStudentReady($0.question) } }
     var due: [V49StudyRecord] {
         records.filter { $0.dueAt <= Date() }
             .sorted { priority($0) > priority($1) }
@@ -520,6 +528,7 @@ struct V49RecallView: View {
     let questionIDs: [Int]
     @ObservedObject private var store = V49StudyStore.shared
     @State private var index = 0
+    @State private var matchingValues: [String: String] = [:]
     @State private var reveal = false
     @State private var remembered = 0
     @State private var needsReview = 0
@@ -544,6 +553,9 @@ struct V49RecallView: View {
                         VStack(alignment: .leading, spacing: 15) {
                             Text(q.topicName).font(.caption.bold()).foregroundStyle(Color.murshidBlue)
                             Text(q.question).font(.title3.bold()).lineSpacing(5).textSelection(.enabled)
+                            if let definition = q.matchingDefinition {
+                                V53MatchingInput(definition: definition, values: $matchingValues).disabled(reveal)
+                            }
                             if reveal {
                                 Divider()
                                 Text("الإجابة النموذجية").font(.caption.bold()).foregroundStyle(.secondary)
@@ -602,6 +614,7 @@ struct V49RecallView: View {
         if didRemember { remembered += 1; haptic(.success) }
         else { needsReview += 1; haptic(.warning) }
         reveal = false
+        matchingValues = [:]
         index += 1
     }
 }

@@ -13,7 +13,7 @@ private enum V31SlideKind: Int, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .million: return "تحدي المليون"
-        case .advertise: return "أعلن مدرستك"
+        case .advertise: return "أعلن هنا"
         case .tests: return "الاختبارات"
         case .success: return "النجاح"
         }
@@ -32,12 +32,16 @@ private enum V31SlideKind: Int, CaseIterable, Identifiable {
 struct V31HomeView: View {
     @EnvironmentObject var app: AppSession
     @EnvironmentObject var device: DeviceServices
+    @ObservedObject private var study = V49StudyStore.shared
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("appearance") private var appearance = "system"
     @State private var insights: JSON = [:]
     @State private var weekly: JSON = [:]
     @State private var loadingInsights = true
     @State private var error = ""
+    @State private var currentClock = Date()
+    @State private var homeAvatarURL: URL?
+    private let clockTicker = Timer.publish(every: 15, on: .main, in: .common).autoconnect()
 
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
@@ -46,14 +50,18 @@ struct V31HomeView: View {
             LazyVStack(spacing: 16) {
                 welcomeHeader
                 if !device.isOnline { offlineBanner }
-                V31WebsiteHeroSlider()
                 subscriptionStrip
+                V50FreeMonthOfferCard()
+                V31WebsiteHeroSlider()
                 releaseUpdateStrip
                 performanceStrip
+                smartCoachStrip
+                if app.featureEnabled("custom_exam") { mockExamStrip }
                 subjectsSection
                 nextStepsSection
                 quickTools
                 if !error.isEmpty { V3InlineMessage(text: error, icon: "wifi.exclamationmark", tone: .warning) }
+                socialLinksFooter
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 30)
@@ -87,65 +95,186 @@ struct V31HomeView: View {
                 .accessibilityLabel(isDarkAppearance ? "تفعيل الوضع الفاتح" : "تفعيل الوضع الداكن")
             }
         }
-        .task { await refreshAll() }
-        .refreshable { await refreshAll() }
+        .task { await refreshAll(); await loadHomeAvatar() }
+        .refreshable { await refreshAll(); await loadHomeAvatar() }
+        .onReceive(clockTicker) { currentClock = $0 }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("MurshidAvatarChanged"))) { _ in Task { await loadHomeAvatar() } }
+        .modifier(V44SchoolAdPopupModifier())
     }
 
     private var welcomeHeader: some View {
-        MurshidCard {
-            HStack(spacing: 13) {
-                Image(systemName: "graduationcap.fill")
-                    .font(.title2)
-                    .foregroundStyle(Color.murshidBlue)
-                    .frame(width: 48, height: 48)
-                    .background(Color.murshidBlue.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("أهلًا، \(firstName)").font(.title3.bold())
-                    Text(app.user?.grade ?? "").font(.subheadline).foregroundStyle(.secondary)
-                    Text(motivation).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+        ZStack(alignment: .topTrailing) {
+            LinearGradient(
+                colors: [.murshidNavy, .murshidAccentSecondary, .murshidBlue],
+                startPoint: .topTrailing, endPoint: .bottomLeading
+            )
+            Circle()
+                .fill(Color.white.opacity(0.07))
+                .frame(width: 190, height: 190)
+                .offset(x: 75, y: -84)
+            Circle()
+                .stroke(Color.murshidGold.opacity(0.20), lineWidth: 1.5)
+                .frame(width: 185, height: 185)
+                .offset(x: 66, y: -76)
+
+            VStack(alignment: .leading, spacing: 17) {
+                HStack(alignment: .center, spacing: 14) {
+                    Group {
+                        if let homeAvatarURL {
+                            AsyncImage(url: homeAvatarURL) { phase in
+                                if case let .success(image) = phase { image.resizable().scaledToFill() }
+                                else { Image(systemName: "person.crop.circle.fill").resizable().scaledToFit().padding(9) }
+                            }
+                        } else if let cached = V43AvatarCache.image(userID: app.user?.id ?? 0) {
+                            Image(uiImage: cached).resizable().scaledToFill()
+                        } else {
+                            Image(systemName: "person.crop.circle.fill").resizable().scaledToFit().padding(9)
+                        }
+                    }
+                    .frame(width: 58, height: 58)
+                    .background(.white.opacity(0.13), in: Circle())
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(.white.opacity(0.3), lineWidth: 2))
+                    .foregroundStyle(.white)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(timeOfDayGreeting)
+                            .font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.79))
+                        Text(firstName)
+                            .font(.system(.title, design: .rounded, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                        Label(app.user?.grade ?? "طالب المرشد", systemImage: "books.vertical.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Color.murshidGold)
+                    }
+                    Spacer(minLength: 0)
                 }
-                Spacer()
-                if app.subscribed {
-                    Image(systemName: "checkmark.seal.fill").foregroundStyle(.green).font(.title3)
+
+                Text(motivation)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.89))
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 10) {
+                    welcomeStat(
+                        value: "\(jInt(app.stats["total_answers"]))",
+                        caption: "إجابة",
+                        icon: "checkmark.circle.fill"
+                    )
+                    welcomeStat(
+                        value: "\(app.accuracy)%",
+                        caption: "دقة الحل",
+                        icon: "chart.line.uptrend.xyaxis"
+                    )
+                    welcomeStat(
+                        value: app.subscribed ? "مفعّل" : "\(max(0,app.freeRemaining ?? app.freeLimit))",
+                        caption: app.subscribed ? "الاشتراك" : "سؤال مجاني",
+                        icon: app.subscribed ? "checkmark.seal.fill" : "gift.fill"
+                    )
                 }
             }
+            .padding(19)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipShape(RoundedRectangle(cornerRadius: 25, style: .continuous))
+        .overlay(alignment: .topTrailing) {
+            VStack(spacing: 2) {
+                HStack(spacing: 5) {
+                    Image(systemName: "clock.fill")
+                        .foregroundStyle(Color.murshidGold)
+                    Text(clockTimeText).font(.system(.subheadline, design: .rounded).bold().monospacedDigit())
+                }
+                Text(clockDateText)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.82))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.white.opacity(0.13), in: RoundedRectangle(cornerRadius: 13))
+            .overlay(RoundedRectangle(cornerRadius: 13).stroke(Color.murshidGold.opacity(0.45)))
+            .environment(\.layoutDirection, .leftToRight)
+            .padding(.top, 14)
+            .padding(.trailing, 14)
+            .accessibilityLabel("الوقت \(clockTimeText)، التاريخ \(clockDateText)")
+        }
+        .shadow(color: Color.murshidNavy.opacity(0.20), radius: 20, y: 9)
         .padding(.top, 6)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func welcomeStat(value: String, caption: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Label(value, systemImage: icon)
+                .font(.headline.bold())
+                .foregroundStyle(Color.murshidGold)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(caption).font(.caption2.weight(.medium))
+                .foregroundStyle(.white.opacity(0.82))
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(11)
+        .background(.white.opacity(0.11), in: RoundedRectangle(cornerRadius: 13))
     }
 
     private var offlineBanner: some View {
         V3InlineMessage(text: "أنت غير متصل الآن. سنعرض البيانات المحفوظة متى كانت متاحة.", icon: "wifi.slash", tone: .warning)
     }
 
+    // Visible first-screen call to action; entitlement remains enforced by the server.
     @ViewBuilder
     private var subscriptionStrip: some View {
         if app.subscribed {
             MurshidCard {
-                HStack(spacing: 12) {
-                    Image(systemName: "checkmark.seal.fill").foregroundStyle(.green).font(.title2)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("كل الأسئلة مفتوحة").font(.headline)
-                        Text("اشتراكك فعّال — واصل التقدم بدون حدود الرصيد المجاني.").font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                }
+                Label("اشتراكك فعّال · جميع الأسئلة متاحة", systemImage: "checkmark.seal.fill")
+                    .font(.headline).foregroundStyle(.green)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         } else {
             NavigationLink(destination: V31SubscriptionView()) {
-                MurshidCard {
-                    HStack(spacing: 13) {
-                        Image(systemName: "gift.fill")
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: app.freeRemaining == 0 ? "exclamationmark.circle.fill" : "crown.fill")
+                            .font(.title2)
                             .foregroundStyle(Color.murshidGold)
-                            .frame(width: 46, height: 46)
-                            .background(Color.murshidGold.opacity(0.13), in: RoundedRectangle(cornerRadius: 13))
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("رصيد التجربة المجانية").font(.headline).foregroundStyle(.primary)
-                            Text("متبقي \(app.freeRemaining ?? 0) من \(app.freeLimit) سؤال").font(.caption).foregroundStyle(.secondary)
+                            .frame(width: 42, height: 42)
+                            .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(app.freeRemaining == 0 ? "جاهز تكمل تطوّرك؟" : "جرّب، تعلّم، ثم قرّر")
+                                .font(.headline).foregroundStyle(.white)
+                            Text(app.freeRemaining == 0
+                                 ? "راجع أخطاءك مجانًا، واشترك لحل أسئلة جديدة والاستمرار في التدريب."
+                                 : "حل \(max(0, app.freeRemaining ?? max(0, app.freeLimit - app.freeUsed))) أسئلة مجانية متبقية، واطّلع على التصحيح قبل أن تختار الاشتراك.")
+                                .font(.subheadline).foregroundStyle(.white.opacity(0.82))
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        Spacer(); Image(systemName: "chevron.left").foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
                     }
+                    HStack(spacing: 9) {
+                        Image(systemName: "creditcard.fill")
+                        Text("اكتشف مزايا الاشتراك").font(.title3.bold())
+                        Spacer()
+                        Image(systemName: "arrow.left").font(.headline.bold())
+                    }
+                    .foregroundStyle(Color.murshidNavy)
+                    .padding(.horizontal, 18)
+                    .frame(height: 54)
+                    .background(Color.murshidGold, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
                 }
-            }.buttonStyle(.plain)
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    LinearGradient(colors: [.murshidNavy, .murshidBlue],
+                                   startPoint: .topTrailing, endPoint: .bottomLeading),
+                    in: RoundedRectangle(cornerRadius: 21, style: .continuous)
+                )
+                .overlay(RoundedRectangle(cornerRadius: 21).stroke(Color.murshidGold.opacity(0.55), lineWidth: 1))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("اشتراك، افتح جميع الأسئلة الوزارية")
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -153,22 +282,30 @@ struct V31HomeView: View {
     private var releaseUpdateStrip: some View {
         let serverVersion = jString(app.releaseInfo["version"])
         let download = jString(app.releaseInfo["download_url"])
-        if isVersion(serverVersion, newerThan: "4.1.0") {
+        let installedVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "4.2.0"
+        let newer = isVersion(serverVersion, newerThan: installedVersion)
+        if newer {
             MurshidCard {
-                HStack(spacing: 12) {
-                    Image(systemName: "arrow.down.app.fill")
-                        .font(.title2)
-                        .foregroundStyle(Color.murshidBlue)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("يتوفر تحديث \(serverVersion)").font(.headline)
-                        Text(jString(app.releaseInfo["notes"], default: "يتوفر إصدار أحدث من تطبيق المرشد الوزاري."))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(3)
-                    }
-                    Spacer()
-                    if let url = URL(string: download), !download.isEmpty {
-                        Link("تحديث", destination: url).font(.subheadline.bold())
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("يتوفر تحديث \(serverVersion)", systemImage: "arrow.down.app.fill")
+                        .font(.headline).foregroundStyle(Color.murshidBlue)
+                    Text(jString(app.releaseInfo["notes"], default: "يتوفر إصدار جديد من التطبيق."))
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    HStack(spacing: 12) {
+                        Spacer()
+                        if let url = URL(string: download), url.scheme?.lowercased() == "https", !download.isEmpty {
+                            Link(destination: url) {
+                                Label("تحديث", systemImage: "square.and.arrow.down.fill")
+                                    .font(.headline)
+                                    .padding(.horizontal, 20)
+                                    .padding(.vertical, 11)
+                                    .background(Color.murshidGold, in: Capsule())
+                                    .foregroundStyle(Color.murshidNavy)
+                            }
+                        } else {
+                            Text("رابط التحديث غير متاح حالياً")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
@@ -195,8 +332,97 @@ struct V31HomeView: View {
                 V3MetricCard(title: "الإجابات", value: "\(jInt(app.stats["total_answers"]))", icon: "checkmark.circle.fill")
                 V3MetricCard(title: "اختبارات مكتملة", value: "\(jInt(app.stats["exams_completed"]))", icon: "flag.checkered")
                 V3MetricCard(title: "هذا الأسبوع", value: "\(jInt(weekly["answers"]))", icon: "calendar")
-                V3MetricCard(title: "مؤشر النجاح", value: "\(jInt(insights["success_index"]))%", icon: "sparkles")
+                V3MetricCard(title: "مؤشر المراجعة", value: "\(jInt(insights["success_index"]))%", icon: "sparkles")
             }
+        }
+    }
+
+    private var smartCoachStrip: some View {
+        NavigationLink(destination: V49StudyHubView()) {
+            MurshidCard {
+                HStack(spacing: 13) {
+                    Image(systemName: "brain.head.profile")
+                        .font(.title2)
+                        .foregroundStyle(Color.murshidBlue)
+                        .frame(width: 47, height: 47)
+                        .background(Color.murshidBlue.opacity(0.10), in: RoundedRectangle(cornerRadius: 13))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("مدربي الذكي · مراجعة دون إنترنت")
+                            .font(.headline).foregroundStyle(.primary)
+                        Text(study.records.isEmpty
+                             ? "بعد أول سؤال مصحّح سنبني لك دفتر مراجعة شخصيًا."
+                             : "لديك \(study.due.count) مراجعة مستحقة · \(study.streak) أيام مواظبة")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.left").foregroundStyle(.secondary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var learningImpactStrip: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            V3SectionHeader(title: "تعلّم من إجاباتك", subtitle: "خطوة صغيرة بعد كل اختبار", icon: "chart.xyaxis.line")
+            MurshidCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    if jInt(weekly["answers"]) > 0 && jInt(weekly["previous"]) > 0,
+                       weekly["accuracy_change"] != nil {
+                        let delta = jInt(weekly["accuracy_change"])
+                        HStack(spacing: 9) {
+                            Image(systemName: delta >= 0 ? "arrow.up.right.circle.fill" : "arrow.down.right.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(delta >= 0 ? Color.green : Color.orange)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("دقتك هذا الأسبوع \(jInt(weekly["accuracy"]))%")
+                                    .font(.headline)
+                                Text(delta == 0 ? "مماثلة للأسبوع السابق" : "\(abs(delta)) نقطة مئوية \(delta > 0 ? "أعلى" : "أقل") من الأسبوع السابق")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    } else {
+                        Label("كل إجابة تساهم في تحليل نقاط قوتك والمواضيع التي تحتاج مراجعة.", systemImage: "brain.head.profile")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    NavigationLink(destination: ReviewView()) {
+                        HStack {
+                            Label("افتح دفتر الأخطاء والتحليل", systemImage: "book.closed.fill")
+                                .font(.subheadline.bold())
+                            Spacer()
+                            Image(systemName: "arrow.left")
+                        }
+                        .foregroundStyle(Color.murshidBlue)
+                    }
+                }
+            }
+        }
+    }
+
+    private var mockExamStrip: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            V3SectionHeader(title: "محاكاة الوزاري", subtitle: "تدرّب على أجواء الامتحان الوزاري", icon: "timer")
+            NavigationLink(destination: V40CustomExamBuilderView(initialMode: "mock")) {
+                MurshidCard {
+                    HStack(spacing: 12) {
+                        Image(systemName: "timer")
+                            .font(.title2)
+                            .foregroundStyle(Color.murshidBlue)
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("ابدأ محاكاة الوزاري")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+                            Text("30 سؤالًا · 45 دقيقة")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.left")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -250,15 +476,13 @@ struct V31HomeView: View {
         VStack(alignment: .leading, spacing: 12) {
             V3SectionHeader(title: "أدواتك السريعة", subtitle: "اختبارات ومراجعة وبحث ومساهمات", icon: "bolt.fill")
             LazyVGrid(columns: columns, spacing: 12) {
+                NavigationLink(destination: V49StudyHubView()) { V3ToolCard(title: "مدربي الذكي", subtitle: "مراجعة بلا إنترنت", icon: "brain") }
                 NavigationLink(destination: ReviewView()) { V3ToolCard(title: "راجع أخطاءك", subtitle: "مراجعة ذكية", icon: "brain.head.profile") }
                 if app.featureEnabled("custom_exam") {
                     NavigationLink(destination: V40CustomExamBuilderView()) { V3ToolCard(title: "اختبار مخصص", subtitle: "عدد · نوع · مؤقت", icon: "slider.horizontal.3") }
                 }
                 if app.featureEnabled("daily_challenge") {
-                    NavigationLink(destination: V40DailyChallengeView()) { V3ToolCard(title: "تحدي اليوم", subtitle: "خمسة أسئلة سريعة", icon: "flame.fill") }
-                }
-                if app.featureEnabled("question_search") {
-                    NavigationLink(destination: V40QuestionSearchView()) { V3ToolCard(title: "ابحث عن سؤال", subtitle: "في بنك الأسئلة", icon: "magnifyingglass") }
+                    NavigationLink(destination: V40DailyChallengeView()) { V3ToolCard(title: "تحدي اليوم", subtitle: "سؤال واحد كل 24 ساعة", icon: "flame.fill") }
                 }
                 if app.featureEnabled("student_question_submit") {
                     NavigationLink(destination: V40StudentQuestionSubmitView()) { V3ToolCard(title: "اقترح سؤالًا", subtitle: "ساهم في البنك", icon: "plus.bubble.fill") }
@@ -267,16 +491,15 @@ struct V31HomeView: View {
                 if app.featureEnabled("attempt_history") {
                     NavigationLink(destination: V40AttemptHistoryView()) { V3ToolCard(title: "سجل الاختبارات", subtitle: "نتائجك السابقة", icon: "clock.arrow.circlepath") }
                 }
-                NavigationLink(destination: StudyPlanView()) { V3ToolCard(title: "خطة الدراسة", subtitle: "هدف يومي", icon: "calendar") }
-                NavigationLink(destination: AchievementsView()) { V3ToolCard(title: "الإنجازات", subtitle: "XP والمستوى", icon: "medal.fill") }
-                NavigationLink(destination: V3FocusView()) { V3ToolCard(title: "جلسة تركيز", subtitle: "25 · 45 · 60 دقيقة", icon: "timer") }
                 NavigationLink(destination: V3ContestView()) { V3ToolCard(title: "تحدي المليون", subtitle: "ترتيب ونقاط", icon: "trophy.fill") }
-                NavigationLink(destination: StoriesView()) { V3ToolCard(title: "غيّر جو", subtitle: "استراحة قصيرة", icon: "sparkles") }
-                NavigationLink(destination: V40WhatsNewView()) { V3ToolCard(title: "ما الجديد", subtitle: "الإصدار 4.2", icon: "sparkles.rectangle.stack.fill") }
+                NavigationLink(destination: V43StoriesView()) { V3ToolCard(title: "غيّر جو", subtitle: "استراحة قصيرة", icon: "sparkles") }
             }
             .buttonStyle(.plain)
+            learningImpactStrip
         }
     }
+
+    private var socialLinksFooter: some View { V498SocialLinksFooter() }
 
     private var isDarkAppearance: Bool {
         appearance == "dark" || (appearance == "system" && colorScheme == .dark)
@@ -293,11 +516,50 @@ struct V31HomeView: View {
         app.user?.name.split(separator: " ").first.map(String.init) ?? "طالبنا"
     }
 
+    private var timeOfDayGreeting: String {
+        // Use Baghdad civil time even when the student's device is set to
+        // another timezone. The existing clock ticker refreshes this label.
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = displayTimeZone
+        let hour = calendar.component(.hour, from: currentClock)
+        return hour < 12 ? "صباح الخير" : "مساء الخير"
+    }
+
+    private var displayTimeZone: TimeZone {
+        TimeZone(identifier: "Asia/Baghdad") ?? .current
+    }
+
     private var motivation: String {
-        let total = jInt(app.stats["total_answers"])
-        if app.accuracy >= 85 && total >= 10 { return "مستواك ممتاز. حافظ على إيقاعك وراجع الأخطاء القليلة." }
-        if total > 0 { return "كل إجابة اليوم تقرّبك أكثر من الدرجة التي تريدها." }
-        return "ابدأ بخطوة صغيرة اليوم، وسنبني تقدمك معك سؤالًا بعد سؤال."
+        let messages = ["الاستمرار اليوم يصنع تفوق الغد.", "كل خطوة صغيرة تقرّبك من حلمك.", "اجعل هذا اليوم فرصة جديدة للنجاح.", "ثق بقدرتك، وابدأ من السؤال الأول.", "لا تقارن تقدمك إلا بنفسك بالأمس.", "الاجتهاد المتكرر يصنع إنجازاً كبيراً.", "أنت أقرب إلى هدفك مما تتصور.", "بعض الصبر وكثير من العمل يصنع الفرق.", "مراجعتك اليوم ترفع ثقتك غداً.", "العلم طريقك إلى مستقبل تستحقه."]
+        let day = Calendar.current.ordinality(of: .day, in: .era, for: currentClock) ?? 0
+        return messages[abs(day) % messages.count]
+    }
+
+    private var clockTimeText: String {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.calendar = Calendar(identifier: .gregorian)
+        fmt.timeZone = displayTimeZone
+        fmt.dateFormat = "HH:mm"
+        return fmt.string(from: currentClock)
+    }
+
+    private var clockDateText: String {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        fmt.calendar = Calendar(identifier: .gregorian)
+        fmt.timeZone = displayTimeZone
+        fmt.dateFormat = "dd/MM"
+        return fmt.string(from: currentClock)
+    }
+
+    private func loadHomeAvatar() async {
+        guard let data = try? await APIClient.shared.request("mobile/account.php") else { return }
+        let url = V43AvatarCache.url(jString(data["avatar_url"]), revision: jString(data["avatar_revision"]))
+        await MainActor.run {
+            homeAvatarURL = url
+            app.applyAvatar(data)
+        }
     }
 
     private var suggestedTopic: (topic: Topic, subject: Subject, coverage: Int)? {
@@ -332,9 +594,12 @@ struct V31HomeView: View {
 }
 
 private struct V31WebsiteHeroSlider: View {
+    @Environment(\.openURL) private var openURL
+    @EnvironmentObject private var device: DeviceServices
     @State private var selection = 0
     @State private var images: [Int: UIImage] = [:]
     @State private var ready = false
+    @State private var showingAdvertisePrice = false
     private let timer = Timer.publish(every: 5.5, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -351,9 +616,15 @@ private struct V31WebsiteHeroSlider: View {
             .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Color.primary.opacity(0.05)))
             .shadow(color: Color.black.opacity(0.08), radius: 18, y: 8)
             .onReceive(timer) { _ in
-                guard ready else { return }
+                // Avoid rotating through four network images on metered 4G/5G.
+                guard ready && !device.isMeteredConnection else { return }
                 withAnimation(.easeInOut(duration: 0.35)) {
                     selection = (selection + 1) % V31SlideKind.allCases.count
+                }
+            }
+            .onChange(of: selection) { value in
+                if device.isMeteredConnection, let slide = V31SlideKind(rawValue: value) {
+                    Task { await loadImage(for: slide) }
                 }
             }
 
@@ -367,52 +638,79 @@ private struct V31WebsiteHeroSlider: View {
             }
         }
         .task { await preloadAllImages() }
+        .onChange(of: device.isMeteredConnection) { metered in
+            if !metered { Task { await preloadAllImages() } }
+        }
+        .alert("أعلن هنا", isPresented: $showingAdvertisePrice) {
+            Button("إلغاء", role: .cancel) { }
+            Button("إكمال") {
+                var target = URLComponents(string: "https://t.me/r_cs4")
+                target?.queryItems = [URLQueryItem(name: "text", value: "السلام عليكم، أريد طلب إعلان مدرسة في منصة المرشد الوزاري لمدة 24 ساعة بسعر 5000 دينار عراقي. يرجى إكمال الحجز معي.")]
+                if let url = target?.url { openURL(url) }
+            }
+        } message: {
+            Text("الإعلان لكل ٢٤ ساعة بسعر ٥ آلاف دينار عراقي فقط. بالضغط على إكمال ستُفتح محادثة @r_cs4 في تيليجرام مع رسالة طلب إعلان جاهزة، ويمكنك إرسالها بنفسك.")
+        }
         .accessibilityLabel("سلايدر منصة المرشد الوزاري")
     }
 
     @ViewBuilder
     private func destination(for kind: V31SlideKind) -> some View {
-        NavigationLink {
-            switch kind {
-            case .million: V3ContestView()
-            case .advertise: V31SchoolAdRequestView()
-            case .tests: V3TestsView()
-            case .success: V3SuccessView()
-            }
-        } label: {
-            ZStack {
-                LinearGradient(colors: [.murshidNavy, .murshidBlue], startPoint: .topLeading, endPoint: .bottomTrailing)
-                if let image = images[kind.rawValue] {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .transition(.opacity)
-                } else {
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .fill(Color.murshidBlue.opacity(0.16))
-                        .overlay {
-                            Image(systemName: "photo")
-                                .font(.title2)
-                                .foregroundStyle(.white.opacity(0.28))
-                        }
+        if kind == .advertise {
+            Button { showingAdvertisePrice = true } label: { slideArtwork(for: kind) }
+                .buttonStyle(.plain)
+                .accessibilityLabel(kind.title)
+        } else {
+            NavigationLink {
+                switch kind {
+                case .million: V3ContestView()
+                case .advertise: EmptyView()
+                case .tests: V3TestsView()
+                case .success: V3SuccessView()
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
+            } label: { slideArtwork(for: kind) }
+                .buttonStyle(.plain)
+                .accessibilityLabel(kind.title)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(kind.title)
+    }
+
+    private func slideArtwork(for kind: V31SlideKind) -> some View {
+        ZStack {
+            LinearGradient(colors: [.murshidNavy, .murshidBlue], startPoint: .topLeading, endPoint: .bottomTrailing)
+            if let image = images[kind.rawValue] {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .transition(.opacity)
+            } else {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Color.murshidBlue.opacity(0.16))
+                    .overlay {
+                        Image(systemName: "photo")
+                            .font(.title2)
+                            .foregroundStyle(.white.opacity(0.28))
+                    }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
     }
 
     @MainActor
     private func preloadAllImages() async {
+        if device.isMeteredConnection {
+            // Only the visible slide is downloaded; the rest remain lightweight
+            // gradients until the student actually swipes to them.
+            if let current = V31SlideKind(rawValue: selection) { await loadImage(for: current) }
+            return
+        }
         guard images.count < V31SlideKind.allCases.count else {
             ready = true
             return
         }
 
         let requests: [(Int, URL)] = V31SlideKind.allCases.compactMap { kind in
-            guard let url = kind.imageURL else { return nil }
+            guard images[kind.rawValue] == nil, let url = kind.imageURL else { return nil }
             return (kind.rawValue, url)
         }
 
@@ -443,6 +741,140 @@ private struct V31WebsiteHeroSlider: View {
         }
         ready = images.count == V31SlideKind.allCases.count
     }
+
+    @MainActor
+    private func loadImage(for kind: V31SlideKind) async {
+        guard images[kind.rawValue] == nil, let url = kind.imageURL else { return }
+        var request = URLRequest(url: url)
+        request.cachePolicy = .returnCacheDataElseLoad
+        request.timeoutInterval = 8
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode),
+              let image = UIImage(data: data) else { return }
+        images[kind.rawValue] = image
+    }
+}
+
+// MARK: - Published school advertisements
+
+struct V31SchoolAdsView: View {
+    @ObservedObject private var feed = V498SchoolAdsStore.shared
+
+    private var tickerText: String {
+        feed.ads.map { "\($0.school) — \($0.text)" }
+            .joined(separator: "     •     ")
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 14) {
+                if !feed.hasLoaded && feed.isLoading {
+                    V3SkeletonCard(height: 130)
+                } else if feed.ads.isEmpty && feed.error.isEmpty {
+                    EmptyStateView(systemImage: "megaphone", title: "لا توجد إعلانات مدرسية الآن", message: "ستظهر الإعلانات هنا تلقائياً بعد نشرها من الإدارة.")
+                } else if !feed.ads.isEmpty {
+                    V31SchoolAdTicker(text: tickerText)
+                    ForEach(feed.ads) { ad in
+                        MurshidCard {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Label(ad.school, systemImage: "building.2.fill")
+                                    .font(.headline).foregroundStyle(Color.murshidBlue)
+                                Text(ad.text).font(.body)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+                if !feed.error.isEmpty {
+                    V3InlineMessage(text: feed.error, icon: "exclamationmark.triangle.fill", tone: .warning)
+                }
+            }
+            .padding(16)
+            .padding(.bottom, 30)
+        }
+        .background(Color.murshidBackground.ignoresSafeArea())
+        .navigationTitle("الإعلانات")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await feed.refresh() }
+        .refreshable { await feed.refresh() }
+    }
+}
+
+private struct V31SchoolAdTickerWidth: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct V31SchoolAdTicker: View {
+    let text: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var measuredWidth: CGFloat = 0
+
+    private var repeatedText: some View {
+        Text(text)
+            .font(.subheadline.bold())
+            .fixedSize(horizontal: true, vertical: false)
+            .environment(\.layoutDirection, .rightToLeft)
+    }
+
+    var body: some View {
+        Group {
+            if reduceMotion {
+                repeatedText.frame(maxWidth: .infinity, alignment: .trailing)
+            } else {
+                TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+                    GeometryReader { viewport in
+                        let textWidth = max(measuredWidth, 1)
+                        let distance = max(viewport.size.width, 1) + textWidth + 24
+                        let travel = CGFloat((context.date.timeIntervalSinceReferenceDate * 28)
+                            .truncatingRemainder(dividingBy: Double(distance)))
+                        // Physical left → right motion, independent of the
+                        // Arabic text's right-to-left reading direction.
+                        repeatedText.background {
+                            GeometryReader { geometry in
+                                Color.clear.preference(key: V31SchoolAdTickerWidth.self, value: geometry.size.width)
+                            }
+                        }
+                        .position(x: travel - textWidth / 2, y: viewport.size.height / 2)
+                    }
+                    .environment(\.layoutDirection, .leftToRight)
+                }
+                .onPreferenceChange(V31SchoolAdTickerWidth.self) { measuredWidth = $0 }
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 48, maxHeight: 48)
+        .background(Color.murshidBlue.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+        .clipped()
+        .accessibilityLabel(text)
+    }
+}
+
+struct V31PredictionsLockedView: View {
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 18) {
+                V3IntroCard(eyebrow: "المرشحات", title: "المرشحات الوزارية", text: "هذا القسم مستقل عن الإعلانات ومتاح للمشتركين.", icon: "scope")
+                MurshidCard {
+                    VStack(spacing: 12) {
+                        Image(systemName: "lock.shield.fill").font(.largeTitle).foregroundStyle(Color.murshidBlue)
+                        Text("المرشحات متاحة بعد الاشتراك").font(.headline)
+                        NavigationLink(destination: V31SubscriptionView()) {
+                            Label("عرض الاشتراكات", systemImage: "arrow.left.circle.fill")
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(16)
+        }
+        .background(Color.murshidBackground.ignoresSafeArea())
+        .navigationTitle("المرشحات")
+    }
 }
 
 // MARK: - External subscription flow: no phone field, no in-app payment web sheet
@@ -452,7 +884,7 @@ struct V31SubscriptionView: View {
     @Environment(\.openURL) private var openURL
     @AppStorage("last_payment_order") private var storedOrderID = 0
     @State private var plan = ""
-        @State private var loading = false
+    @State private var loading = false
     @State private var error = ""
     @State private var statusMessage = ""
 
@@ -460,10 +892,11 @@ struct V31SubscriptionView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
-                V3IntroCard(eyebrow: "الاشتراك", title: app.subscribed ? "اشتراكك مفعّل" : "افتح كامل الأسئلة", text: app.subscribed ? "يمكنك الوصول إلى كامل المحتوى المتاح في صفك." : "اختر الباقة فقط، ثم انتقل مباشرة إلى صفحة الدفع الخارجية الآمنة.", icon: app.subscribed ? "checkmark.seal.fill" : "arrow.up.forward.app.fill")
+                membershipHero
                 if app.subscribed {
                     MurshidCard { Label("لا تحتاج إلى أي عملية دفع الآن.", systemImage: "checkmark.circle.fill").font(.headline).foregroundStyle(.green) }
                 } else {
+                    premiumBenefits
                     plansSection
                     actionSection
                 }
@@ -473,6 +906,71 @@ struct V31SubscriptionView: View {
         .navigationTitle("الاشتراك")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { if plan.isEmpty { plan = app.plans.first?.id ?? "month1" } }
+    }
+
+    private var membershipHero: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("المرشد الوزاري", systemImage: "crown.fill")
+                    .font(.subheadline.bold()).foregroundStyle(Color.murshidGold)
+                Spacer()
+                Image(systemName: app.subscribed ? "checkmark.seal.fill" : "sparkles")
+                    .font(.title).foregroundStyle(Color.murshidGold)
+            }
+            Text(app.subscribed ? "دراستك مستمرة بلا حدّ الأسئلة المجانية" : "لا تحفظ الإجابة فقط… افهم أين تتطور")
+                .font(.system(.title2, design: .rounded, weight: .bold))
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(app.subscribed
+                 ? "وصولك إلى بنك أسئلة صفك فعّال وفق مدة اشتراكك."
+                 : "تدرّب على أسئلة صفك، راجع أخطاءك، واستخدم المحاكاة والمؤشرات المتاحة لتعرف الخطوة التالية.")
+                .font(.subheadline).foregroundStyle(.white.opacity(0.87))
+                .fixedSize(horizontal: false, vertical: true)
+            if !app.subscribed {
+                HStack(spacing: 10) {
+                    Image(systemName: "gift.fill")
+                    Text("تجربة مجانية: \(app.freeLimit) سؤال · المتبقي \(max(0, app.freeRemaining ?? max(0, app.freeLimit - app.freeUsed)))")
+                }
+                .font(.caption.bold())
+                .foregroundStyle(Color.murshidNavy)
+                .padding(.horizontal, 12).padding(.vertical, 9)
+                .background(Color.murshidGold, in: Capsule())
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(21)
+        .background(LinearGradient(colors: [.murshidNavy, .murshidBlue], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 23))
+        .overlay(RoundedRectangle(cornerRadius: 23).stroke(Color.murshidGold.opacity(0.45), lineWidth: 1))
+    }
+
+    private var premiumBenefits: some View {
+        MurshidCard {
+            VStack(alignment: .leading, spacing: 15) {
+                Text("ماذا تكسب عند الاشتراك؟")
+                    .font(.title3.bold())
+                benefit("أسئلة صفّك", detail: "تابع الحل بعد انتهاء الرصيد المجاني مع إظهار الإجابة الصحيحة.", icon: "checkmark.seal.fill")
+                benefit("دفتر الأخطاء", detail: "ارجع للأسئلة التي أخطأت بها والمواضيع الأضعف.", icon: "book.closed.fill")
+                if app.featureEnabled("custom_exam") {
+                    benefit("اختبار ومحاكاة", detail: "حدد أسئلة للتدريب أو جرّب محاكاة مؤقتة والتصحيح بعد النهاية.", icon: "timer")
+                }
+                Label("الشرح التفصيلي والمصادر يظهران فقط حيث تتوفر بيانات صحيحة لهما.", systemImage: "info.circle")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func benefit(_ name: String, detail: String, icon: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(Color.murshidBlue)
+                .frame(width: 35, height: 35)
+                .background(Color.murshidBlue.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(name).font(.headline)
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private var plansSection: some View {
@@ -486,7 +984,12 @@ struct V31SubscriptionView: View {
                         Image(systemName: plan == p.id ? "checkmark.circle.fill" : "circle").foregroundStyle(plan == p.id ? Color.murshidBlue : Color.secondary)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(p.label).font(.headline).foregroundStyle(.primary)
-                            Text("وصول كامل حسب مدة الباقة").font(.caption).foregroundStyle(.secondary)
+                            if p.id == "month3", let monthly = app.plans.first(where: { $0.id == "month1" }), monthly.amount * 3 > p.amount {
+                                Text("توفّر \((monthly.amount * 3 - p.amount).formatted()) د.ع مقارنة بثلاث باقات شهرية")
+                                    .font(.caption.bold()).foregroundStyle(.green)
+                            } else {
+                                Text("وصول إلى المحتوى حسب مدة الباقة").font(.caption).foregroundStyle(.secondary)
+                            }
                         }
                         Spacer(); Text("\(p.amount.formatted()) د.ع").font(.headline).foregroundStyle(Color.murshidBlue)
                     }
@@ -601,6 +1104,8 @@ private struct V31AccountRow: View {
 struct V31AccountView: View {
     @EnvironmentObject var app: AppSession
     @EnvironmentObject var device: DeviceServices
+    @AppStorage("student_palette") private var paletteID = "royal"
+    @AppStorage("appearance") private var appearance = "system"
     @AppStorage("biometric_lock") private var biometricLock = false
     @AppStorage("study_reminder") private var studyReminder = false
     @AppStorage("study_reminder_hour") private var reminderHour = 19
@@ -618,6 +1123,10 @@ struct V31AccountView: View {
     @State private var uploadingAvatar = false
     @State private var faceIDMessage = ""
     @State private var avatarMessage = ""
+    @State private var activationCode = ""
+    @State private var activatingCode = false
+    @State private var activationSuccess = ""
+    @State private var activationError = ""
 
     var body: some View {
         ScrollView {
@@ -625,10 +1134,11 @@ struct V31AccountView: View {
                 profileCard
                 if loading { V3SkeletonCard(height: 90) }
                 subscriptionCard
+                activationCodeCard
                 servicesSection
+                appearanceSection
                 securitySection
                 logoutSection
-                appInfo
                 if !avatarMessage.isEmpty { V3InlineMessage(text: avatarMessage, icon: "person.crop.circle.badge.checkmark", tone: .success) }
                 if !faceIDMessage.isEmpty { V3InlineMessage(text: faceIDMessage, icon: "faceid", tone: .info) }
                 if !error.isEmpty { V3InlineMessage(text: error, icon: "exclamationmark.triangle.fill", tone: .warning) }
@@ -690,26 +1200,36 @@ struct V31AccountView: View {
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 
+    // Show the user's latest uploaded picture immediately and preserve a local fallback.
     @ViewBuilder private var avatarView: some View {
-        if let preview = avatarPreview {
-            Image(uiImage: preview).resizable().scaledToFill().frame(width: 78, height: 78).clipShape(Circle()).overlay(Circle().stroke(.white.opacity(0.34), lineWidth: 2))
-        } else {
-            let raw = jString(account["avatar_url"])
-            let revision = jString(account["avatar_revision"], default: "0")
-            let joined = raw.isEmpty ? raw : raw + (raw.contains("?") ? "&" : "?") + "ios_rev=" + revision
-            if let url = URL(string: joined), !raw.isEmpty {
+        let raw = jString(account["avatar_url"])
+        let revision = jString(account["avatar_revision"], default: "0")
+        let url = V43AvatarCache.url(raw, revision: revision)
+        let fallback = jString(account["avatar_status"]) == "approved"
+            ? V43AvatarCache.image(userID: app.user?.id ?? 0) : nil
+        ZStack {
+            if let preview = avatarPreview {
+                Image(uiImage: preview).resizable().scaledToFill()
+            } else if let url {
                 AsyncImage(url: url) { phase in
-                    if case let .success(image) = phase { image.resizable().scaledToFill() }
-                    else { Image(systemName: "person.crop.circle.fill").resizable().foregroundStyle(.white.opacity(0.9)) }
+                    if case let .success(image) = phase {
+                        image.resizable().scaledToFill()
+                    } else if let fallback {
+                        Image(uiImage: fallback).resizable().scaledToFill()
+                    } else {
+                        Image(systemName: "person.crop.circle.fill").resizable().foregroundStyle(.white.opacity(0.9))
+                    }
                 }
-                .id(joined)
-                .frame(width: 78, height: 78)
-                .clipShape(Circle())
-                .overlay(Circle().stroke(.white.opacity(0.34), lineWidth: 2))
+                .id(url.absoluteString)
+            } else if let fallback {
+                Image(uiImage: fallback).resizable().scaledToFill()
             } else {
-                Image(systemName: "person.crop.circle.fill").resizable().frame(width: 78, height: 78).foregroundStyle(.white.opacity(0.92))
+                Image(systemName: "person.crop.circle.fill").resizable().foregroundStyle(.white.opacity(0.9))
             }
         }
+        .frame(width: 78, height: 78)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(.white.opacity(0.34), lineWidth: 2))
     }
 
     private var avatarStatusText: String {
@@ -726,13 +1246,95 @@ struct V31AccountView: View {
                 HStack(spacing: 13) {
                     Image(systemName: app.subscribed ? "checkmark.seal.fill" : "arrow.up.forward.app.fill").font(.title2).foregroundStyle(app.subscribed ? .green : Color.murshidBlue)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(app.subscribed ? "الاشتراك" : "افتح كامل المنصة").font(.headline).foregroundStyle(.primary)
-                        Text(app.subscribed ? "اشتراكك مفعّل حاليًا." : "الدفع خارجي ولا نطلب رقمًا إضافيًا من هنا.").font(.caption).foregroundStyle(.secondary)
+                        Text(app.subscribed ? "الاشتراك" : "اشتراك").font(.headline.bold()).foregroundStyle(app.subscribed ? Color.primary : Color.murshidBlue)
+                        Text(app.subscribed ? "الأيام المتبقية: \(app.subscriptionDaysRemaining.map(String.init) ?? "—") يوم" : "الدفع خارجي ولا نطلب رقمًا إضافيًا من هنا.").font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer(); Image(systemName: "chevron.left").foregroundStyle(.secondary)
                 }
             }
         }.buttonStyle(.plain)
+    }
+
+    private var activationCodeCard: some View {
+        MurshidCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("تفعيل الاشتراك بكود", systemImage: "ticket.fill")
+                    .font(.headline.bold())
+                    .foregroundStyle(Color.murshidBlue)
+                Text("إذا حصلت على كود من إدارة المنصة، أدخله هنا لتفعيل اشتراكك لمدة شهر أو أكثر حسب صلاحية الكود.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                TextField("MW-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX", text: $activationCode)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled(true)
+                    .keyboardType(.asciiCapable)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(activatingCode)
+                    .accessibilityLabel("كود تفعيل الاشتراك")
+                Button {
+                    Task { await redeemActivationCode() }
+                } label: {
+                    HStack(spacing: 9) {
+                        if activatingCode { ProgressView().tint(.white) }
+                        Image(systemName: "checkmark.shield.fill")
+                        Text(activatingCode ? "جاري التحقق من الكود…" : "تفعيل الاشتراك")
+                    }
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(activatingCode || activationCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                if !activationSuccess.isEmpty {
+                    V3InlineMessage(text: activationSuccess, icon: "checkmark.seal.fill", tone: .success)
+                }
+                if !activationError.isEmpty {
+                    V3InlineMessage(text: activationError, icon: "exclamationmark.triangle.fill", tone: .warning)
+                }
+                Text("كل كود يُستخدم مرة واحدة فقط، ومدته يحددها إصدار الكود من الإدارة.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @MainActor
+    private func redeemActivationCode() async {
+        guard !activatingCode else { return }
+        activationError = ""
+        activationSuccess = ""
+        let normalized = activationCode.uppercased()
+            .replacingOccurrences(of: "-", with: "")
+            .filter { !$0.isWhitespace }
+        guard normalized.range(of: #"^MW[A-F0-9]{24}$"#, options: .regularExpression) != nil else {
+            activationError = "صيغة الكود غير صحيحة. تأكد من كتابة الكود الصادر من الإدارة كاملاً."
+            haptic(.error)
+            return
+        }
+        activatingCode = true
+        do {
+            let result = try await APIClient.shared.request("mobile/redeem-subscription-code.php", method: "POST", body: [
+                "csrf": app.csrf,
+                "code": normalized
+            ])
+            guard jBool(result["subscribed"]) else {
+                throw APIError(message: "لم يؤكد الخادم تفعيل الاشتراك. لا يزال الكود غير مفعّل.", status: 502, paymentRequired: false)
+            }
+            // Only a successful, authenticated server response can unlock a subscription.
+            // A failed follow-up refresh must not spend a valid code a second time.
+            let refreshed = try? await APIClient.shared.bootstrap()
+            if let refreshed, jBool(refreshed["subscribed"]) {
+                app.applyBootstrap(refreshed)
+            } else {
+                app.subscribed = true
+                app.subscriptionDaysRemaining = max(0, jInt(result["subscription_days_remaining"]))
+            }
+            activationCode = ""
+            activationSuccess = jString(result["message"], default: "تم تأكيد تفعيل اشتراكك من الخادم.")
+            haptic()
+        } catch {
+            activationError = error.localizedDescription
+            haptic(.error)
+        }
+        activatingCode = false
     }
 
     private var servicesSection: some View {
@@ -744,13 +1346,64 @@ struct V31AccountView: View {
                         V31AccountRow(title: "تغيير الاسم", subtitle: "متاح مرة واحدة", icon: "pencil") { newName = app.user?.name ?? ""; showRename = true }
                         Divider().padding(.leading, 48)
                     }
-                    NavigationLink(destination: V31SchoolAdRequestView()) { V31AccountRowLabel(title: "طلب إعلان مدرسة", subtitle: "أرسل الطلب مباشرة إلى الإدارة", icon: "megaphone.fill") }
-                    Divider().padding(.leading, 48)
                     NavigationLink(destination: NotificationsView()) { V31AccountRowLabel(title: "الإشعارات", subtitle: app.unreadNotifications > 0 ? "لديك \(app.unreadNotifications) غير مقروء" : "لا توجد إشعارات جديدة", icon: "bell.fill") }
+                    Divider().padding(.leading, 48)
+                    NavigationLink(destination: V49StudyHubView()) { V31AccountRowLabel(title: "مراجعاتي المحفوظة", subtitle: "مدرب ذكي يعمل دون اتصال بعد التصحيح", icon: "books.vertical.fill") }
                     Divider().padding(.leading, 48)
                     NavigationLink(destination: SupportView()) { V31AccountRowLabel(title: "خدمة العملاء", subtitle: "محادثة مباشرة مع الدعم", icon: "message.fill") }
                     Divider().padding(.leading, 48)
-                    NavigationLink(destination: StoriesView()) { V31AccountRowLabel(title: "غيّر جو", subtitle: "رسائل وقصص قصيرة", icon: "sparkles") }
+
+                }
+            }
+        }
+    }
+
+    private var appearanceSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            V3SectionHeader(title: "الألوان والمظهر", subtitle: "غيّر تصميم تطبيقك وقتما تريد", icon: "paintpalette.fill")
+            MurshidCard {
+                VStack(alignment: .leading, spacing: 15) {
+                    Label("اختر هويتك اللونية", systemImage: "paintbrush.pointed.fill")
+                        .font(.subheadline.bold()).foregroundStyle(Color.murshidBlue)
+                    HStack(spacing: 8) {
+                        ForEach(StudentPalette.allCases) { palette in
+                            Button {
+                                paletteID = palette.rawValue
+                                selectionHaptic()
+                            } label: {
+                                VStack(spacing: 8) {
+                                    Image(systemName: paletteID == palette.rawValue ? "checkmark" : "sparkles")
+                                        .font(.system(size:18,weight:.bold))
+                                        .foregroundStyle(.white)
+                                        .frame(width: 53, height: 53)
+                                        .background(LinearGradient(colors:[palette.accent,palette.secondary],startPoint:.topLeading,endPoint:.bottomTrailing),in:RoundedRectangle(cornerRadius:17,style:.continuous))
+                                    Text(palette.title).font(.subheadline.bold()).foregroundStyle(.primary)
+                                    Text(palette.detail)
+                                        .font(.system(size:10,weight:.medium)).foregroundStyle(.secondary)
+                                        .lineLimit(1).minimumScaleFactor(0.8)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12).padding(.horizontal, 3)
+                                .background(Color.murshidBlue.opacity(paletteID == palette.rawValue ? 0.10 : 0.025),in:RoundedRectangle(cornerRadius:18,style:.continuous))
+                                .overlay(RoundedRectangle(cornerRadius:18,style:.continuous)
+                                    .stroke(paletteID == palette.rawValue ? Color.murshidBlue : Color.murshidBlue.opacity(0.12),lineWidth:paletteID == palette.rawValue ? 2 : 1))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("مظهر \(palette.title): \(palette.detail)")
+                            .accessibilityAddTraits(paletteID == palette.rawValue ? .isSelected : [])
+                        }
+                    }
+                    Divider()
+                    Label("إضاءة التطبيق", systemImage: "circle.lefthalf.filled")
+                        .font(.subheadline.bold()).foregroundStyle(Color.murshidBlue)
+                    Picker("إضاءة التطبيق", selection: $appearance) {
+                        Label("النظام", systemImage: "iphone").tag("system")
+                        Label("فاتح", systemImage: "sun.max.fill").tag("light")
+                        Label("داكن", systemImage: "moon.fill").tag("dark")
+                    }
+                    .pickerStyle(.segmented)
+                    Text("يُحفظ اختيارك على هذا الآيفون، ولا يغيّر بيانات حسابك أو اشتراكك.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
@@ -795,7 +1448,7 @@ struct V31AccountView: View {
     private var appInfo: some View {
         MurshidCard {
             VStack(alignment: .leading, spacing: 8) {
-                HStack { Label("منصة المرشد الوزاري", systemImage: "graduationcap.fill").font(.headline); Spacer(); Text("4.2 • 420").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
+                HStack { Label("منصة المرشد الوزاري", systemImage: "graduationcap.fill").font(.headline); Spacer(); Text("\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—") • \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—")").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
                 Text("تطبيق iPhone أصلي مرتبط مباشرة بحسابك في المنصة.").font(.footnote).foregroundStyle(.secondary)
                 HStack(spacing: 14) {
                     Link("الخصوصية", destination: URL(string: "https://www.mur-iq.com/privacy.php")!)
@@ -844,12 +1497,12 @@ struct V31AccountView: View {
             let d = try await APIClient.shared.request("mobile/account.php")
             await MainActor.run {
                 account = d
+                app.applyAvatar(d)
                 loading = false
                 error = ""
-                let status = jString(d["avatar_status"])
-                if status == "approved" || status == "blocked" || status == "rejected" || status == "none" {
+                // Keep the successful image visible until the remote avatar finishes loading.
+                if ["blocked", "rejected", "none"].contains(jString(d["avatar_status"])) {
                     avatarPreview = nil
-                    avatarItem = nil
                 }
             }
         } catch {
@@ -883,12 +1536,22 @@ struct V31AccountView: View {
                 avatarMessage = ""
             }
             let d = try await APIClient.shared.uploadAvatarJPEG(jpeg, csrf: app.csrf)
+            // Server must return a usable avatar URL; otherwise the upload is not complete.
+            let urlText = jString(d["avatar_url"])
+            guard V43AvatarCache.url(urlText, revision: jString(d["avatar_revision"])) != nil else {
+                throw APIError(message: "حُفظت الصورة لكن الخادم لم يُرجع رابطاً صالحاً للعرض.", status: 502, paymentRequired: false)
+            }
             await MainActor.run {
+                V43AvatarCache.save(jpeg, userID: app.user?.id ?? 0)
+                account["avatar_url"] = urlText
+                account["avatar_revision"] = jString(d["avatar_revision"])
+                account["avatar_status"] = "approved"
+                app.applyAvatar(d)
                 uploadingAvatar = false
-                avatarPreview = nil
                 avatarItem = nil
-                avatarMessage = jString(d["message"], default: "تم تغيير صورة الحساب فورًا.")
-                haptic()
+                avatarMessage = "تم تغيير صورة الحساب. الصورة ظاهرة وجاري تحديث رابطها."
+                NotificationCenter.default.post(name: Notification.Name("MurshidAvatarChanged"), object: nil)
+                haptic(.success)
             }
             await load()
         } catch {
@@ -1000,7 +1663,7 @@ extension APIClient {
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.httpBody = body
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw APIError(message: "تعذر الاتصال بالخادم.", status: 0, paymentRequired: false) }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? JSON else { throw APIError(message: "تعذر قراءة استجابة رفع الصورة.", status: http.statusCode, paymentRequired: false) }
         if !(200...299).contains(http.statusCode) || !jBool(json["ok"]) { throw APIError(message: jString(json["message"], default: "تعذر رفع الصورة."), status: http.statusCode, paymentRequired: false) }
@@ -1008,51 +1671,31 @@ extension APIClient {
     }
 }
 
-// MARK: - APNs client registration (server endpoint is included in the matching website patch)
+// MARK: - APNs registration for school advertisements.
 
 final class MurshidAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-        UNUserNotificationCenter.current().delegate = self
-        Task {
-            let center = UNUserNotificationCenter.current()
-            let granted = (try? await center.requestAuthorization(options: [.alert, .badge, .sound])) ?? false
-            if granted { await MainActor.run { UIApplication.shared.registerForRemoteNotifications() } }
-        }
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        Task { @MainActor in MurshidSchoolAdPush.shared.configure() }
         return true
     }
-
-    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        let token = deviceToken.map { String(format: "%02x", $0) }.joined()
-        UserDefaults.standard.set(token, forKey: "apns_device_token")
-        Task { await V31PushRegistrar.syncIfPossible() }
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken token: Data) {
+        Task { @MainActor in MurshidSchoolAdPush.shared.receivedToken(token) }
     }
-
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        UserDefaults.standard.set(error.localizedDescription, forKey: "apns_last_error")
+        // The app still displays school ads in-app if the signing profile has no APNs entitlement.
     }
-
-    nonisolated func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-    ) {
-        completionHandler([.banner, .sound, .badge])
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([])
     }
 }
 
 @MainActor
 enum V31PushRegistrar {
     static func syncIfPossible() async {
-        let token = UserDefaults.standard.string(forKey: "apns_device_token") ?? ""
-        let csrf = AppSession.shared.csrf
-        guard !token.isEmpty, !csrf.isEmpty, AppSession.shared.v3Authenticated else { return }
-        do {
-            _ = try await APIClient.shared.request("mobile/apns-register.php", method: "POST", body: [
-                "csrf": csrf,
-                "token": token,
-                "bundle_id": "com.muriq.murshid",
-                "platform": "ios"
-            ])
-        } catch { }
+        MurshidSchoolAdPush.shared.activate()
     }
 }
+

@@ -120,6 +120,8 @@ function coach_next_batch(PDO $pdo, int $uid, int $gradeId, int $limit = 10, int
     $items = $st->fetchAll();
     foreach ($items as &$it) {
         $it['id'] = (int)$it['id'];
+        $it['english_match']=murshid_v53_public_matching(murshid_v53_matching_definition((string)$it['question_text']));
+        if($it['english_match'])$it['question_text']='صِل كل عنصر من القائمة A بما يناسبه من القائمة B.';
         $it['options'] = [];
         if ($it['type'] === 'mcq') {
             $o = $pdo->prepare("SELECT answer_text FROM answers WHERE question_id=? ORDER BY sort_order,id");

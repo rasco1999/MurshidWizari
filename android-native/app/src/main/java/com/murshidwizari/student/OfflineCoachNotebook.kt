@@ -25,7 +25,7 @@ class OfflineCoachNotebook(private val prefs: SharedPreferences) {
             val source = JSONArray(raw)
             val all = (0 until source.length()).mapNotNull { source.optJSONObject(it) }
             val allowed = all.filter {
-                it.optInt("id") > 0 && it.optString("question").isNotBlank() &&
+                it.optInt("id") > 0 && it.optString("question").isNotBlank() && !MatchingRules.generated(it.optString("question")) &&
                     !RetiredFrenchContent.isQuestion(it.optInt("id")) &&
                     !EquationStudyRules.isFrenchSubject(0, it.optString("subject"))
             }
@@ -42,14 +42,15 @@ class OfflineCoachNotebook(private val prefs: SharedPreferences) {
     fun remember(
         userId: Int, questionId: Int, question: String, correctAnswer: String,
         explanation: String, subject: String, wasCorrect: Boolean?,
-        now: Long = System.currentTimeMillis()
+        now: Long = System.currentTimeMillis(), matching: JSONObject? = null
     ): Boolean {
-        if (userId <= 0 || questionId <= 0 || question.isBlank() || correctAnswer.isBlank() ||
+        if (userId <= 0 || questionId <= 0 || question.isBlank() || correctAnswer.isBlank() || MatchingRules.generated(question) ||
             RetiredFrenchContent.isQuestion(questionId) ||
             EquationStudyRules.isFrenchSubject(0, subject)) return false
         val saved = cards(userId).toMutableList()
         val existing = saved.firstOrNull { it.optInt("id") == questionId }
         val entry = JSONObject().apply {
+            if (matching != null) put("english_match", matching)
             put("id", questionId)
             put("question", question.trim().take(4000))
             put("correct_answer", correctAnswer.trim().take(1800))

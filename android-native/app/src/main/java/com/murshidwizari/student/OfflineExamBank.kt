@@ -164,7 +164,15 @@ internal class OfflineExamBank(context: Context) {
         }
         return OfflineExamRules.signature(
             item.optInt("id"), item.optString("type"), item.optString("text"),
-            item.optString("meaning_word"), item.optString("correct_answer"), choices
+            item.optString("meaning_word") + item.optJSONObject("english_match")?.let { def ->
+                buildString {
+                    append("matching-v53")
+                    for (side in listOf("left","right")) {
+                        val labels=def.optJSONObject(side) ?: continue
+                        for (key in labels.keys().asSequence().toList().sorted()) append(key).append(':').append(labels.optString(key)).append('\u001f')
+                    }
+                }
+            }.orEmpty(), item.optString("correct_answer"), choices
         )
     }
 

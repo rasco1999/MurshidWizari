@@ -1,7 +1,7 @@
 /* Accessible, scoped matching editor. Stores only complete one-to-one answers. */
 (() => {
   'use strict';
-  document.querySelectorAll('[data-v53-matching]').forEach(host => {
+  function mount(host) {
     const def = JSON.parse(host.dataset.definition || '{}');
     const input = host.querySelector('input');
     const left = Object.entries(def.left || {}).sort((a,b) => Number(a[0])-Number(b[0]));
@@ -40,5 +40,7 @@
       if(!complete()) {event.preventDefault();event.stopImmediatePropagation();status.textContent='أكمل جميع التوصيلات أولاً.';board.querySelector('button')?.focus();}
     },true);
     render();
-  });
+  }
+  window.MurshidMatching = {mount};
+  document.querySelectorAll('[data-v53-matching]').forEach(mount);
 })();
