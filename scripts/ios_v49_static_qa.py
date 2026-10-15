@@ -41,7 +41,7 @@ def main() -> None:
         (auth, "V49StudyStore.shared.rememberGraded", "Official exam saves reviewed questions"),
         (api, "V49StudyStore.shared.bind(to: user)", "Cache bound to authenticated student"),
         (api, "V49StudyStore.shared.eraseOnLogout", "Logout erases cached review"),
-        (app, "showingOfflineReview", "Offline entry available without bootstrap success"),
+        (app, "V49OfflineAccessView()", "Offline entry available without bootstrap success"),
         (home, "NavigationLink(destination: V49StudyHubView())", "Home/account route to coach"),
     ]
     for path, needle, label in checks:

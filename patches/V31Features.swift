@@ -51,6 +51,7 @@ struct V31HomeView: View {
                 welcomeHeader
                 if !device.isOnline { offlineBanner }
                 subscriptionStrip
+                V50FreeMonthOfferCard()
                 V31WebsiteHeroSlider()
                 releaseUpdateStrip
                 performanceStrip
@@ -104,7 +105,7 @@ struct V31HomeView: View {
     private var welcomeHeader: some View {
         ZStack(alignment: .topTrailing) {
             LinearGradient(
-                colors: [.murshidNavy, Color(red: 0.06, green: 0.26, blue: 0.51), .murshidBlue],
+                colors: [.murshidNavy, .murshidAccentSecondary, .murshidBlue],
                 startPoint: .topTrailing, endPoint: .bottomLeading
             )
             Circle()
@@ -498,87 +499,7 @@ struct V31HomeView: View {
         }
     }
 
-    // Official website accounts. HTTPS universal links open the installed social
-    // app when supported by iOS; otherwise they remain reachable in Safari.
-    // Dynamic system surface/text colors follow both manually selected themes.
-    private var socialLinksFooter: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            V3SectionHeader(
-                title: "تابعنا على منصات التواصل",
-                subtitle: "كل جديد من منصة المرشد الوزاري",
-                icon: "bubble.left.and.bubble.right.fill"
-            )
-            MurshidCard {
-                HStack(spacing: 9) {
-                    socialLinkButton(
-                        title: "إنستغرام",
-                        icon: "camera.fill",
-                        url: URL(string: "https://www.instagram.com/murshid.iq/")!,
-                        color: Color(red: 0.76, green: 0.19, blue: 0.50)
-                    )
-                    socialLinkButton(
-                        title: "فيسبوك",
-                        icon: "f",
-                        url: URL(string: "https://www.facebook.com/Murshidiq/")!,
-                        color: Color(red: 0.12, green: 0.33, blue: 0.77)
-                    )
-                    socialLinkButton(
-                        title: "تيليجرام",
-                        icon: "paperplane.fill",
-                        url: URL(string: "https://t.me/El_Murshed_iq")!,
-                        color: Color(red: 0.10, green: 0.57, blue: 0.79)
-                    )
-                }
-                .frame(maxWidth: .infinity)
-                Text("اضغط على الأيقونة لزيارة حسابنا الرسمي")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 5)
-            }
-        }
-        .padding(.top, 5)
-        .accessibilityElement(children: .contain)
-    }
-
-    private func socialLinkButton(
-        title: String,
-        icon: String,
-        url: URL,
-        color: Color
-    ) -> some View {
-        Link(destination: url) {
-            VStack(spacing: 9) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(color)
-                        .frame(width: 55, height: 55)
-                        .shadow(color: color.opacity(0.20), radius: 7, y: 3)
-
-                    if icon == "f" {
-                        Text("f")
-                            .font(.system(size: 36, weight: .heavy, design: .rounded))
-                            .foregroundStyle(.white)
-                            .offset(y: 3)
-                    } else {
-                        Image(systemName: icon)
-                            .font(.system(size: 25, weight: .semibold))
-                            .foregroundStyle(.white)
-                    }
-                }
-                Text(title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-            .frame(maxWidth: .infinity, minHeight: 94)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("فتح حساب منصة المرشد الوزاري على \(title)")
-        .accessibilityHint("يفتح الرابط خارج التطبيق")
-    }
+    private var socialLinksFooter: some View { V498SocialLinksFooter() }
 
     private var isDarkAppearance: Bool {
         appearance == "dark" || (appearance == "system" && colorScheme == .dark)
@@ -838,39 +759,36 @@ private struct V31WebsiteHeroSlider: View {
 // MARK: - Published school advertisements
 
 struct V31SchoolAdsView: View {
-    @State private var ads: [JSON] = []
-    @State private var loading = true
-    @State private var error = ""
+    @ObservedObject private var feed = V498SchoolAdsStore.shared
 
     private var tickerText: String {
-        ads.map { "\(jString($0["school"])) — \(jString($0["text"]))" }
+        feed.ads.map { "\($0.school) — \($0.text)" }
             .joined(separator: "     •     ")
     }
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 14) {
-                if loading {
+                if !feed.hasLoaded && feed.isLoading {
                     V3SkeletonCard(height: 130)
-                } else if ads.isEmpty {
+                } else if feed.ads.isEmpty && feed.error.isEmpty {
                     EmptyStateView(systemImage: "megaphone", title: "لا توجد إعلانات مدرسية الآن", message: "ستظهر الإعلانات هنا تلقائياً بعد نشرها من الإدارة.")
-                } else {
+                } else if !feed.ads.isEmpty {
                     V31SchoolAdTicker(text: tickerText)
-                    ForEach(ads.indices, id: \.self) { index in
-                        let ad = ads[index]
+                    ForEach(feed.ads) { ad in
                         MurshidCard {
                             VStack(alignment: .leading, spacing: 10) {
-                                Label(jString(ad["school"]), systemImage: "building.2.fill")
+                                Label(ad.school, systemImage: "building.2.fill")
                                     .font(.headline).foregroundStyle(Color.murshidBlue)
-                                Text(jString(ad["text"])).font(.body)
+                                Text(ad.text).font(.body)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                 }
-                if !error.isEmpty {
-                    V3InlineMessage(text: error, icon: "exclamationmark.triangle.fill", tone: .warning)
+                if !feed.error.isEmpty {
+                    V3InlineMessage(text: feed.error, icon: "exclamationmark.triangle.fill", tone: .warning)
                 }
             }
             .padding(16)
@@ -879,27 +797,8 @@ struct V31SchoolAdsView: View {
         .background(Color.murshidBackground.ignoresSafeArea())
         .navigationTitle("الإعلانات")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await loadAds() }
-        .refreshable { await loadAds() }
-    }
-
-    private func loadAds() async {
-        do {
-            let response = try await APIClient.shared.request("mobile/bootstrap.php")
-            await MainActor.run {
-                ads = jArray(response["ads"]).filter {
-                    !jString($0["school"]).isEmpty && !jString($0["text"]).isEmpty
-                        && jBool($0["active"], default: true)
-                }
-                loading = false
-                error = ""
-            }
-        } catch let fetchError {
-            await MainActor.run {
-                loading = false
-                error = "تعذر تحديث الإعلانات: \(fetchError.localizedDescription)"
-            }
-        }
+        .task { await feed.refresh() }
+        .refreshable { await feed.refresh() }
     }
 }
 
@@ -1205,6 +1104,8 @@ private struct V31AccountRow: View {
 struct V31AccountView: View {
     @EnvironmentObject var app: AppSession
     @EnvironmentObject var device: DeviceServices
+    @AppStorage("student_palette") private var paletteID = "royal"
+    @AppStorage("appearance") private var appearance = "system"
     @AppStorage("biometric_lock") private var biometricLock = false
     @AppStorage("study_reminder") private var studyReminder = false
     @AppStorage("study_reminder_hour") private var reminderHour = 19
@@ -1235,6 +1136,7 @@ struct V31AccountView: View {
                 subscriptionCard
                 activationCodeCard
                 servicesSection
+                appearanceSection
                 securitySection
                 logoutSection
                 if !avatarMessage.isEmpty { V3InlineMessage(text: avatarMessage, icon: "person.crop.circle.badge.checkmark", tone: .success) }
@@ -1451,6 +1353,57 @@ struct V31AccountView: View {
                     NavigationLink(destination: SupportView()) { V31AccountRowLabel(title: "خدمة العملاء", subtitle: "محادثة مباشرة مع الدعم", icon: "message.fill") }
                     Divider().padding(.leading, 48)
 
+                }
+            }
+        }
+    }
+
+    private var appearanceSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            V3SectionHeader(title: "الألوان والمظهر", subtitle: "غيّر تصميم تطبيقك وقتما تريد", icon: "paintpalette.fill")
+            MurshidCard {
+                VStack(alignment: .leading, spacing: 15) {
+                    Label("اختر هويتك اللونية", systemImage: "paintbrush.pointed.fill")
+                        .font(.subheadline.bold()).foregroundStyle(Color.murshidBlue)
+                    HStack(spacing: 8) {
+                        ForEach(StudentPalette.allCases) { palette in
+                            Button {
+                                paletteID = palette.rawValue
+                                selectionHaptic()
+                            } label: {
+                                VStack(spacing: 8) {
+                                    Image(systemName: paletteID == palette.rawValue ? "checkmark" : "sparkles")
+                                        .font(.system(size:18,weight:.bold))
+                                        .foregroundStyle(.white)
+                                        .frame(width: 53, height: 53)
+                                        .background(LinearGradient(colors:[palette.accent,palette.secondary],startPoint:.topLeading,endPoint:.bottomTrailing),in:RoundedRectangle(cornerRadius:17,style:.continuous))
+                                    Text(palette.title).font(.subheadline.bold()).foregroundStyle(.primary)
+                                    Text(palette.detail)
+                                        .font(.system(size:10,weight:.medium)).foregroundStyle(.secondary)
+                                        .lineLimit(1).minimumScaleFactor(0.8)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12).padding(.horizontal, 3)
+                                .background(Color.murshidBlue.opacity(paletteID == palette.rawValue ? 0.10 : 0.025),in:RoundedRectangle(cornerRadius:18,style:.continuous))
+                                .overlay(RoundedRectangle(cornerRadius:18,style:.continuous)
+                                    .stroke(paletteID == palette.rawValue ? Color.murshidBlue : Color.murshidBlue.opacity(0.12),lineWidth:paletteID == palette.rawValue ? 2 : 1))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("مظهر \(palette.title): \(palette.detail)")
+                            .accessibilityAddTraits(paletteID == palette.rawValue ? .isSelected : [])
+                        }
+                    }
+                    Divider()
+                    Label("إضاءة التطبيق", systemImage: "circle.lefthalf.filled")
+                        .font(.subheadline.bold()).foregroundStyle(Color.murshidBlue)
+                    Picker("إضاءة التطبيق", selection: $appearance) {
+                        Label("النظام", systemImage: "iphone").tag("system")
+                        Label("فاتح", systemImage: "sun.max.fill").tag("light")
+                        Label("داكن", systemImage: "moon.fill").tag("dark")
+                    }
+                    .pickerStyle(.segmented)
+                    Text("يُحفظ اختيارك على هذا الآيفون، ولا يغيّر بيانات حسابك أو اشتراكك.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
@@ -1718,51 +1671,30 @@ extension APIClient {
     }
 }
 
-// MARK: - APNs client registration (server endpoint is included in the matching website patch)
+// MARK: - APNs registration for school advertisements.
 
 final class MurshidAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-        UNUserNotificationCenter.current().delegate = self
-        Task {
-            let center = UNUserNotificationCenter.current()
-            let granted = (try? await center.requestAuthorization(options: [.alert, .badge, .sound])) ?? false
-            if granted { await MainActor.run { UIApplication.shared.registerForRemoteNotifications() } }
-        }
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        Task { @MainActor in MurshidSchoolAdPush.shared.configure() }
         return true
     }
-
-    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        let token = deviceToken.map { String(format: "%02x", $0) }.joined()
-        UserDefaults.standard.set(token, forKey: "apns_device_token")
-        Task { await V31PushRegistrar.syncIfPossible() }
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken token: Data) {
+        Task { @MainActor in MurshidSchoolAdPush.shared.receivedToken(token) }
     }
-
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        UserDefaults.standard.set(error.localizedDescription, forKey: "apns_last_error")
+        // The app still displays school ads in-app if the signing profile has no APNs entitlement.
     }
-
-    nonisolated func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-    ) {
-        completionHandler([.banner, .sound, .badge])
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([])
     }
 }
 
 @MainActor
 enum V31PushRegistrar {
     static func syncIfPossible() async {
-        let token = UserDefaults.standard.string(forKey: "apns_device_token") ?? ""
-        let csrf = AppSession.shared.csrf
-        guard !token.isEmpty, !csrf.isEmpty, AppSession.shared.v3Authenticated else { return }
-        do {
-            _ = try await APIClient.shared.request("mobile/apns-register.php", method: "POST", body: [
-                "csrf": csrf,
-                "token": token,
-                "bundle_id": "com.muriq.murshid",
-                "platform": "ios"
-            ])
-        } catch { }
+        MurshidSchoolAdPush.shared.activate()
     }
 }

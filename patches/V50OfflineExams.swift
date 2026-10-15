@@ -220,7 +220,8 @@ final class V50OfflineExamBank: ObservableObject {
             }
             let type = jString(raw["type"])
             guard V50OfflineRules.supports(type, optionCount: options.count),
-                  jInt(raw["id"]) > 0, !jString(raw["text"]).isEmpty else { continue }
+                  jInt(raw["id"]) > 0, !V520RetiredFrenchContent.isQuestion(jInt(raw["id"])),
+                  !V520RetiredFrenchContent.isChapter(chapterID), !jString(raw["text"]).isEmpty else { continue }
             contents.append(V50OfflineQuestion(
                 id: jInt(raw["id"]), type: type, text: jString(raw["text"]),
                 meaningWord: jString(raw["meaning_word"]), options: options,

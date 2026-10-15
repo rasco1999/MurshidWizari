@@ -1716,9 +1716,18 @@ struct V49StudentAvatar: View {
 
 struct MainV3TabView: View {
     @EnvironmentObject var app: AppSession
+    @EnvironmentObject private var device: DeviceServices
+    @Environment(\.scenePhase) private var scenePhase
+    @ObservedObject private var schoolAds = V498SchoolAdsStore.shared
     @State private var selection = 0
     @State private var visited: Set<Int> = [0]
     @State private var keyboardVisible = false
+
+    private var canViewAds: Bool {
+        scenePhase == .active && app.v3Authenticated && !device.isLocked
+    }
+    private var canMonitorAds: Bool { canViewAds && device.isOnline }
+    private var adsMonitorKey: String { "\(app.user?.id ?? 0):\(canViewAds):\(device.isOnline)" }
 
     // Five destinations fit in one native bottom bar without a Study tab.
     private let tabs: [(title: String, symbol: String)] = [
@@ -1733,15 +1742,15 @@ struct MainV3TabView: View {
         ZStack {
             Color.murshidBackground.ignoresSafeArea()
             if visited.contains(0) {
-                tabPane(0) { NavigationStack { tabRoot { V31HomeView() } } }
+                tabPane(0) { NavigationStack { tabRoot(0) { V31HomeView() } } }
             }
             if visited.contains(1) {
-                tabPane(1) { NavigationStack { tabRoot { V3TestsView() } } }
+                tabPane(1) { NavigationStack { tabRoot(1) { V3TestsView() } } }
             }
             if visited.contains(2) {
                 tabPane(2) {
                     NavigationStack {
-                        tabRoot {
+                        tabRoot(2) {
                             if app.subscribed { V44PredictionsView() }
                             else { V31PredictionsLockedView() }
                         }
@@ -1749,20 +1758,34 @@ struct MainV3TabView: View {
                 }
             }
             if visited.contains(3) {
-                tabPane(3) { NavigationStack { tabRoot { V31SchoolAdsView() } } }
+                tabPane(3) { NavigationStack { tabRoot(3) { V31SchoolAdsView() } } }
             }
             if visited.contains(4) {
-                tabPane(4) { NavigationStack { tabRoot { V31AccountView() } } }
+                tabPane(4) { NavigationStack { tabRoot(4) { V31AccountView() } } }
             }
         }
         .tint(.murshidBlue)
         .environment(\.layoutDirection, .rightToLeft)
         .onChange(of: selection) { value in
             visited.insert(value)
+            schoolAds.setViewingAds(value == 3 && canViewAds)
             selectionHaptic()
         }
+        .task(id: adsMonitorKey) {
+            schoolAds.setViewingAds(selection == 3 && canViewAds)
+            guard canMonitorAds else { return }
+            await schoolAds.monitor(userID: app.user?.id ?? 0)
+        }
+        .onDisappear { schoolAds.setViewingAds(false) }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardVisible = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardVisible = false }
+        .onReceive(NotificationCenter.default.publisher(for: .murshidSchoolAdOpened)) { _ in
+            selection = 3
+            _ = MurshidSchoolAdPush.shared.takePendingSchoolAd()
+        }
+        .onAppear {
+            if MurshidSchoolAdPush.shared.takePendingSchoolAd() { selection = 3 }
+        }
         .task { await keepSessionAlive() }
         .onOpenURL { url in
             switch (url.host ?? url.path.replacingOccurrences(of: "/", with: "")).lowercased() {
@@ -1785,10 +1808,12 @@ struct MainV3TabView: View {
     // Keep the five-tab bar on top-level screens only. A pushed question/detail
     // screen may have its own pinned answer/next buttons; a bar applied outside
     // NavigationStack would cover those controls and the last scroll content.
-    private func tabRoot<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+    private func tabRoot<Content: View>(_ index: Int, @ViewBuilder content: () -> Content) -> some View {
         content()
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if !keyboardVisible { bottomBar }
+                // Retained navigation stacks must not expose duplicate tab
+                // buttons through accessibility while their pane is hidden.
+                if selection == index && !keyboardVisible { bottomBar }
             }
     }
 
@@ -1805,6 +1830,12 @@ struct MainV3TabView: View {
                         } else {
                             Image(systemName: tabs[index].symbol)
                                 .font(.system(size: 19, weight: selection == index ? .bold : .medium))
+                                .overlay(alignment: .topTrailing) {
+                                    if index == 3 {
+                                        V498UnreadAdBadge(count: schoolAds.unreadCount)
+                                            .offset(x: 11, y: -9)
+                                    }
+                                }
                         }
                         Text(tabs[index].title)
                             .font(.system(size: 10, weight: selection == index ? .bold : .medium))
@@ -1817,6 +1848,8 @@ struct MainV3TabView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(tabs[index].title)
+                .accessibilityValue(index == 3 && schoolAds.unreadCount > 0 ? "\(schoolAds.unreadCount) إعلانات جديدة" : "")
+                .accessibilityIdentifier("student-tab-\(index)")
             }
         }
         .padding(.horizontal, 5)
@@ -2585,6 +2618,10 @@ struct V3ContestView: View {
                     LazyVStack(spacing: 16) {
                         V3IntroCard(eyebrow: "تحدي المليون", title: "تقدمك بين الطلاب", text: "الترتيب يعتمد على نقاط المنصة والإجابات الصحيحة ضمن فترة التحدي.", icon: "trophy.fill")
                         V45ContestInstructionsLink()
+                        Text("بداية التحدي: " + jString((contest["config"] as? JSON)?["start_at"]))
+                            .font(.subheadline).foregroundStyle(.secondary)
+                        Text("نهاية التحدي: " + jString((contest["config"] as? JSON)?["end_at"]))
+                            .font(.subheadline).foregroundStyle(.secondary)
                         myRankCard
                         leaderboard(title: "متصدرو تحدي المليون", rows: jArray(contest["leaderboard"]), rankKey: "rank", xpKey: "xp")
                         leaderboard(title: "ترتيب الموسم", rows: jArray(season["leaderboard"]), rankKey: "rank", xpKey: "xp")
@@ -3146,11 +3183,12 @@ struct V3ExamView: View {
                         .background(Color.murshidBlue.opacity(0.10), in: Capsule())
                     Spacer()
                 }
-                Text(murshidQuestionDisplayText(q.text))
+                Text(V515MathBidi.display(murshidQuestionDisplayText(q.text)))
                     .font(.title3.weight(.semibold))
                     .lineSpacing(5)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
+                V515EquationSteps(question: q.text, subject: subject.name, topic: topic.name, kind: q.type)
                 let meta = [q.examYear, q.examRound].filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
                 if !meta.isEmpty {
                     Label(meta.joined(separator: " • "), systemImage: "calendar")
@@ -3202,6 +3240,9 @@ struct V3ExamView: View {
                         .padding(10)
                         .scrollContentBackground(.hidden)
                         .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    if V515EquationGuide.applies(question: q.text, subject: subject.name, kind: q.type) {
+                        V515MathKeypad(answer: bindingAnswer(q.id))
+                    }
                 }
 
                 if !isAnswered(q) && options.isEmpty {
@@ -3295,7 +3336,7 @@ struct V3ExamView: View {
                         Text("الإجابة النموذجية")
                             .font(.caption.bold())
                             .foregroundStyle(.secondary)
-                        Text(serverCorrectAnswer)
+                        Text(V515MathBidi.display(serverCorrectAnswer))
                             .font(.body.weight(.semibold))
                             .foregroundStyle(.green)
                     }
@@ -3478,6 +3519,18 @@ struct V3ExamView: View {
 
     private func load() async {
         await MainActor.run { loading = true; error = ""; startedAt = Date() }
+        // Protect against old topic deep links or stale API caches after
+        // removing French from all three curricula.
+        if V520RetiredFrenchContent.isChapter(topic.id) ||
+           [33, 36, 40].contains(subject.id) ||
+           MurshidSubjectCatalog.isFrenchSubject(subject.name) {
+            await MainActor.run {
+                questions = []
+                error = "هذه المادة غير متاحة في المنهج الحالي."
+                loading = false
+            }
+            return
+        }
         do {
             var query: [URLQueryItem] = [URLQueryItem(name: "chapter_id", value: "\(topic.id)")]
             if filterType != "all" { query.append(URLQueryItem(name: "type", value: filterType)) }
@@ -3486,7 +3539,7 @@ struct V3ExamView: View {
             if filterDifficulty != "all" { query.append(URLQueryItem(name: "difficulty", value: filterDifficulty)) }
             if filterState != "all" { query.append(URLQueryItem(name: "state", value: filterState)) }
             if filterShuffle { query.append(URLQueryItem(name: "shuffle", value: "1")) }
-            let d = try await APIClient.shared.request("mobile/exam.php", query: query)
+            let d = try await APIClient.shared.request("mobile/exam.php", query: query, fresh: true)
             if let uid = app.user?.id {
                 _ = V50OfflineExamBank.shared.rememberTopic(userID: uid, chapterID: topic.id,
                     name: topic.name, source: jArray(d["questions"]))
@@ -3495,6 +3548,7 @@ struct V3ExamView: View {
             let qs = jArray(d["questions"])
                 .map(Question.init)
                 .filter { question in
+                    guard !V520RetiredFrenchContent.isQuestion(question.id) else { return false }
                     guard murshidQuestionIsStudentReady(question.text) else { return false }
                     guard murshidQuestionClientValid(question) else { return false }
                     guard murshidQuestionAnswerCompatible(question: question.text, serverAnswer: question.correctAnswer) else { return false }
@@ -5104,4 +5158,198 @@ private func v3IsValidEmail(_ value: String) -> Bool {
 private func v3IsValidIraqiPhone(_ value: String) -> Bool {
     let digits = value.filter(\.isNumber)
     return digits.count == 11 && digits.hasPrefix("07")
+}
+
+
+
+
+// MARK: - v5.15: accessible formula guidance and native equation tools
+// These steps do not reveal the model answer and never mutate server grades.
+enum V515EquationGuide {
+    static func applies(question: String, subject: String, kind: String) -> Bool {
+        if kind == "calculation" { return true }
+        let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        if q.count < 7 { return false }
+        if ["=", "×", "÷", "√", "∑", "∫", "∆", "Δ", "→", "⇌", "²", "³", "^"].contains(where: { q.contains($0) }) { return true }
+        // Match complete mathematical tokens, not 'sin' inside 'sing',
+        // 'cos' inside 'because', or 'mol' inside an English paragraph.
+        if q.range(of: #"(?i)\b(?:sin|cos|tan|mol)\b"#, options: .regularExpression) != nil { return true }
+        let quantitative = ["رياضيات", "فيزياء", "كيمياء", "أحياء", "اقتصاد", "جغرافية", "علوم"].contains { subject.contains($0) }
+        let words = ["احسب", "أوجد", "جد قيمة", "معادلة", "قانون", "الميل", "العمودي", "المحيط", "مساحة", "الكتلة المولية", "حجم الغاز", "التخفيف", "التركيز", "النسبة الوراثية"]
+        return quantitative && words.contains { q.contains($0) }
+    }
+    static func steps(question: String, subject: String, topic: String) -> [String] {
+        let context = question + " " + topic
+        if ["المستقيم", "الميل", "عمودي", "إحداثيات"].contains(where: { context.contains($0) }) {
+            return ["حدّد المطلوب: الميل أو معادلة المستقيم أو الإحداثيات.",
+                    "افصل النقطتين واكتب السينات والصادات مع إشاراتها.",
+                    "اكتب قانون الميل، واستخدم علاقة التعامد أو التوازي عند الحاجة.",
+                    "عوّض بصيغة المستقيم ثم تحقّق من الحل باستخدام نقطة معطاة."]
+        }
+        if subject.contains("كيمياء") {
+            return ["حدّد نوع المسألة: تفاعل، مولات، تركيز، أم اتزان.",
+                    "اكتب المعطيات ووحداتها والمجهول المطلوب.",
+                    "اكتب القانون أو المعادلة الكيميائية الموزونة قبل التعويض.",
+                    "احسب بالترتيب وتحقّق من الوحدات وتوازن الذرات."]
+        }
+        if subject.contains("فيزياء") {
+            return ["حدّد الكمية الفيزيائية المطلوبة.",
+                    "افصل المعطيات ورموزها وحوّل الوحدات عند الحاجة.",
+                    "اختر القانون الذي يربط المجهول بالمعطيات ورتّبه.",
+                    "عوّض بالأرقام، ثم تحقّق من وحدة القياس والنتيجة."]
+        }
+        if subject.contains("أحياء") || context.contains("وراث") || context.contains("جين") {
+            return ["حدّد العلاقة الوراثية أو النسبة المطلوب حسابها.",
+                    "رمز إلى الصفات والأليلات وافصل المعطيات.",
+                    "رتّب جدول التزاوج أو الاحتمالات ثم احسب النسب.",
+                    "تأكّد من مجموع الاحتمالات ومطابقة الناتج للسؤال."]
+        }
+        return ["حدّد المطلوب والمجهول بدقة.",
+                "افصل المعطيات والرموز والإشارات ووحدات القياس.",
+                "اكتب القانون أو الخاصية الرياضية قبل التعويض.",
+                "نفّذ الحسابات بالترتيب ثم تحقّق من الناتج بالتعويض."]
+    }
+}
+struct V515EquationSteps: View {
+    let question: String
+    let subject: String
+    let topic: String
+    let kind: String
+    @State private var expanded = true
+    var body: some View {
+        if V515EquationGuide.applies(question: question, subject: subject, kind: kind) {
+            VStack(alignment: .leading, spacing: 10) {
+                Button { withAnimation { expanded.toggle() } } label: {
+                    HStack {
+                        Label("طريقة الحل خطوة بخطوة", systemImage: "list.number")
+                            .font(.subheadline.bold())
+                        Spacer()
+                        Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.murshidBlue)
+                if expanded {
+                    ForEach(Array(V515EquationGuide.steps(question: question, subject: subject, topic: topic).enumerated()), id: \.offset) { item in
+                        HStack(alignment: .top, spacing: 10) {
+                            Text("\(item.offset + 1)")
+                                .font(.caption.bold().monospacedDigit())
+                                .frame(width: 25, height: 25)
+                                .background(Color.murshidBlue.opacity(0.1), in: Circle())
+                            Text(item.element)
+                                .font(.subheadline)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Text("خطوات تساعدك على التفكير ولا تكشف الإجابة النموذجية.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            .padding(12)
+            .background(Color.murshidBlue.opacity(0.055), in: RoundedRectangle(cornerRadius: 13))
+        }
+    }
+}
+struct V515MathKeypad: View {
+    @Binding var answer: String
+    @State private var showGrid = false
+    @State private var points: [CGPoint] = []
+    private let symbols: [(String,String)] = [("−","-"),("+","+"),("×","*"),("÷","/"),("=","="),("( )","()"),
+                                             ("x","x"),("y","y"),("²","^2"),("√","sqrt("),("π","pi"),("/","/")]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text("لوحة المعادلات").font(.caption.bold()).foregroundStyle(.secondary)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 6), spacing: 6) {
+                ForEach(Array(symbols.enumerated()), id: \.offset) { item in
+                    Button(item.element.0) { answer += item.element.1 }
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                        .background(Color.murshidBlue.opacity(0.09), in: RoundedRectangle(cornerRadius: 9))
+                        .buttonStyle(.plain)
+                }
+            }
+            HStack {
+                Button { if !answer.isEmpty { answer.removeLast() } } label: {
+                    Label("حذف", systemImage: "delete.left")
+                }
+                Spacer()
+                Button { withAnimation { showGrid.toggle() } } label: {
+                    Label(showGrid ? "إخفاء الشبكة" : "شبكة الإحداثيات", systemImage: "square.grid.3x3")
+                }
+            }
+            .font(.caption.bold()).buttonStyle(.bordered)
+            if showGrid {
+                V515GraphGrid(points: $points)
+                    .environment(\.layoutDirection, .leftToRight)
+                    .frame(height: 230)
+                HStack {
+                    Button("مسح النقاط") { points = [] }.disabled(points.isEmpty)
+                    Spacer()
+                    Button("إدراج الإحداثيات") {
+                        let coordinates = points.map { "(\(Int($0.x)),\(Int($0.y)))" }.joined(separator: "، ")
+                        if !coordinates.isEmpty { answer += (answer.isEmpty ? "" : " ") + coordinates }
+                    }.disabled(points.isEmpty)
+                }
+                .font(.caption.bold()).buttonStyle(.bordered)
+                Text("استخدم الشبكة للمساعدة، وتُصحّح الإجابة المكتوبة فقط بعد إرسالها.")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+struct V515GraphGrid: View {
+    @Binding var points: [CGPoint]
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                Canvas { context, size in
+                    for n in 0...10 {
+                        let x = CGFloat(n) * size.width / 10
+                        let y = CGFloat(n) * size.height / 10
+                        var vertical = Path()
+                        vertical.move(to: CGPoint(x: x, y: 0))
+                        vertical.addLine(to: CGPoint(x: x, y: size.height))
+                        var horizontal = Path()
+                        horizontal.move(to: CGPoint(x: 0, y: y))
+                        horizontal.addLine(to: CGPoint(x: size.width, y: y))
+                        let tint: Color = n == 5 ? .secondary.opacity(0.8) : .secondary.opacity(0.18)
+                        context.stroke(vertical, with: .color(tint), lineWidth: n == 5 ? 1.5 : 1)
+                        context.stroke(horizontal, with: .color(tint), lineWidth: n == 5 ? 1.5 : 1)
+                    }
+                }
+                ForEach(Array(points.enumerated()), id: \.offset) { item in
+                    Circle().fill(Color.murshidBlue).frame(width: 11, height: 11)
+                        .position(x: (item.element.x + 5) / 10 * proxy.size.width,
+                                  y: (5 - item.element.y) / 10 * proxy.size.height)
+                }
+            }
+            .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0).onEnded { gesture in
+                guard proxy.size.width > 0, proxy.size.height > 0 else { return }
+                let x = max(-5, min(5, Int((gesture.location.x / proxy.size.width * 10 - 5).rounded())))
+                let y = max(-5, min(5, Int((5 - gesture.location.y / proxy.size.height * 10).rounded())))
+                if points.count >= 6 { points.removeFirst() }
+                points.append(CGPoint(x: x, y: y))
+            })
+        }
+    }
+}
+
+
+// Mathematical notation embedded in Arabic needs an explicit left-to-right
+// isolate; otherwise (0,-4) can appear on screen as (4-,0).
+enum V515MathBidi {
+    static func display(_ raw: String) -> String {
+        guard let regex = try? NSRegularExpression(
+            pattern: #"\(\s*[+\-−]?[0-9٠-٩۰-۹]+(?:\.[0-9٠-٩۰-۹]+)?\s*[,،]\s*[+\-−]?[0-9٠-٩۰-۹]+(?:\.[0-9٠-٩۰-۹]+)?\s*\)"#
+        ) else { return raw }
+        var result = raw
+        let matches = regex.matches(in: raw, range: NSRange(raw.startIndex..., in: raw))
+        for match in matches.reversed() {
+            guard let range = Range(match.range, in: result) else { continue }
+            result.replaceSubrange(range, with: "\u{2066}" + result[range] + "\u{2069}")
+        }
+        return result
+    }
 }

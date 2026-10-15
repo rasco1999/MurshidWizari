@@ -81,13 +81,18 @@ final class AppSession: ObservableObject {
         return Int((Double(jInt(stats["correct_answers"])) / Double(total) * 100).rounded())
     }
 
-    func reset(expired: Bool = false) {
-        // Review cards are tied to the last authenticated student and must not
-        // survive an explicit logout or a server-confirmed expired session.
+    func reset(expired: Bool = false, eraseOfflineStudy: Bool = false) {
+        // Server cookies may expire on the next launch when "remember me" is
+        // unchecked. That is NOT an explicit logout and must never destroy
+        // the previously verified, device-locked offline review notebook.
+        // Actual logout or password reset explicitly revokes that notebook.
         ResponseCache.shared.clearForCurrentUser()
         URLCache.shared.removeAllCachedResponses()
-        if !expired { V50OfflineExamBank.shared.clear() }
-        V49StudyStore.shared.eraseOnLogout(userID: user?.id)
+        if eraseOfflineStudy {
+            V50OfflineExamBank.shared.clear()
+            V49StudyStore.shared.eraseOnLogout(userID: user?.id)
+        }
+        V498SchoolAdsStore.shared.bind(userID: 0)
         authenticated = false
         v3Authenticated = false
         bootstrapNetworkFailed = false
@@ -112,6 +117,14 @@ final class AppSession: ObservableObject {
         let u = json["user"] as? JSON ?? [:]
         user = UserSummary(id: jInt(u["id"]), name: jString(u["name"]), grade: jString(u["grade"]), gradeID: jInt(u["grade_id"]))
         if let user { V49StudyStore.shared.bind(to: user) }
+        if let user {
+            V498SchoolAdsStore.shared.bind(userID: user.id)
+            // Seed once. A slower unrelated home/account bootstrap must not
+            // overwrite a newer response from the dedicated live-ad monitor.
+            if !V498SchoolAdsStore.shared.hasLoaded, let rows = json["ads"] as? [JSON] {
+                V498SchoolAdsStore.shared.ingest(rows, for: user.id)
+            }
+        }
         avatarURL = jString(u["avatar_url"])
         avatarRevision = jString(u["avatar_revision"])
         subjects = MurshidSubjectCatalog.visibleSubjects(jArray(json["subjects"]).map(Subject.init))
@@ -163,6 +176,10 @@ final class APIClient {
 
     private init() {
         let config = URLSessionConfiguration.default
+        #if V498_QA
+        // CI-only transport: deterministic fixtures, no real account/server writes.
+        config.protocolClasses = [V498QAURLProtocol.self]
+        #endif
         config.httpCookieStorage = .shared
         config.httpShouldSetCookies = true
         // API requests work on Wi-Fi, 4G, 5G and Low Data Mode. Optional
@@ -176,8 +193,6 @@ final class APIClient {
         // Bound stalled DNS/connectivity requests; two safe read attempts remain enabled.
         config.timeoutIntervalForRequest = 18
         config.timeoutIntervalForResource = 38
-        // All authorization and sync reads must reach the server. Optional cached
-        // screens use the protected, account-scoped ResponseCache explicitly.
         URLCache.shared.removeAllCachedResponses()
         let legacy = URLCache(memoryCapacity: 0, diskCapacity: 96 * 1024 * 1024, diskPath: "MurshidHTTP")
         legacy.removeAllCachedResponses()
@@ -191,7 +206,7 @@ final class APIClient {
         session = URLSession(configuration: config)
     }
 
-    func request(_ path: String, method: String = "GET", body: JSON? = nil, query: [URLQueryItem] = [], cacheKey: String? = nil) async throws -> JSON {
+    func request(_ path: String, method: String = "GET", body: JSON? = nil, query: [URLQueryItem] = [], cacheKey: String? = nil, fresh: Bool = false) async throws -> JSON {
         guard var components = URLComponents(url: baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false) else {
             throw APIError(message: "تعذر تكوين عنوان الطلب.", status: 0, paymentRequired: false)
         }
@@ -199,6 +214,10 @@ final class APIClient {
         guard let url = components.url else { throw APIError(message: "عنوان الطلب غير صالح.", status: 0, paymentRequired: false) }
 
         var req = URLRequest(url: url)
+        if fresh {
+            req.cachePolicy = .reloadIgnoringLocalCacheData
+            req.setValue("no-cache, no-store", forHTTPHeaderField: "Cache-Control")
+        }
         req.httpMethod = method
         // A metered/Low Data Mode connection must never disable essential API calls.
         req.allowsCellularAccess = true
@@ -375,7 +394,7 @@ final class APIClient {
             throw APIError(message: parsed.text.isEmpty ? "تعذر تغيير كلمة المرور." : parsed.text, status: response.statusCode, paymentRequired: false)
         }
         if let cookies = HTTPCookieStorage.shared.cookies { cookies.forEach(HTTPCookieStorage.shared.deleteCookie) }
-        AppSession.shared.reset()
+        AppSession.shared.reset(eraseOfflineStudy: true)
         return parsed.text
     }
 
@@ -430,8 +449,12 @@ final class APIClient {
 
     func logout() async throws {
         let csrf = AppSession.shared.csrf
-        if !csrf.isEmpty { _ = try await request("mobile/logout.php", method: "POST", body: ["csrf": csrf]) }
-        AppSession.shared.reset()
+        if !csrf.isEmpty {
+            _ = try await request("mobile/logout.php", method: "POST",
+                 body: ["csrf": csrf, "ios_push_token": MurshidSchoolAdPush.shared.tokenHex ?? ""])
+        }
+        MurshidSchoolAdPush.shared.resetLocalRegistration()
+        AppSession.shared.reset(eraseOfflineStudy: true)
         if let cookies = HTTPCookieStorage.shared.cookies { cookies.forEach(HTTPCookieStorage.shared.deleteCookie) }
     }
 

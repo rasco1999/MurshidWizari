@@ -3,7 +3,58 @@ import LocalAuthentication
 import CryptoKit
 import Security
 
+// v5.20: French content retired from the owner's 2026-10-14 SQL snapshot.
+// Never re-surface previously graded French questions from offline storage.
+enum V520RetiredFrenchContent {
+    private static let questionRanges: [ClosedRange<Int>] = [
+        6278...6293,
+        6439...6502,
+        6675...6686,
+        6747...6758,
+        6771...6782,
+        6949...7003,
+        7449...7503,
+        8677...8710,
+        12788...12979,
+        14864...14945,
+        16976...17018,
+        17185...17192,
+        18218...18276,
+        23341...23492,
+        26747...27046,
+        30532...30830
+    ]
+    private static let chapterRanges: [ClosedRange<Int>] = [
+        22...29, 85...92, 145...152, 318...323, 1461...1461, 1507...1507
+    ]
+    static func isQuestion(_ id: Int) -> Bool {
+        id > 0 && questionRanges.contains(where: { $0.contains(id) })
+    }
+    static func isChapter(_ id: Int) -> Bool {
+        id > 0 && chapterRanges.contains(where: { $0.contains(id) })
+    }
+    static func isRetired(_ record: V49StudyRecord) -> Bool {
+        isQuestion(record.id) || isChapter(record.topicID) ||
+        [33, 36, 40].contains(record.subjectID) ||
+        MurshidSubjectCatalog.isFrenchSubject(record.subjectName)
+    }
+}
+
 // MARK: - iPhone-only v4.9: previously graded questions, never an offline paid exam
+
+// Offline access is not derived from a remembered web session or subscription.
+enum V49OfflineLaunchRules {
+    static func showLocalCoach(networkUnavailable: Bool, hasVerifiedArchive: Bool) -> Bool {
+        networkUnavailable && hasVerifiedArchive
+    }
+
+    static func showPublicGuest(networkUnavailable: Bool, hasVerifiedArchive: Bool) -> Bool {
+        networkUnavailable && !hasVerifiedArchive
+    }
+}
+
+
+
 
 struct V49StudyRecord: Identifiable, Codable, Hashable {
     let id: Int
@@ -109,7 +160,12 @@ final class V49StudyStore: ObservableObject {
            let box = try? AES.GCM.SealedBox(combined: data),
            let decrypted = try? AES.GCM.open(box, using: secret),
            let decoded = try? JSONDecoder().decode(V49StudyArchive.self, from: decrypted),
-           decoded.userID == userID { return decoded }
+           decoded.userID == userID {
+            var cleaned = decoded
+            cleaned.records.removeAll(where: V520RetiredFrenchContent.isRetired)
+            if cleaned.records.count != decoded.records.count { _ = write(cleaned) }
+            return cleaned
+        }
         // Migrate old protected JSON only after its encrypted replacement is durable.
         let legacy = url.deletingPathExtension().appendingPathExtension("json")
         guard let data = try? Data(contentsOf: legacy),
@@ -132,6 +188,11 @@ final class V49StudyStore: ObservableObject {
         save()
     }
 
+    func hasOfflineAccount() -> Bool {
+        let userID = UserDefaults.standard.integer(forKey: recentUserKey)
+        return userID > 0 && read(userID: userID) != nil
+    }
+
     func hasOfflineReview() -> Bool {
         let userID = UserDefaults.standard.integer(forKey: recentUserKey)
         return userID > 0 && (!(read(userID: userID)?.records.isEmpty ?? true) ||
@@ -141,28 +202,27 @@ final class V49StudyStore: ObservableObject {
     // Called only after device authentication on the disconnected launch screen.
     @discardableResult func openOfflineReview() -> Bool {
         let userID = UserDefaults.standard.integer(forKey: recentUserKey)
-        guard userID > 0, let saved = read(userID: userID),
-              !saved.records.isEmpty || !V50OfflineExamBank.shared.topics(userID: userID).isEmpty
-        else { return false }
+        guard userID > 0, let saved = read(userID: userID) else { return false }
         archive = saved
         return true
     }
 
     func eraseOnLogout(userID: Int?) {
-        guard let userID, userID > 0 else { archive = nil; return }
-        if let url = fileURL(for: userID) {
+        let storedID = UserDefaults.standard.integer(forKey: recentUserKey)
+        let targetID = userID.flatMap { $0 > 0 ? $0 : nil } ?? storedID
+        if targetID > 0, let url = fileURL(for: targetID) {
             try? FileManager.default.removeItem(at: url)
             try? FileManager.default.removeItem(at: url.deletingPathExtension().appendingPathExtension("json"))
         }
-        if UserDefaults.standard.integer(forKey: recentUserKey) == userID {
-            UserDefaults.standard.removeObject(forKey: recentUserKey)
-        }
+        if storedID == targetID { UserDefaults.standard.removeObject(forKey: recentUserKey) }
         archive = nil
     }
 
     func rememberGraded(_ q: Question, subject: Subject, topic: Topic, answer: String,
                        correct: Bool, correctAnswer: String? = nil, explanation: String? = nil,
                        persistImmediately: Bool = true) {
+        guard !V520RetiredFrenchContent.isQuestion(q.id), !V520RetiredFrenchContent.isChapter(topic.id),
+              !MurshidSubjectCatalog.isFrenchSubject(subject.name) else { return }
         let verifiedAnswer = correctAnswer ?? q.correctAnswer
         guard q.id > 0, !V49QuestionQuality.normalized(q.text + q.meaningWord).isEmpty,
               !V49QuestionQuality.normalized(verifiedAnswer).isEmpty, var archive,
