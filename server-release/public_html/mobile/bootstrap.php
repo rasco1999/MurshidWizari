@@ -40,7 +40,7 @@ if($subscribed){try{$exp=db()->prepare("SELECT expires_at FROM subscriptions WHE
 
 $q=$pdo->prepare('SELECT xp,level,streak,total_answers,correct_answers,exams_completed FROM user_stats WHERE user_id=?');$q->execute([(int)$u['id']]);
 $stats=$q->fetch(PDO::FETCH_ASSOC)?:['xp'=>0,'level'=>1,'streak'=>0,'total_answers'=>0,'correct_answers'=>0,'exams_completed'=>0];
-$plans=[];foreach(subscription_plans() as $key=>$plan)$plans[]=['key'=>$key,'label'=>$plan['label'],'amount'=>(int)$plan['amount']];
+$plans=[];foreach(subscription_plans() as $key=>$plan)$plans[]=['id'=>$key,'key'=>$key,'label'=>$plan['label'],'amount'=>(int)$plan['amount']];
 // A missing optional ads column must not initiate ALTER TABLE during login.
 // Ads fallback is read-only and does not block account access.
 $bootstrapStage = 'advertisements';
