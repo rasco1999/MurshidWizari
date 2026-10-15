@@ -21,16 +21,20 @@ function android_school_fcm_tick(PDO $db, int $limit=75): array {
     $limit=max(1,min(150,$limit));
     if (!(int)$db->query("SELECT GET_LOCK('murshid_android_school_fcm',0)")->fetchColumn()) return $stat;
     try {
-        $installed=(string)$db->query('SELECT installed_at FROM android_school_fcm_meta WHERE id=1')->fetchColumn();
+        $installation=$db->query('SELECT installed_at,UNIX_TIMESTAMP(installed_at) installed_unix FROM android_school_fcm_meta WHERE id=1')->fetch(PDO::FETCH_ASSOC);
+        $installed=(string)($installation['installed_at']??'');
         if (!$installed) return $stat;
+        $baghdad=new DateTimeZone('Asia/Baghdad');
+        $localNow=(new DateTimeImmutable('now',$baghdad))->format('Y-m-d H:i:s');
+        $localInstalled=(new DateTimeImmutable('@'.(int)$installation['installed_unix']))->setTimezone($baghdad)->format('Y-m-d H:i:s');
         $ads=$db->prepare("SELECT id,school_name,ad_text,created_at,updated_at,start_at
             FROM school_ads WHERE is_enabled=1
-              AND COALESCE(start_at,CONCAT(start_date,' 00:00:00'))<=NOW()
-              AND COALESCE(end_at,CONCAT(end_date,' 23:59:59'))>=NOW()
+              AND COALESCE(start_at,CONCAT(start_date,' 00:00:00'))<=?
+              AND COALESCE(end_at,CONCAT(end_date,' 23:59:59'))>?
               AND (max_impressions=0 OR impressions<max_impressions)
               AND (created_at>=? OR updated_at>=? OR COALESCE(start_at,CONCAT(start_date,' 00:00:00'))>?)
             ORDER BY id LIMIT 40");
-        $ads->execute([$installed,$installed,$installed]);
+        $ads->execute([$localNow,$localNow,$installed,$installed,$localInstalled]);
         foreach($ads->fetchAll(PDO::FETCH_ASSOC) as $ad) {
             if ($stat['queued'] >= $limit) break;
             $id=(int)$ad['id']; if ($id<=0) continue;

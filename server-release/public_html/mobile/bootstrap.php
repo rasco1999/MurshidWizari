@@ -36,7 +36,7 @@ $q=$pdo->prepare("SELECT id,name FROM subjects WHERE grade_id=? AND status=1 AND
 $subjects=$q->fetchAll(PDO::FETCH_ASSOC);
 $used=free_answers_used((int)$u['id']);$subscribed=is_subscribed((int)$u['id']);
 $daysLeft=null; $offlineExpiryUnix=null;
-if($subscribed){try{$exp=db()->prepare("SELECT expires_at FROM subscriptions WHERE user_id=? AND status='active' AND expires_at>NOW() ORDER BY expires_at DESC LIMIT 1");$exp->execute([(int)$u['id']]);$at=$exp->fetchColumn();if($at){$offlineExpiryUnix=strtotime((string)$at);$seconds=$offlineExpiryUnix-time();$daysLeft=max(1,(int)ceil(max(0,$seconds)/86400));}}catch(Throwable $e){error_log('subscription days: '.$e->getMessage());}}
+if($subscribed){try{$exp=db()->prepare("SELECT UNIX_TIMESTAMP(expires_at) FROM subscriptions WHERE user_id=? AND status='active' AND expires_at>NOW() ORDER BY expires_at DESC LIMIT 1");$exp->execute([(int)$u['id']]);$at=$exp->fetchColumn();if($at){$offlineExpiryUnix=(int)$at;$seconds=$offlineExpiryUnix-time();$daysLeft=max(1,(int)ceil(max(0,$seconds)/86400));}}catch(Throwable $e){error_log('subscription days: '.$e->getMessage());}}
 
 $q=$pdo->prepare('SELECT xp,level,streak,total_answers,correct_answers,exams_completed FROM user_stats WHERE user_id=?');$q->execute([(int)$u['id']]);
 $stats=$q->fetch(PDO::FETCH_ASSOC)?:['xp'=>0,'level'=>1,'streak'=>0,'total_answers'=>0,'correct_answers'=>0,'exams_completed'=>0];

@@ -51,6 +51,8 @@ check(free_answers_used(101)===15,'Exactly fifteen free answers required');
 check(record_answer_event_with_quota(101,17,1,true,'8')===-1,'Expired/free account bypassed quota');
 $pdo->exec("INSERT INTO subscriptions VALUES(1,101,'active',DATE_ADD(NOW(),INTERVAL 1 DAY))");
 check(is_subscribed(101),'Active subscription not recognized');
+$expectedUnix=(int)$pdo->query('SELECT UNIX_TIMESTAMP(expires_at) FROM subscriptions WHERE id=1')->fetchColumn();
+check(abs($expectedUnix-(time()+86400))<=3,'Offline expiry must be a Unix timestamp in the database session time zone');
 check(record_answer_event_with_quota(101,17,1,true,'8')===1,'Paid account incorrectly blocked');
 $pdo->exec("UPDATE subscriptions SET expires_at=DATE_SUB(NOW(),INTERVAL 1 SECOND)");
 check(!is_subscribed(101),'Expired subscription still active');
