@@ -7,7 +7,7 @@ import student_fixture_qa as fixture
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--output',type=Path,required=True);p.add_argument('--smoke',action='store_true');a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--output',type=Path,required=True);p.add_argument('--smoke',action='store_true');p.add_argument('--case');a=p.parse_args()
     a.output.mkdir(parents=True,exist_ok=True)
     server=ThreadingHTTPServer(('127.0.0.1',8765),fixture.Handler)
     threading.Thread(target=server.serve_forever,daemon=True).start()
@@ -15,6 +15,9 @@ def main():
     ui.adb('reverse','tcp:8765','tcp:8765');ui.adb('install','-r','android-native/app/build/outputs/apk/qa/app-qa.apk')
     cases=[('phone-360dp-density2',720,1600,320,1.0),('small-320dp',320,640,160,1.0)]
     if not a.smoke:cases += [('large-font',393,852,160,1.6),('tablet',800,1280,160,1.3),('landscape',800,360,160,1.0)]
+    if a.case:
+        cases=[c for c in cases if c[0]==a.case]
+        assert len(cases)==1
     results=[]
     try:
         for name,w,h,density,scale in cases:
@@ -27,7 +30,7 @@ def main():
             button('إنشاء حساب طالب جديد');ui.wait_for('بيانات الطالب');ui.wait_for('السادس العلمي')
             capture('01-register','بيانات الطالب')
             tree,_=ui.ui_tree();next_initial=ui.find(tree,'التالي') is not None
-            if name=='phone-360dp-density2':assert next_initial,'Normal phone registration should show Next without scrolling'
+            if name in ('phone-360dp-density2','small-320dp'):assert next_initial,'Phone registration should show Next without scrolling'
             field=ui.reveal('مثال: يونس محمد عباس',w,h);fixture.input_text(field,'Test%sStudent%sDemo');time.sleep(.8)
             ui.wait_for('Test Student Demo');capture('02-keyboard-name','Test Student Demo')
             # The active input remains in the visible window; no rebuild loses its text.

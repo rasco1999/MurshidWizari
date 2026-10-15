@@ -2234,9 +2234,6 @@ class MainActivity : Activity() {
         titles.addView(uiText(when (draft.step) {
             1 -> "بيانات الطالب"; 2 -> "طريقة التسجيل"; else -> "حماية الحساب"
         }, 22f, true))
-        titles.addView(uiText(when (draft.step) {
-            1 -> "الاسم والصف والجنس"; 2 -> "البريد أو رقم الهاتف"; else -> "اختر كلمة مرور قوية"
-        }, 13f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
         heading.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
         heading.addView(uiText("${draft.step} من 3", 13f, true, blue).apply {
             setPadding(dp(10), dp(6), dp(10), dp(6))
@@ -2252,8 +2249,7 @@ class MainActivity : Activity() {
             val name = authV3Field("مثال: يونس محمد عباس", draft.fullName)
             registrationWatch(name) { draft.fullName = it }
             add(name, 10)
-            add(uiText("اكتب اسمك الثلاثي كما في بياناتك الرسمية.",
-                13f, tint = mutedText), 16)
+            name.contentDescription = "الاسم الثلاثي كما في بياناتك الرسمية"
 
             add(authFieldLabel("الصف الدراسي", "books"), 8)
             val gradeBox = LinearLayout(this).apply {
@@ -2443,10 +2439,6 @@ class MainActivity : Activity() {
             }
             add(previous, 0)
         }
-        form.addView(uiText("نسخة iPhone 4.8.18 • Build 498", 11f,
-            tint = if (night) Color.rgb(78, 78, 82) else Color.rgb(154, 154, 160)).apply {
-            gravity = Gravity.CENTER
-        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(13) })
         addUiCard(form, bottom = 18)
         root.addView(uiText("لدي حساب بالفعل", 17f, true, blue).apply {
             gravity = Gravity.CENTER
