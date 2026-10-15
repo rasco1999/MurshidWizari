@@ -2,6 +2,7 @@
 import argparse
 import json
 import threading
+import time
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
@@ -36,7 +37,13 @@ def main():
         fixture.button('تفعيل الاشتراك')
         assert fixture.STATE['redeem_requests'] == 0
         fixture.hide_keyboard_if_visible()
-        fixture.button('حسابي'); ui.wait_for('تفعيل الاشتراك بكود')
+        fixture.button('الرئيسية'); fixture.button('حسابي')
+        ui.wait_for('تفعيل الاشتراك بكود')
+        ui.reveal('الإشعارات', 393, 852)
+        # UIAutomator may return the visible edge of a row beneath the fixed
+        # tab bar. Centre the services card before capturing its subtitle.
+        ui.adb('shell', 'input', 'swipe', '196', '650', '196', '400', '300')
+        time.sleep(.4)
         ui.reveal('الإشعارات', 393, 852)
         fixture.screenshot(out, 'account-notification-row')
         tree, _ = ui.ui_tree()
