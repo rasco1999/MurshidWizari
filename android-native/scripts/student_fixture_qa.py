@@ -11,7 +11,7 @@ STATE={'notes':{},'answers':{},'calls':[],'reject_once':False,'logout_reject_onc
        'registered':False,'verified':False,'resend_count':0,'invalid_code_count':0,
        'registered_methods':[],'verified_methods':[],'subscription_active':True,
        'checkout_payload':None,'checkout_requests':0,'redeem_requests':0}
-BOOT={'ok':True,'csrf':'synthetic-csrf','user':USER,'subscribed':True,'free_remaining':15,'free_limit':15,
+BOOT={'ok':True,'csrf':'synthetic-csrf','user':USER,'subscribed':True,'free_remaining':15,'free_limit':15,'subscription_expires_at_unix':int(time.time())+7*86400,
       'plans':[{'id':'month1','label':'شهر واحد','amount':8000},{'id':'month3','label':'3 أشهر','amount':15000}],
       'subjects':SUBJECTS,'stats':{},'ads':[{'id':1,'school':'مدرسة افتراضية','text':'إعلان محلي للتحقق من عرض الإعلانات','active':True}]}
 QUESTIONS=[{'id':101,'text':'ما حاصل جمع اثنين وثلاثة؟','type':'mcq','options':[{'id':1,'text':'خمسة'},{'id':2,'text':'ستة'}],'correct_answer':'خمسة','explanation':'نجمع اثنين مع ثلاثة فيكون الناتج خمسة.','submitted':False}, {'id':102,'text':'اكتب ناتج أربعة زائد أربعة.','type':'text','correct_answer':'8','explanation':'أربعة مضافاً إليها أربعة تساوي ثمانية.','submitted':False}]
@@ -114,7 +114,19 @@ class Handler(BaseHTTPRequestHandler):
   elif path=='/mobile/contest-instructions.php': data={'ok':True,'prize_iqd':1000000,'end_at':'2027-01-01','rules':[{'title':'قاعدة فحص افتراضية','text':'تأتي قواعد التحدي من الخادم.'}],'points':[]}
   elif path=='/api/grades.php': data={'ok':True,'grades':[{'id':1,'name':'السادس العلمي'}]}
   raw=json.dumps(data,ensure_ascii=False).encode()
-  self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Set-Cookie','fixture_session=synthetic; Path=/');self.end_headers();self.wfile.write(raw)
+  lose_reply=path=='/api/progress.php' and STATE.pop('lose_grade_reply_once',False)
+  if lose_reply: raw=json.dumps({'ok':False,'message':'Synthetic receipt lost after server acceptance'}).encode()
+  self.send_response(502 if lose_reply else 200);self.send_header('Content-Type','application/json');self.send_header('Set-Cookie','fixture_session=synthetic; Path=/');self.end_headers();self.wfile.write(raw)
+
+def wait_editable(seconds=16):
+ deadline=time.time()+seconds
+ while time.time()<deadline:
+  tree,_=ui.ui_tree()
+  field=next((n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText'
+      and n.attrib.get('enabled')!='false'),None)
+  if field is not None: return field
+  time.sleep(.35)
+ raise AssertionError('Expected editable native input after transition: '+repr(ui.visible_texts(tree)))
 
 def input_text(node,value):
  ui.tap_node(node);time.sleep(.35);ui.adb('shell','input','text',value)
@@ -228,6 +240,8 @@ def main():
  server=ThreadingHTTPServer(('127.0.0.1',8765),Handler);threading.Thread(target=server.serve_forever,daemon=True).start()
  ui.PACKAGE='com.murshidwizari.student.qa'
  ui.adb('reverse','tcp:8765','tcp:8765');ui.adb('install','-r','android-native/app/build/outputs/apk/qa/app-qa.apk')
+ ui.adb('shell','am','force-stop',ui.PACKAGE)
+ ui.adb('shell','pm','clear',ui.PACKAGE)
  ui.adb('shell','wm','size','393x852');ui.adb('shell','wm','density','160');ui.adb('shell','settings','put','system','font_scale','1.0')
  ui.launch_native();ui.enter_login(393,852)
  login_field(0,'student@example.test');login_field(1,'fixture-pass')
@@ -328,7 +342,7 @@ def main():
  # settling. Verify the visible note field rather than assuming input worked.
  for attempt in range(4):
   tree,_=ui.ui_tree()
-  field=next(n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText')
+  field=wait_editable()
   actual=field.attrib.get('text','')
   if actual=='fixture-note': break
   # Android 8 accessibility may expose the hint as text even when
@@ -351,7 +365,7 @@ def main():
  button('التالي ›');ui.wait_for('اكتب ناتج أربعة زائد أربعة.');screenshot(args.output,'student-text-question')
  assert len(STATE['answers'])==1,'Opening/navigating questions must not submit answers'
  assert sum(1 for m,p in STATE['calls'] if p=='/api/progress.php')==1,'Exactly one grading request'
- tree,_=ui.ui_tree();field=next(n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText')
+ tree,_=ui.ui_tree();field=wait_editable()
  input_text(field,'8');hide_keyboard_if_visible()
  # A definitive application-level rejection must leave the form retryable.
  # This is not a timeout: uncertain submissions must still be reconciled.
@@ -372,7 +386,7 @@ def main():
  button('الرئيسية');ui.wait_for('حسابي')
  ui.reveal('مدربي الذكي · مراجعة دون إنترنت',393,852)
  button('مدربي الذكي · مراجعة دون إنترنت')
- ui.wait_for('أسئلتي المحفوظة')
+ ui.wait_for('مراجعة اليوم')
  screenshot(args.output,'student-coach-saved')
  # The self-review session remains local and cannot consume a free answer.
  prior_grades=sum(1 for m,p in STATE['calls'] if p=='/api/progress.php')
@@ -382,7 +396,7 @@ def main():
  ui.wait_for('الإجابة الصحيحة')
  screenshot(args.output,'student-coach-revealed')
  button('أتقنت هذا السؤال')
- ui.wait_for('أسئلتي المحفوظة')
+ ui.wait_for('مراجعة اليوم')
  assert sum(1 for m,p in STATE['calls'] if p=='/api/progress.php')==prior_grades, (
   'The local coach must never send a billable answer')
  back();ui.wait_for('حسابي')
@@ -402,11 +416,11 @@ def main():
  assert sum(1 for _,p in STATE['calls'] if p=='/mobile/bootstrap.php')==bootstrap_before,(
   'Airplane-mode offline access must not contact the server')
  button('مدربي الذكي · مراجعة دون إنترنت')
- ui.wait_for('أسئلتي المحفوظة')
+ ui.wait_for('مراجعة اليوم')
  button('ما حاصل جمع اثنين وثلاثة؟')
  ui.wait_for('جلسة مراجعة')
  screenshot(args.output,'student-offline-coach')
- back();ui.wait_for('أسئلتي المحفوظة')
+ back();ui.wait_for('مراجعة اليوم')
  back();ui.wait_for('وضع المراجعة دون إنترنت')
  ui.adb('shell','svc','wifi','enable')
  ui.adb('shell','svc','data','enable')
@@ -448,7 +462,7 @@ def main():
  button('تأكيد الحساب');ui.wait_for('رمز التحقق غير صحيح.')
  assert STATE['invalid_code_count']==1 and not STATE['verified'],'Wrong OTP cannot activate'
  tree,_=ui.ui_tree()
- otp=next(n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.EditText')
+ otp=wait_editable()
  ui.tap_node(otp)
  ui.adb('shell','input','keyevent','KEYCODE_MOVE_END')
  for _ in range(6):ui.adb('shell','input','keyevent','KEYCODE_DEL')
@@ -519,8 +533,13 @@ def main():
  button('تفعيل الاشتراك');time.sleep(.6)
  assert STATE['redeem_requests']==0,'Malformed code must not contact the redemption endpoint'
  hide_keyboard_if_visible()
- # Android 15 clips off-screen accessibility nodes. Reveal the inbox row
- # before asserting the unread count; never assume it shares the code viewport.
+ # Recreate the account view after the invalid-code field loses IME focus.
+ # Android 10 can otherwise restore a scroll offset below its services card.
+ button('حسابي');ui.wait_for('تفعيل الاشتراك بكود')
+ # Hiding the IME can retain a scroll offset below the inbox row. Start at
+ # the account top before searching downward for the unread count.
+ for _ in range(4):
+  ui.adb('shell','input','swipe','196','230','196','770','330');time.sleep(.15)
  ui.reveal('لديك 2 غير مقروء',393,852)
  screenshot(args.output,'student-account-unread-count')
  # Account ends at the red logout card per the user's final iPhone reference.

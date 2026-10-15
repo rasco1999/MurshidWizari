@@ -1,0 +1,9 @@
+<?php
+// Copy as config/native_push.php; never commit the real APNs .p8 key or publish it.
+// Configure these environment variables in your hosting panel:
+return [
+ 'team_id' => getenv('MURSHID_APNS_TEAM_ID') ?: '',
+ 'key_id' => getenv('MURSHID_APNS_KEY_ID') ?: '',
+ 'private_key' => str_replace('\\n', "\n", getenv('MURSHID_APNS_P8_PRIVATE_KEY') ?: ''),
+ 'topic' => 'com.muriq.murshid',
+];

@@ -1,0 +1,26 @@
+name: Prepare isolated question review browser
+on:
+  push:
+    branches: [work/complete-student-apps-20261015]
+    paths: ['.github/workflows/question-review-browser.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Fetch official Chromium runtime for private local layout checks
+        run: |
+          curl --fail --location --retry 2 --output chrome-headless-shell-linux64.zip https://cdn.playwright.dev/builds/cft/151.0.7922.34/linux64/chrome-headless-shell-linux64.zip
+          unzip -t chrome-headless-shell-linux64.zip >/dev/null
+          sha256sum chrome-headless-shell-linux64.zip > chrome-headless-shell.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Question-Review-Chromium-Runtime
+          path: |
+            chrome-headless-shell-linux64.zip
+            chrome-headless-shell.sha256
+          retention-days: 1
+          if-no-files-found: error

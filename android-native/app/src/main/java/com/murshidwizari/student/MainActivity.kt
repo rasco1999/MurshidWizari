@@ -213,6 +213,10 @@ class MainActivity : Activity() {
     private val textColor get() = if (night) Color.WHITE else Color.rgb(28,28,30)
     private val surface get() = if (night) Color.rgb(28,28,30) else Color.WHITE
     private val accent get() = blue
+    private val accentInk get() = if (night) Color.rgb(
+        Color.red(blue) + (255 - Color.red(blue)) / 4,
+        Color.green(blue) + (255 - Color.green(blue)) / 4,
+        Color.blue(blue) + (255 - Color.blue(blue)) / 4) else blue
     private val mutedText get() = if (night) Color.rgb(174,174,178) else Color.rgb(110,110,115)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -772,7 +776,7 @@ class MainActivity : Activity() {
                        tint: Int = textColor): TextView = TextView(this).apply {
         typography.apply(this, value, bold)
         textSize = MurshidTypeScale.sizeSp(size)
-        setTextColor(tint)
+        setTextColor(if (night && tint == blue) accentInk else tint)
         includeFontPadding = true
         setLineSpacing(dp(1).toFloat(), 1.03f)
         layoutDirection = View.LAYOUT_DIRECTION_RTL
@@ -958,7 +962,7 @@ class MainActivity : Activity() {
             maxLines = 3
             minHeight = dp(if (secondary) VisualRules.secondaryButtonHeight else VisualRules.primaryButtonHeight)
             setPadding(dp(if (secondary) 14 else 16), dp(8), dp(if (secondary) 14 else 16), dp(8))
-            setTextColor(if (secondary) accent else Color.WHITE)
+            setTextColor(if (secondary) accentInk else Color.WHITE)
             val radius = dp(if (secondary) VisualRules.secondaryButtonRadius else VisualRules.primaryButtonRadius).toFloat()
             val fill = if (secondary) GradientDrawable().apply {
                 // SwiftUI: blue at 8% opacity, 22%-opacity 1pt blue border.
@@ -2549,8 +2553,10 @@ class MainActivity : Activity() {
     private fun openPushInboxIfReady() {
         if (biometricOverlay != null || biometricAuthInProgress || student.optInt("id") <= 0) return
         if (StudentPush.matchesInboxIntent(this, intent, student.optInt("id"))) {
+            val openAds = intent.getStringExtra(StudentPush.routeExtra) == "ads"
             intent.removeExtra(StudentPush.inboxExtra)
-            notificationsScreen()
+            intent.removeExtra(StudentPush.routeExtra)
+            if (openAds) advertisementsTabScreen() else notificationsScreen()
         }
     }
 
@@ -2675,7 +2681,8 @@ class MainActivity : Activity() {
         base(topic.name, true)
         val header = uiCard()
         header.addView(uiText("السؤال ${index + 1} من ${list.length()}", 13f, true, blue))
-        header.addView(uiText(question.optString("text"), 19f, true),
+        ministerialBadge(header)
+        header.addView(uiText(QuestionPresentation.prompt(question.optString("text")), 19f, true),
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(13) })
         if (question.optString("meaning_word").isNotBlank())
             header.addView(uiText("المفردة: ${question.optString("meaning_word")}", 14f, tint = mutedText))
@@ -2694,6 +2701,18 @@ class MainActivity : Activity() {
             if (queued != null) {
                 accepted.addView(uiText("إجابتك: ${queued.optString("answer")}", 15f),
                     LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+                val choiceLabels = (0 until options.length()).map { i ->
+                    options.optJSONObject(i)?.optString("text") ?: options.optString(i)
+                }.ifEmpty { if (type == "true_false") listOf("صح", "خطأ") else emptyList() }
+                val practice = OfflinePracticeRules.evaluate(type, queued.optString("answer"),
+                    question.optString("correct_answer"), choiceLabels)
+                val feedback = when (practice) {
+                    OfflinePracticeRules.Result.CORRECT -> "نتيجة تدريبية: إجابة صحيحة ✓"
+                    OfflinePracticeRules.Result.INCORRECT -> "نتيجة تدريبية: راجع الإجابة النموذجية"
+                    OfflinePracticeRules.Result.NEEDS_SERVER -> "تحتاج هذه الصيغة إلى تصحيح الخادم بعد الاتصال"
+                }
+                accepted.addView(uiText(feedback, 16f, true, blue),
+                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
                 accepted.addView(uiText("الدرجة والنقاط والرصيد ستُحدد من الخادم بعد المزامنة.",
                     13f, tint = mutedText))
                 val discardButton = makeButton("حذف هذه الإجابة المؤجلة", secondary = true) {
@@ -2946,6 +2965,16 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
         addUiCard(status)
 
+        if (offlineExams.topics(userId).isNotEmpty()) {
+            button("الاختبارات المحفوظة دون إنترنت", secondary = true) { offlineExamTopicsScreen() }
+        }
+        if (cards.isNotEmpty()) {
+            button(if (due > 0) "ابدأ مراجعة اليوم" else "استعرض دفتر المراجعة") {
+                val next = cards.firstOrNull { it.optLong("due_at", 0L) <= now } ?: cards.first()
+                coachQuestionScreen(next.optInt("id"))
+            }
+        }
+
         // Local estimation, never an official exam grade or result.
         val reviewSignals = localLearningReviews()
         val studyGoal = LearningInsights.suggestedDailyTarget(reviewSignals, now)
@@ -2975,21 +3004,17 @@ class MainActivity : Activity() {
             }
         }
 
-        if (offlineExams.topics(userId).isNotEmpty()) {
-            button("الاختبارات المحفوظة دون إنترنت", secondary = true) { offlineExamTopicsScreen() }
-        }
         if (cards.isNotEmpty()) {
-            button(if (due > 0) "ابدأ مراجعة اليوم" else "استعرض دفتر المراجعة") {
-                val next = cards.firstOrNull { it.optLong("due_at", 0L) <= now } ?: cards.first()
-                coachQuestionScreen(next.optInt("id"))
-            }
             sectionHeader("أسئلتي المحفوظة", "تُعرض من ذاكرة الجهاز حتى دون إنترنت", "brain")
             cards.take(18).forEach { card ->
                 val label = card.optString("question").replace("\n", " ").take(95)
                 val subtitle = card.optString("subject").ifBlank { "سؤال تمت مراجعته" }
-                addUiCard(uiRow(label, subtitle, "book") {
+                val savedQuestion = uiCard()
+                ministerialBadge(savedQuestion)
+                savedQuestion.addView(uiRow(QuestionPresentation.prompt(label), subtitle, "book") {
                     coachQuestionScreen(card.optInt("id"))
                 })
+                addUiCard(savedQuestion)
             }
         }
 
@@ -3037,7 +3062,8 @@ class MainActivity : Activity() {
         base("جلسة مراجعة", true)
         sectionHeader("راجع وتذكّر", card.optString("subject"), "brain")
         val prompt = uiCard()
-        prompt.addView(uiText(card.optString("question"), 20f, true))
+        ministerialBadge(prompt)
+        prompt.addView(uiText(QuestionPresentation.prompt(card.optString("question")), 20f, true))
         addUiCard(prompt, bottom = 15)
 
         val revealed = uiCard()
@@ -3588,7 +3614,8 @@ class MainActivity : Activity() {
                     item.optString("question").ifBlank { item.optString("text") }
                 }
                 card.addView(uiText(chapter, 12f, true, blue))
-                card.addView(uiText(question, 17f, true),
+                ministerialBadge(card)
+                card.addView(uiText(QuestionPresentation.prompt(question), 17f, true),
                     LinearLayout.LayoutParams(-1,-2).apply { topMargin = dp(10) })
                 val score = item.optString("prediction_score").ifBlank { item.optString("probability") }
                 val confidence = item.optString("confidence")
@@ -4267,6 +4294,19 @@ class MainActivity : Activity() {
         addUiCard(card, bottom = 14)
     }
 
+    private fun ministerialBadgeView(): TextView = uiText(QuestionPresentation.BADGE, 12f, true,
+        if (night) Color.rgb(125,226,161) else Color.rgb(21,115,59)).apply {
+        setPadding(dp(10), dp(5), dp(10), dp(5))
+        background = shape(if (night) Color.rgb(23,61,43) else Color.rgb(234,247,238), dp(14).toFloat())
+        contentDescription = QuestionPresentation.BADGE
+    }
+
+    private fun ministerialBadge(parent: LinearLayout = root) {
+        parent.addView(ministerialBadgeView(), LinearLayout.LayoutParams(-2, -2).apply {
+            bottomMargin = dp(8)
+        })
+    }
+
     private fun examQuestionCard(question: JSONObject) {
         val card = uiCard()
         val eyebrow = LinearLayout(this).apply {
@@ -4275,6 +4315,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
         }
         eyebrow.addView(uiText("سؤال ${questionIndex + 1}", 12f, true, blue))
+        eyebrow.addView(ministerialBadgeView(), LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(8) })
         for (key in listOf("exam_year", "exam_round")) {
             val value = question.optString(key).takeUnless { question.isNull(key) }.orEmpty()
             if (value.isBlank()) continue
@@ -4282,12 +4323,12 @@ class MainActivity : Activity() {
                 LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(8) })
         }
         card.addView(eyebrow)
-        card.addView(uiText(question.optString("text"), 20f, true).apply {
+        card.addView(uiText(QuestionPresentation.prompt(question.optString("text")), 20f, true).apply {
             // Keep signed coordinates in mathematical order inside Arabic RTL.
             textDirection = View.TEXT_DIRECTION_FIRST_STRONG
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(11) })
         val questionText = question.optString("text")
-        if (EquationStudyRules.applies(questionText, topicsSubjectName, question.optString("type"))) {
+        if (isSubmitted(question) && EquationStudyRules.applies(questionText, topicsSubjectName, question.optString("type"))) {
             val guide = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(12), dp(12), dp(12), dp(12))
@@ -5669,7 +5710,8 @@ class MainActivity : Activity() {
             val items = response.optJSONArray("items") ?: JSONArray()
             for (i in 0 until items.length()) {
                 val item = items.optJSONObject(i) ?: continue
-                line(item.optString("question_text"), true)
+                ministerialBadge()
+                line(QuestionPresentation.prompt(item.optString("question_text")), true)
                 if (item.optString("correct_answer").isNotBlank())
                     caption("الإجابة الصحيحة: " + item.optString("correct_answer"))
                 if (item.optString("explanation").isNotBlank())
@@ -5812,7 +5854,8 @@ class MainActivity : Activity() {
             val items = response.optJSONArray("mistakes") ?: JSONArray()
             for (i in 0 until items.length()) {
                 val item = items.optJSONObject(i) ?: continue
-                line(item.optString("question_text"))
+                ministerialBadge()
+                line(QuestionPresentation.prompt(item.optString("question_text")))
                 caption("الإجابة الصحيحة: " + item.optString("correct_answer"))
                 caption("التوضيح: " + item.optString("explanation"))
                 caption(item.optString("subject_name") + " • " + item.optString("chapter_name"))
@@ -6274,7 +6317,8 @@ class MainActivity : Activity() {
             practiceTicker = timer
             main.postDelayed(timer, 1000L)
         }
-        line(question.optString("text"), true)
+        ministerialBadge()
+        line(QuestionPresentation.prompt(question.optString("text")), true)
         val details = listOf(question.optString("exam_year"), question.optString("exam_round"))
             .filter(String::isNotBlank)
         if (details.isNotEmpty()) caption(details.joinToString(" • "))
@@ -6392,7 +6436,8 @@ class MainActivity : Activity() {
             val row = review.optJSONObject(i) ?: continue
             if (ExamRules.knownBoolean(row.opt("is_correct")) == true) continue
             incorrect++
-            line(row.optString("question_text"), true)
+            ministerialBadge()
+            line(QuestionPresentation.prompt(row.optString("question_text")), true)
             caption("إجابتك: " + row.optString("submitted_answer", "—"))
             caption("الإجابة الصحيحة: " + row.optString("correct_answer"))
             if (row.optString("explanation").isNotBlank()) caption("الشرح: " + row.optString("explanation"))
@@ -6880,7 +6925,8 @@ class MainActivity : Activity() {
             val questionCard = uiCard()
             questionCard.addView(uiText("سؤال ${index + 1} من ${dailyQuestions.size}", 12f, true, blue),
                 LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(9) })
-            questionCard.addView(uiText(question.text, 17f, true),
+            ministerialBadge(questionCard)
+            questionCard.addView(uiText(QuestionPresentation.prompt(question.text), 17f, true),
                 LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
             val choices = question.choices()
             if (choices.isNotEmpty()) {

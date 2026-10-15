@@ -89,9 +89,16 @@ internal class OfflineExamBank(context: Context) {
     private fun topicKey(uid: Int, chapter: Int) = "topic_" + uid + "_" + chapter
     private fun pendingKey(uid: Int) = "pending_" + uid
 
+    @Synchronized
     fun saveTopic(uid: Int, chapterId: Int, chapterName: String, questions: JSONArray): Boolean {
         if (!canOpen(uid) || chapterId <= 0 || questions.length() < 1 ||
             questions.length() > 250 || chapterName.isBlank()) return false
+        val drafts = pending(uid)
+        val pinned = (0 until drafts.length()).mapNotNull { drafts.optJSONObject(it) }
+            .map { it.optInt("chapter_id") }.toSet()
+        // Keep the exact question text that the student answered until every
+        // draft in this topic is confirmed or explicitly discarded.
+        if (chapterId in pinned || pinned.size >= 12) return false
         val raw = questions.toString()
         if (raw.length > 1_600_000) return false
         val filtered = JSONArray()
@@ -117,8 +124,11 @@ internal class OfflineExamBank(context: Context) {
         replaced.put(JSONObject().put("id", chapterId).put("name", chapterName.take(180))
             .put("count", filtered.length()).put("saved_at", System.currentTimeMillis()))
         // Keep a bounded bank; preserve pending answers separately.
-        val recent = (0 until replaced.length()).mapNotNull { replaced.optJSONObject(it) }
-            .sortedByDescending { it.optLong("saved_at", 0L) }.take(12)
+        val ordered = (0 until replaced.length()).mapNotNull { replaced.optJSONObject(it) }
+            .sortedByDescending { it.optLong("saved_at", 0L) }
+        val pinnedTopics = ordered.filter { it.optInt("id") in pinned }
+        val recent = pinnedTopics + ordered.filter { it.optInt("id") !in pinned }
+            .take((12 - pinnedTopics.size).coerceAtLeast(0))
         return write(topicsKey(uid), JSONObject().put("items", JSONArray(recent)))
     }
 
@@ -195,18 +205,35 @@ internal class OfflineExamBank(context: Context) {
     @Synchronized
     fun discardPending(uid: Int, questionId: Int): Boolean {
         if (uid <= 0 || questionId <= 0) return false
-        return acknowledge(uid, questionId)
+        return acknowledge(uid, questionId, accepted = false)
     }
 
     @Synchronized
-    private fun acknowledge(uid: Int, questionId: Int): Boolean {
+    private fun acknowledge(uid: Int, questionId: Int, accepted: Boolean = true): Boolean {
         val latest = pending(uid)
         val kept = JSONArray()
         for (i in 0 until latest.length()) {
             val entry = latest.optJSONObject(i) ?: continue
             if (entry.optInt("question_id") != questionId) kept.put(entry)
         }
-        return write(pendingKey(uid), JSONObject().put("items", kept))
+        // Update the cached receipt and remove the queue entry in one disk commit.
+        // A confirmed answer must remain answered after an offline process restart.
+        return runCatching {
+            val editor = prefs.edit().putString(pendingKey(uid), encode(JSONObject().put("items", kept)))
+            if (accepted) {
+                val entry = (0 until latest.length()).mapNotNull { latest.optJSONObject(it) }
+                    .firstOrNull { it.optInt("question_id") == questionId }
+                val chapter = entry?.optInt("chapter_id") ?: 0
+                val cached = read(topicKey(uid, chapter))
+                val items = cached?.optJSONArray("questions")
+                for (i in 0 until (items?.length() ?: 0)) {
+                    val item = items?.optJSONObject(i) ?: continue
+                    if (item.optInt("id") == questionId) item.put("submitted", true)
+                }
+                if (cached != null) editor.putString(topicKey(uid, chapter), encode(cached))
+            }
+            editor.commit()
+        }.getOrDefault(false)
     }
 
     /** Synchronize on a serial background executor. Reconcile each ambiguous

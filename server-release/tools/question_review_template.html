@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ar" dir="rtl" data-theme="light">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>مراجعة أسئلة المرشد الوزاري</title>
+<style>
+/*FONT*/
+:root{color-scheme:light;--bg:#f3f5f8;--card:#fff;--ink:#172235;--muted:#536176;--line:#d5dde7;--green:#15733b;--greenbg:#eaf7ee;--gold:#8b5308}
+:root[data-theme=dark]{color-scheme:dark;--bg:#101722;--card:#1b2635;--ink:#f1f4f8;--muted:#b3c0d1;--line:#41536a;--green:#7de2a1;--greenbg:#173d2b;--gold:#ffc76b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Cairo,system-ui,sans-serif;font-size:16px;line-height:1.8}
+main{max-width:1100px;margin:auto;padding:20px}h1{font-size:26px;line-height:1.5;margin:0 0 10px}p{margin:6px 0}header,.controls,.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:16px}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:12px}label{font-weight:700;font-size:13px}select,input,button{font:inherit;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink);padding:10px;min-height:44px;max-width:100%}label select,label input{display:block;width:100%}button{cursor:pointer}button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid #3479e8;outline-offset:2px}
+.muted,.meta{color:var(--muted);font-size:13px}.meta{display:flex;gap:8px 16px;flex-wrap:wrap;align-items:center}.badge{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;white-space:nowrap;border-radius:999px;font-size:13px;font-weight:700;line-height:1.5;padding:5px 10px;color:var(--green);background:var(--greenbg)}
+.question{font-size:20px;font-weight:700;line-height:1.9;white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal;unicode-bidi:plaintext;margin:14px 0}.option,.answer,.explanation,.diff{white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal;unicode-bidi:plaintext}.option{border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin:8px 0}.answer{color:var(--green);font-weight:700}.findings{font-size:13px;color:var(--gold)}details{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}summary{cursor:pointer;font-weight:700}.diff{font-size:14px;padding:10px;border:1px solid var(--line);border-radius:9px;margin:8px 0}.pager{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:center;margin:20px 0}.count{font-weight:700}.card p,.card summary{overflow-wrap:anywhere}
+@media(max-width:420px){main{padding:10px}header,.controls,.card{padding:14px}h1{font-size:22px}.question{font-size:19px}}
+</style>
+<main>
+<header><h1>مراجعة أسئلة المرشد الوزاري</h1>
+<p>سجل تفصيلي لكل سؤال من تصدير ١٤ أكتوبر ٢٠٢٦، مع التصحيحات المقترحة والتلميحات المحذوفة.</p>
+<p class="muted">اكتمل الفحص الآلي. التدقيق اللغوي اليدوي لكل سؤال واعتماد مصادره العلمية لم يكتملَا. هذا التقرير لا يغيّر قاعدة الموقع.</p>
+<button id="theme">تبديل المظهر</button> <span class="count" id="summary"></span>
+</header>
+<section class="controls" aria-label="تصفية الأسئلة">
+<label>الصف<select id="grade"><option value="">كل الصفوف</option></select></label>
+<label>المادة<select id="subject"><option value="">كل المواد</option></select></label>
+<label>الموضوع<select id="chapter"><option value="">كل المواضيع</option></select></label>
+<label>حالة المراجعة<select id="status"><option value="">كل الأسئلة</option><option value="changed">توجد تصحيحات جاهزة</option><option value="flagged">تحتاج مراجعة من المصدر</option><option value="hints">حُذفت حقول تلميح</option><option value="published">المنشورة في التصدير</option></select></label>
+<label>معرّف السؤال أو نصه<input id="search" type="search" placeholder="بحث في الأسئلة"></label>
+</section>
+<p class="muted" id="pageInfo"></p><section id="questions"></section>
+<nav class="pager"><button id="previous">السابق</button><span id="pageNumber"></span><button id="next">التالي</button></nav>
+</main>
+<script id="bank" type="application/json">/*DATA*/</script>
+<script>
+'use strict';
+const records=JSON.parse(document.getElementById('bank').textContent);
+const all=(id)=>document.getElementById(id);let selected=records,page=0;const pageSize=25;
+const labels={question_text:'نص السؤال',explanation:'الشرح',genetics_json:'مراحل الوراثة',calculation_json:'مراحل المسألة',correct_answer:'الإجابة',meaning_word:'المفردة',option_a:'الخيار الأول',option_b:'الخيار الثاني',option_c:'الخيار الثالث',option_d:'الخيار الرابع'};
+const issueLabels={ocr_fragment_needs_source:'أثر استخراج نصي يحتاج مقابلة المصدر',replacement_character:'حرف مفقود أثناء الاستخراج',control_character:'رمز تحكم غير ظاهر',private_use_glyph_needs_source:'رمز من خط خاص يحتاج مقابلة الأصل',suspected_internal_ocr_word:'كلمة متأثرة باستخراج النص تحتاج مراجعة',multiple_subquestions_need_source_layout:'عدة أسئلة فرعية في سجل واحد تحتاج مراجعة التخطيط',embedded_verification_or_answer:'صيغة تحقق داخلية أو جواب داخل السؤال',repeated_word_review:'تكرار كلمة يحتاج مراجعة سياقها',answer_or_option_spelling_proposal:'تصحيح مقترح في جواب أو خيار لم يُطبّق',invalid_json:'بنية مسألة تحتاج إصلاحًا'};
+function node(tag,text,cls){const el=document.createElement(tag);if(text!==undefined)el.textContent=text;if(cls)el.className=cls;return el}
+function fillOptions(id,values){const el=all(id),old=el.value;el.replaceChildren(el.options[0]);[...new Set(values)].filter(Boolean).sort((a,b)=>a.localeCompare(b,'ar')).forEach(v=>{const o=node('option',v);o.value=v;el.append(o)});if([...el.options].some(o=>o.value===old))el.value=old}
+function card(q){const el=node('article',undefined,'card');el.dataset.id=q.id;const meta=node('div',undefined,'meta');meta.append(node('span','وزاري','badge'),node('span','السؤال '+q.id),node('span',q.grade+' · '+q.subject+' · '+q.chapter));el.append(meta,node('div',q.text,'question'));q.options.forEach((o,i)=>el.append(node('div',(i+1)+'. '+o,'option')));const answer=node('details');answer.append(node('summary','الإجابة والشرح للمراجعة'),node('p',q.correct_answer,'answer'));if(q.explanation)answer.append(node('p',q.explanation,'explanation'));el.append(answer);
+const keys=Object.keys(q.changes);if(keys.length){const diff=node('details');diff.append(node('summary','التغييرات الجاهزة: '+keys.length));keys.forEach(key=>{diff.append(node('strong',labels[key]||key),node('div','قبل: '+q.changes[key].before,'diff'),node('div','بعد: '+q.changes[key].after,'diff'))});el.append(diff)}
+if(q.removed_hint_paths.length)el.append(node('p','حقول تلميح محذوفة: '+q.removed_hint_paths.length,'findings'));
+if(q.findings.length){const notes=node('details');notes.append(node('summary','نقاط المراجعة: '+q.findings.length));q.findings.forEach(f=>{notes.append(node('p',(labels[f.field]||f.field)+' — '+(issueLabels[f.kind]||f.kind),'findings'));if(f.proposed)notes.append(node('p','اقتراح لم يُطبّق: '+f.proposed,'diff'))});el.append(notes)}return el}
+function renderList(list){all('questions').replaceChildren(...list.map(card))}
+function render(){const start=page*pageSize;renderList(selected.slice(start,start+pageSize));all('pageInfo').textContent='الأسئلة المطابقة: '+selected.length;all('pageNumber').textContent=(page+1)+' / '+Math.max(1,Math.ceil(selected.length/pageSize));all('previous').disabled=page===0;all('next').disabled=start+pageSize>=selected.length}
+function filter(changed){const grade=all('grade').value;if(changed==='grade')fillOptions('subject',records.filter(q=>!grade||q.grade===grade).map(q=>q.subject));const subject=all('subject').value;if(changed==='grade'||changed==='subject')fillOptions('chapter',records.filter(q=>(!grade||q.grade===grade)&&(!subject||q.subject===subject)).map(q=>q.chapter));const chapter=all('chapter').value,status=all('status').value,search=all('search').value.trim().toLocaleLowerCase();selected=records.filter(q=>(!grade||q.grade===grade)&&(!subject||q.subject===subject)&&(!chapter||q.chapter===chapter)&&(!search||(q.id+' '+q.text).toLocaleLowerCase().includes(search))&&(!status||(status==='changed'&&Object.keys(q.changes).length)||(status==='flagged'&&q.findings.length)||(status==='hints'&&q.removed_hint_paths.length)||(status==='published'&&q.published)));page=0;render()}
+fillOptions('grade',records.map(q=>q.grade));fillOptions('subject',records.map(q=>q.subject));fillOptions('chapter',records.map(q=>q.chapter));all('summary').textContent=records.length+' سؤالًا';for(const id of ['grade','subject','chapter','status'])all(id).addEventListener('change',()=>filter(id));all('search').addEventListener('input',()=>filter('search'));all('theme').onclick=()=>document.documentElement.dataset.theme=document.documentElement.dataset.theme==='dark'?'light':'dark';all('previous').onclick=()=>{page--;render();scrollTo(0,0)};all('next').onclick=()=>{page++;render();scrollTo(0,0)};render();
+// Read-only browser layout audit hooks. The report has no network or mutation actions.
+window.reviewAudit={records,renderList};
+</script>
+</html>

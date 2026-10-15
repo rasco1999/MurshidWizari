@@ -36,6 +36,7 @@ class StudentMessagingService : FirebaseMessagingService() {
 object StudentPush {
     const val requestCode = 1902
     const val inboxExtra = "murshid_push_binding"
+    const val routeExtra = "murshid_push_destination"
     private const val channel = "student_account_updates"
     private const val noticeId = 1902
     private val worker = Executors.newSingleThreadExecutor()
@@ -177,6 +178,7 @@ object StudentPush {
         if (!PushRules.accepts(p.getInt("user_id", 0), p.getString("binding", "").orEmpty(),
                 binding, id, p.getLong("last_seen", 0), allowed(context))) return@synchronized
         val intent = Intent(context, MainActivity::class.java).putExtra(inboxExtra, binding)
+            .putExtra(routeExtra, if (data["type"] == "school_ad") "ads" else "inbox")
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         val pending = PendingIntent.getActivity(context, noticeId, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)

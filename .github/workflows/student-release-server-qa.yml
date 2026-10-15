@@ -1,0 +1,44 @@
+name: Student release server integration QA
+on:
+  push:
+    branches: [work/complete-student-apps-20261015]
+    paths: ['server-release/**', '.github/workflows/student-release-server-qa.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: synthetic-ci-only
+          MYSQL_DATABASE: murshid_release_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -psynthetic-ci-only"
+          --health-interval=5s --health-timeout=5s --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax-check every changed PHP file
+        run: find server-release/public_html -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Verify question proofreading guards and actual hint removal
+        run: |
+          python3 -m unittest discover -s server-release/tests -p test_question_review.py -v
+          php server-release/tests/hint-presentation.php
+      - name: Exercise real grading, quotas, expiry and publication queues
+        env:
+          RELEASE_TEST_DSN: 'mysql:host=127.0.0.1;port=3306;dbname=murshid_release_test;charset=utf8mb4'
+        shell: bash
+        run: |
+          set -euo pipefail
+          php server-release/tests/runtime.php | tee server-release/test-results.txt
+          python3 server-release/tests/export_guard_fixture.py > /tmp/question-guard-fixture.json
+          php server-release/tests/guarded-question-update.php /tmp/question-guard-fixture.json | tee -a server-release/test-results.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Murshid-Server-Integration-QA
+          path: server-release/test-results.txt

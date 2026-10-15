@@ -3,7 +3,7 @@ name: Android Native Anonymous Emulator Smoke
 on:
   workflow_dispatch:
   push:
-    branches: [android-native]
+    branches: [android-native, work/complete-student-apps-20261015]
     paths:
       - 'android-native/**'
       - '.github/workflows/android-native-emulator.yml'
@@ -13,14 +13,13 @@ permissions:
 
 concurrency:
   group: android-native-emulator-${{ github.ref }}
-  # Retain running 4-device audits when a new source-only fix lands.
-  # Queue newer commits so at least one full audit can complete.
-  cancel-in-progress: false
+  # Keep the latest source audit and avoid spending emulator time on superseded fixes.
+  cancel-in-progress: true
 
 jobs:
   anonymous-qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -43,7 +42,7 @@ jobs:
         working-directory: android-native
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;35.0.0'
-          gradle --no-daemon testDebugUnitTest assembleDebug assembleQa
+          gradle --no-daemon --refresh-dependencies testDebugUnitTest assembleDebug assembleQa
       - name: Enable emulator virtualization
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -60,6 +59,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
             python3 android-native/scripts/anonymous_emulator_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa"
+            if [ "${{ matrix.api-level }}" = "35" ]; then python3 android-native/scripts/offline_exam_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/offline"; fi
             python3 android-native/scripts/student_fixture_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/student"
             python3 android-native/scripts/specialized_exam_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/specialized"
             python3 android-native/scripts/biometric_lock_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/lock"
