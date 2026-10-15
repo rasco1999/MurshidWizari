@@ -35,6 +35,13 @@ final class DeviceServices: ObservableObject {
     }
 
     func startNetworkMonitor() {
+        #if V498_QA
+        // Simulator-only deterministic airplane-mode coverage. Not in production.
+        if ProcessInfo.processInfo.arguments.contains("V498_QA_FORCE_OFFLINE") {
+            isOnline = false
+            return
+        }
+        #endif
         monitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
                 self?.isOnline = path.status == .satisfied
