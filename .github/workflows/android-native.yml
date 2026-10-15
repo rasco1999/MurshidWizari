@@ -57,7 +57,7 @@ jobs:
         with:
           gradle-version: '8.11.1'
       - name: Verify exam rules and build native APK
-        run: gradle --no-daemon testDebugUnitTest assembleDebug assembleQa assemblePreview assembleCandidate bundleCandidate --stacktrace
+        run: gradle --no-daemon --refresh-dependencies testDebugUnitTest assembleDebug assembleQa assemblePreview assembleCandidate bundleCandidate --stacktrace
       - name: Verify Cairo font and license embedded in preview APK
         run: |
           unzip -Z1 app/build/outputs/apk/preview/app-preview.apk | grep -F 'res/font/cairo.ttf'

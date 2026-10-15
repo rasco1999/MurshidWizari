@@ -43,7 +43,7 @@ jobs:
         working-directory: android-native
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-36' 'build-tools;35.0.0'
-          gradle --no-daemon testDebugUnitTest assembleDebug assembleQa
+          gradle --no-daemon --refresh-dependencies testDebugUnitTest assembleDebug assembleQa
       - name: Enable emulator virtualization
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

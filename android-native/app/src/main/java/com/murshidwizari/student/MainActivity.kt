@@ -213,6 +213,10 @@ class MainActivity : Activity() {
     private val textColor get() = if (night) Color.WHITE else Color.rgb(28,28,30)
     private val surface get() = if (night) Color.rgb(28,28,30) else Color.WHITE
     private val accent get() = blue
+    private val accentInk get() = if (night) Color.rgb(
+        Color.red(blue) + (255 - Color.red(blue)) / 4,
+        Color.green(blue) + (255 - Color.green(blue)) / 4,
+        Color.blue(blue) + (255 - Color.blue(blue)) / 4) else blue
     private val mutedText get() = if (night) Color.rgb(174,174,178) else Color.rgb(110,110,115)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -772,7 +776,7 @@ class MainActivity : Activity() {
                        tint: Int = textColor): TextView = TextView(this).apply {
         typography.apply(this, value, bold)
         textSize = MurshidTypeScale.sizeSp(size)
-        setTextColor(tint)
+        setTextColor(if (night && tint == blue) accentInk else tint)
         includeFontPadding = true
         setLineSpacing(dp(1).toFloat(), 1.03f)
         layoutDirection = View.LAYOUT_DIRECTION_RTL
@@ -958,7 +962,7 @@ class MainActivity : Activity() {
             maxLines = 3
             minHeight = dp(if (secondary) VisualRules.secondaryButtonHeight else VisualRules.primaryButtonHeight)
             setPadding(dp(if (secondary) 14 else 16), dp(8), dp(if (secondary) 14 else 16), dp(8))
-            setTextColor(if (secondary) accent else Color.WHITE)
+            setTextColor(if (secondary) accentInk else Color.WHITE)
             val radius = dp(if (secondary) VisualRules.secondaryButtonRadius else VisualRules.primaryButtonRadius).toFloat()
             val fill = if (secondary) GradientDrawable().apply {
                 // SwiftUI: blue at 8% opacity, 22%-opacity 1pt blue border.
@@ -6664,75 +6668,751 @@ class MainActivity : Activity() {
                     activate.text = "حالة التفعيل غير مؤكدة"
                     message("لم يؤكد الخادم تفعيل الاشتراك. نتحقق من الحالة قبل إعادة استخدام الكود.")
                     fetch("mobile/bootstrap.php", showError = false) { updated ->
-                        if (updated.…22152 tokens truncated…y($device['_school_ad']))$data['type']='school_ad';
-    return ['message'=>['token'=>$device['token'],'data'=>$data,
-        'android'=>['priority'=>'HIGH','ttl'=>'86400s','collapse_key'=>'student-inbox']]];
-}
-function android_fcm_send(array $device, int $notificationId): array {
-    $project=android_fcm_settings()['firebase']['project_id'];
-    $ch=curl_init('https://fcm.googleapis.com/v1/projects/'.rawurlencode($project).'/messages:send');
-    $retry=0;
-    curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>json_encode(android_fcm_payload($device,$notificationId),JSON_THROW_ON_ERROR),
-        CURLOPT_HTTPHEADER=>['Authorization: Bearer '.android_fcm_access_token(),'Content-Type: application/json'],
-        CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>5,CURLOPT_TIMEOUT=>10,CURLOPT_FOLLOWLOCATION=>false,
-        CURLOPT_HEADERFUNCTION=>static function($handle,string $header) use (&$retry): int {
-            if (stripos($header,'Retry-After:')===0) { $value=trim(substr($header,12));
-                $retry=ctype_digit($value)?(int)$value:max(0,(int)strtotime($value)-time()); }
-            return strlen($header);
-        }]);
-    $raw=curl_exec($ch); $status=(int)curl_getinfo($ch,CURLINFO_RESPONSE_CODE); curl_close($ch);
-    $body=json_decode((string)$raw,true); $unregistered=false;
-    foreach (($body['error']['details']??[]) as $detail) if (($detail['errorCode']??'')==='UNREGISTERED') $unregistered=true;
-    // Never persist/log provider response bodies: they may contain a registration token.
-    return ['ok'=>$status===200,'unregistered'=>$unregistered,'retry_after'=>max(0,min(86400,$retry)),'status'=>$status];
-}
-function android_fcm_dispatch(PDO $pdo, int $limit=40, ?callable $sender=null, ?int $onlyUser=null): array {
-    $sender=$sender??'android_fcm_send'; $stats=['sent'=>0,'revoked'=>0,'retry'=>0,'scanned'=>0];
-    if (!(int)$pdo->query("SELECT GET_LOCK('murshid_android_fcm_dispatch',0)")->fetchColumn()) return $stats;
-    $started=microtime(true);
-    try {
-        $query=$pdo->prepare('SELECT * FROM android_fcm_devices WHERE next_attempt_at<=NOW() AND updated_at>DATE_SUB(NOW(),INTERVAL 60 DAY)'.
-            ($onlyUser!==null?' AND user_id=?':'').' ORDER BY next_attempt_at,installation_id LIMIT '.max(1,min(200,$limit)));
-        $query->execute($onlyUser!==null?[$onlyUser]:[]);
-        foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $device) {
-            if (microtime(true)-$started>40) break;
-            $stats['scanned']++;
-            $q=$pdo->prepare('SELECT COALESCE(MAX(id),0) newest,COALESCE(MAX(CASE WHEN is_read=0 THEN id ELSE NULL END),0) unread FROM notifications WHERE user_id=? AND id>?');
-            $q->execute([(int)$device['user_id'],(int)$device['last_notification_id']]); $next=$q->fetch(PDO::FETCH_ASSOC);
-            $cursor=max((int)$device['last_notification_id'],(int)$next['newest']);
-            $where=[$device['installation_id'],$device['binding_id'],$device['token_hash']];
-            $result=['ok'=>true];
-            if ((int)$next['unread']>0) {
-                $kind=$pdo->prepare('SELECT title FROM notifications WHERE id=? AND user_id=?');
-                $kind->execute([(int)$next['unread'],(int)$device['user_id']]);
-                $device['_school_ad']=(string)$kind->fetchColumn()==='إعلان مدرسة جديد';
-                try { $result=$sender($device,(int)$next['unread']); }
-                catch (Throwable $e) { $result=['ok'=>false]; }
-            }
-            if (!empty($result['unregistered'])) {
-                $pdo->prepare('DELETE FROM android_fcm_devices WHERE installation_id=? AND binding_id=? AND token_hash=?')->execute($where); $stats['revoked']++;
-            } elseif (!empty($result['ok'])) {
-                $pdo->prepare('UPDATE android_fcm_devices SET last_notification_id=?,attempts=0,next_attempt_at=DATE_ADD(NOW(),INTERVAL 1 MINUTE) WHERE installation_id=? AND binding_id=? AND token_hash=?')
-                    ->execute(array_merge([$cursor],$where)); if ((int)$next['unread']>0) $stats['sent']++;
-            } else {
-                $delay=max((int)($result['retry_after']??0),min(21600,60*(2**min(9,(int)$device['attempts']))));
-                $pdo->prepare('UPDATE android_fcm_devices SET attempts=LEAST(attempts+1,1000),next_attempt_at=DATE_ADD(NOW(),INTERVAL ? SECOND) WHERE installation_id=? AND binding_id=? AND token_hash=?')
-                    ->execute(array_merge([$delay],$where)); $stats['retry']++;
+                        if (updated.optBoolean("ok")) {
+                            applyBootstrap(updated)
+                            if (subscribed) prefs.edit().remove(pendingKey).apply()
+                            if (activeScreen == "account") accountScreen()
+                            else if (subscribed) showHome(updated)
+                        }
+                    }
+                }
+                else -> {
+                    prefs.edit().remove(pendingKey).apply()
+                    activate.isEnabled = true
+                    activate.text = "تفعيل الاشتراك"
+                    message(result.optString("message", "تعذر تفعيل هذا الكود."))
+                }
             }
         }
-    } finally { $pdo->query("SELECT RELEASE_LOCK('murshid_android_fcm_dispatch')"); }
-    return $stats;
-}
-function android_fcm_schedule(int $userId): void {
-    if ($userId<=0 || !android_fcm_ready() || !function_exists('fastcgi_finish_request')) return;
-    static $users=[]; static $scheduled=false; if (count($users)<3) $users[$userId]=true;
-    if ($scheduled) return; $scheduled=true;
-    register_shutdown_function(static function() use (&$users): void {
-        fastcgi_finish_request();
-        foreach (array_keys($users) as $id) try {
-            // A new notification can wake an idle installation, but never bypass a failed-send backoff.
-            db()->prepare('UPDATE android_fcm_devices SET next_attempt_at=NOW() WHERE user_id=? AND attempts=0')->execute([(int)$id]);
-            android_fcm_dispatch(db(),3,null,(int)$id);
-        } catch (Throwable $e) { error_log('Android push dispatch deferred to cron'); }
-    });
+    }
+
+    private fun predictionsScreen(subjectId: Int, subject: String) {
+        if (!subscribed) { message("المرشحات متاحة للمشتركين فقط."); return }
+        predictionsReturnScreen = if (activeScreen == "subjects") "subjects" else "predictions_tab"
+        activeScreen = "predictions_list"
+        fetch("mobile/predictions.php?subject_id=" + subjectId) { response ->
+            if (activeScreen != "predictions_list" || !response.optBoolean("ok")) return@fetch
+            base("مرشحات " + subject, true)
+            val predictions = response.optJSONArray("predictions") ?: JSONArray()
+            for (i in 0 until predictions.length()) {
+                val p = predictions.optJSONObject(i) ?: continue
+                val question = p.optString("question_text").ifBlank {
+                    p.optString("title", "مرشح ${i + 1}")
+                }
+                val topic = p.optString("topic_name").ifBlank {
+                    p.optString("chapter_name", subject)
+                }
+                val explanation = p.optString("explanation")
+                val card = uiCard().apply {
+                    addView(uiText(topic, 12f, tint = mutedText))
+                    addView(uiText("س${i + 1}: $question", 17f, true, blue),
+                        LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+                    if (explanation.isNotBlank()) addView(uiText("افتح لعرض الشرح والتفاصيل", 12f,
+                        tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+                }
+                addUiCard(tappable(card, "تفاصيل المرشح ${i + 1}") {
+                    AlertDialog.Builder(this).setTitle("مرشح ${i + 1} · $topic")
+                        .setMessage(question + if (explanation.isBlank()) "" else "\n\nالشرح: $explanation")
+                        .setPositiveButton("إغلاق", null).show()
+                })
+            }
+            if (predictions.length() == 0) caption("لم تُنشَر مرشحات لهذه المادة بعد.")
+        }
+    }
+
+    // The native equivalents of iOS Daily Challenge, Million Contest and Achievements.
+    // The server alone grades challenge answers and awards XP/badges.
+    private fun openCompetition(screen: String) {
+        if (activeScreen != screen) competitionHistory.addLast(activeScreen)
+        when (screen) {
+            "daily_challenge" -> loadDailyChallenge()
+            "contest" -> loadContest()
+            "achievements" -> loadAchievements()
+        }
+    }
+
+    private fun parseDailyQuestions(rows: JSONArray): List<CompetitionRules.Question> =
+        (0 until rows.length()).map { i ->
+            // Never silently skip a malformed row: it could change the submitted set.
+            val row = rows.optJSONObject(i)
+                ?: return@map CompetitionRules.Question(0, "invalid", "", emptyList())
+            val options = row.optJSONArray("options") ?: JSONArray()
+            CompetitionRules.Question(
+                id = row.optInt("id"),
+                type = row.optString("type", "text"),
+                text = row.optString("question_text").ifBlank { row.optString("text") },
+                options = (0 until options.length()).map { j ->
+                    val option = options.optJSONObject(j)
+                    if (option != null) option.optString("answer_text").ifBlank { option.optString("text") }
+                    else options.optString(j)
+                }
+            )
+        }
+
+    private fun dailyDraftKey(): String = "daily_challenge_draft_v1_" + student.optInt("id", 0)
+
+    private fun dailyDraftSignature(): String =
+        DailyDraftRules.signature(student.optInt("id", 0), dailyQuestions)
+
+    private fun clearDailyDraft() {
+        prefs.edit().remove(dailyDraftKey()).apply()
+    }
+
+    private fun saveDailyDraft(pendingReceipt: Boolean = dailyUncertain): Boolean {
+        val signature = dailyDraftSignature()
+        if (signature.isBlank()) return false
+        val answers = JSONObject()
+        DailyDraftRules.validAnswers(dailyQuestions, dailyAnswers).forEach { (id, answer) ->
+            answers.put(id.toString(), answer)
+        }
+        val editor = prefs.edit().putString(dailyDraftKey(), JSONObject()
+            .put("signature", signature).put("answers", answers)
+            .put("pending_receipt", pendingReceipt).toString())
+        // A pending POST flag must reach disk before network I/O, even if the app is killed.
+        return if (pendingReceipt) editor.commit() else { editor.apply(); true }
+    }
+
+    /** Recover only the current account/day/question set; a pending POST needs manual reconciliation. */
+    private fun restoreDailyDraft() {
+        dailyAnswers.clear()
+        dailyUncertain = false
+        if (dailyDone) { clearDailyDraft(); return }
+        // A transiently unavailable or malformed GET is not proof that an earlier
+        // POST was rejected. Keep its persisted receipt marker until a valid GET.
+        if (!DailyDraftRules.mayReconcileDraft(dailyAvailable, dailyQuestions)) return
+        val signature = dailyDraftSignature()
+        if (signature.isBlank()) return
+        val saved = try { JSONObject(prefs.getString(dailyDraftKey(), "").orEmpty()) }
+            catch (_: Exception) { null }
+        val baghdadDate = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Baghdad"))
+        val isLegacy = saved != null && (0L..1L).any { days ->
+            saved.optString("signature") == DailyDraftRules.legacySignature(student.optInt("id", 0),
+                baghdadDate.minusDays(days).toString(), dailyQuestions)
+        }
+        if (saved?.optString("signature") != signature && !isLegacy) {
+            // A new day or question must not erase evidence of an uncertain POST.
+            // A previously accepted answer may be in flight even after midnight.
+            if (saved?.optBoolean("pending_receipt") == true) dailyUncertain = true
+            else clearDailyDraft()
+            return
+        }
+        val answers = saved?.optJSONObject("answers") ?: JSONObject()
+        val restored = LinkedHashMap<Int, String>()
+        for (question in dailyQuestions) {
+            val answer = answers.optString(question.id.toString())
+            if (answer.isNotBlank()) restored[question.id] = answer
+        }
+        dailyAnswers.putAll(DailyDraftRules.validAnswers(dailyQuestions, restored))
+        dailyUncertain = saved?.optBoolean("pending_receipt") == true
+        if (isLegacy) saveDailyDraft(pendingReceipt = dailyUncertain)
+    }
+
+    private fun loadDailyChallenge() {
+        activeScreen = "daily_challenge"
+        base("تحدي اليوم", true)
+        caption("جارٍ تحميل أسئلة التحدي ونتيجتك من الخادم…")
+        fetch("mobile/challenge.php") { response ->
+            if (activeScreen != "daily_challenge") return@fetch
+            if (!response.optBoolean("ok")) {
+                base("تحدي اليوم", true)
+                caption("تعذر تحميل أسئلة التحدي. تحقق من الإنترنت وأعد المحاولة؛ لن تُرسل أي إجابة من جديد.")
+                button("إعادة المحاولة") { loadDailyChallenge() }
+                return@fetch
+            }
+            csrf = response.optString("csrf", csrf)
+            dailyAvailable = ExamRules.knownBoolean(response.opt("available")) ?: true
+            dailyDone = ExamRules.knownBoolean(response.opt("done")) == true
+            dailyQuotaBlocked = response.optBoolean("quota_blocked") || response.optBoolean("payment_required")
+            dailyScore = response.optInt("score")
+            dailyTotal = response.optInt("total")
+            dailyReward = response.optInt("reward")
+            dailyGivenAnswer = response.optString("given_answer")
+            dailyCorrectAnswer = response.optString("correct_answer")
+            dailyExplanation = response.optString("explanation")
+            dailyNextResetAt = response.optString("next_reset_at")
+            dailyQuestions = parseDailyQuestions(response.optJSONArray("questions") ?: JSONArray())
+            restoreDailyDraft()
+            dailyStatusMessage = ""
+            renderDailyChallenge()
+        }
+    }
+
+    private fun renderDailyChallenge() {
+        activeScreen = "daily_challenge"
+        base("تحدي اليوم", true)
+        line(if (dailyDone) "أكملت تحدي اليوم!" else "سؤال واحد يصنع فرقاً", true)
+        caption("سؤال صعب واحد كل 24 ساعة، لا يستهلك رصيد الأسئلة المجانية ولا يُضاف إلى نقاط المسابقة.")
+        if (!dailyAvailable) {
+            line("لا يوجد تحدٍ متاح الآن.")
+            button("تحديث التحدي", secondary = true) { loadDailyChallenge() }
+            return
+        }
+        if (dailyDone) {
+            line("نتيجتك: $dailyScore / $dailyTotal", true)
+            if (dailyReward > 0) line("المكافأة الممنوحة: +$dailyReward XP")
+            if (dailyGivenAnswer.isNotBlank()) caption("إجابتك: $dailyGivenAnswer")
+            if (dailyCorrectAnswer.isNotBlank()) caption("الإجابة الصحيحة: $dailyCorrectAnswer")
+            if (dailyExplanation.isNotBlank()) addUiCard(uiCard().apply {
+                addView(uiText("التوضيح", 15f, true, blue))
+                addView(uiText(dailyExplanation, 15f),
+                    LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            })
+            val nextTime = try {
+                java.time.OffsetDateTime.parse(dailyNextResetAt)
+                    .atZoneSameInstant(java.time.ZoneId.of("Asia/Baghdad"))
+                    .format(java.time.format.DateTimeFormatter.ofPattern("d/M/yyyy · h:mm a", java.util.Locale("ar", "IQ")))
+            } catch (_: Exception) { "" }
+            caption(if (nextTime.isNotBlank()) "التحدي القادم: $nextTime بتوقيت بغداد"
+                else "يتاح التحدي التالي بعد مرور 24 ساعة على محاولتك.")
+            button("عرض ترتيبي في تحدي المليون") { openCompetition("contest") }
+            button("متابعة إنجازاتي") { openCompetition("achievements") }
+            button("تحديث النتيجة", secondary = true) { loadDailyChallenge() }
+            return
+        }
+        if (dailyQuotaBlocked) {
+            line("الخادم منع التحدي بسبب حالة الرصيد أو الاشتراك. لن نعيد إرسال إجابة تلقائياً.")
+            button("تفعيل رمز اشتراك") { redeemScreen() }
+            button("إعادة التحقق من الرصيد", secondary = true) { loadDailyChallenge() }
+            return
+        }
+        val issue = CompetitionRules.issue(dailyQuestions)
+        if (issue != null) {
+            line("لا يمكن تقديم تحدٍ غير مكتمل: $issue")
+            button("إعادة تحميل الأسئلة") { loadDailyChallenge() }
+            button("مراسلة الدعم", secondary = true) { supportScreen() }
+            return
+        }
+        if (dailyUncertain) {
+            line("تعذر التأكد من حفظ التحدي. قد تكون الإجابات وصلت رغم انقطاع الاتصال.")
+            caption("احتفظنا بإجاباتك على هذا الجهاز. تحقق من حالتك على الخادم أولاً؛ لن تُرسل الإجابات ثانية تلقائياً.")
+            button("التحقق من حالة التحدي") { loadDailyChallenge() }
+            button("تحققت، إعادة المحاولة يدوياً", secondary = true) {
+                AlertDialog.Builder(this).setTitle("إعادة إرسال التحدي؟")
+                    .setMessage("تحقق من حالة التحدي أو الدعم قبل المتابعة. قد يكون التسليم السابق وصل للخادم رغم فقدان الرد، ولن نعيده تلقائياً.")
+                    .setPositiveButton("تحققت، متابعة") { _, _ ->
+                        dailyUncertain = false
+                        saveDailyDraft(pendingReceipt = false)
+                        renderDailyChallenge()
+                    }.setNegativeButton("إلغاء", null).show()
+            }
+            return
+        }
+        for ((index, question) in dailyQuestions.withIndex()) {
+            val questionCard = uiCard()
+            questionCard.addView(uiText("سؤال ${index + 1} من ${dailyQuestions.size}", 12f, true, blue),
+                LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(9) })
+            questionCard.addView(uiText(question.text, 17f, true),
+                LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
+            val choices = question.choices()
+            if (choices.isNotEmpty()) {
+                val group = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
+                val ids = HashMap<Int, String>()
+                for (choice in choices) {
+                    val radio = RadioButton(this).apply {
+                        id = View.generateViewId()
+                        text = choice
+                        textSize = 16f
+                        setTextColor(textColor)
+                        isChecked = dailyAnswers[question.id] == choice
+                        isEnabled = !dailyBusy
+                        buttonTintList = ColorStateList.valueOf(blue)
+                        setPadding(dp(9), dp(7), dp(9), dp(7))
+                        background = shape(if (night) Color.rgb(49,49,52)
+                            else Color.rgb(242,242,247), dp(12).toFloat())
+                    }
+                    ids[radio.id] = choice
+                    group.addView(radio, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(7) })
+                }
+                group.setOnCheckedChangeListener { _, selected ->
+                    if (dailyBusy) return@setOnCheckedChangeListener
+                    ids[selected]?.let { dailyAnswers[question.id] = it; saveDailyDraft() }
+                }
+                questionCard.addView(group)
+            } else {
+                val field = EditText(this).apply {
+                    hint = "اكتب إجابتك هنا"
+                    textSize = 16f
+                    setTextColor(textColor)
+                    setHintTextColor(mutedText)
+                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                    minLines = 2
+                    maxLines = 5
+                    isEnabled = !dailyBusy
+                    setPadding(dp(12), dp(10), dp(12), dp(10))
+                    background = shape(if (night) Color.rgb(49,49,52)
+                        else Color.rgb(242,242,247), dp(12).toFloat())
+                    setText(dailyAnswers[question.id].orEmpty())
+                }
+                field.addTextChangedListener(object : TextWatcher {
+                    override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                    override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                        if (dailyBusy) return
+                        dailyAnswers[question.id] = s?.toString().orEmpty()
+                        saveDailyDraft()
+                    }
+                    override fun afterTextChanged(s: Editable?) = Unit
+                })
+                questionCard.addView(field, LinearLayout.LayoutParams(-1, -2))
+            }
+            addUiCard(questionCard, bottom = 14)
+        }
+        val submit = button(if (dailyBusy) "جارٍ التصحيح…" else "إنهاء تحدي اليوم") {
+            if (!CompetitionRules.canSubmit(dailyQuestions, dailyAnswers, dailyAvailable, dailyDone,
+                    dailyBusy, dailyUncertain)) {
+                message("أجب عن السؤال قبل التسليم.")
+            } else {
+                AlertDialog.Builder(this).setTitle("تسليم تحدي اليوم")
+                    .setMessage("سيتم إرسال الإجابة للتصحيح مرة واحدة، ولن يتاح تحدٍ جديد قبل مرور 24 ساعة. هل أنت مستعد؟")
+                    .setPositiveButton("إرسال وتصحيح") { _, _ -> submitDailyChallenge() }
+                    .setNegativeButton("إلغاء", null).show()
+            }
+        }
+        submit.isEnabled = !dailyBusy
+        if (dailyStatusMessage.isNotBlank()) caption(dailyStatusMessage)
+        button("تحديث التحدي", secondary = true) { if (!dailyBusy) loadDailyChallenge() }
+    }
+
+    private fun submitDailyChallenge() {
+        if (dailyQuotaBlocked) return
+        if (!CompetitionRules.canSubmit(dailyQuestions, dailyAnswers, dailyAvailable, dailyDone,
+                dailyBusy, dailyUncertain)) return
+        if (csrf.isBlank()) { message("انتهت الجلسة. حدّث التحدي أولاً."); return }
+        if (dailyDraftSignature().isBlank()) {
+            message("تعذر تحديد حسابك أو أسئلة التحدي للحفظ الآمن. حدّث بيانات الحساب أولاً.")
+            return
+        }
+        dailyBusy = true
+        val answerObject = JSONObject()
+        CompetitionRules.submission(dailyQuestions, dailyAnswers).forEach { (id, answer) ->
+            answerObject.put(id, answer)
+        }
+        val payload = JSONObject().put("csrf", csrf).put("answers", answerObject)
+        if (!saveDailyDraft(pendingReceipt = true)) {
+            dailyBusy = false
+            message("تعذر حفظ حالة التحدي على الجهاز؛ لن نرسل الإجابات قبل تأمين الاستعادة.")
+            return
+        }
+        renderDailyChallenge()
+        fetch("mobile/challenge.php", payload, showError = true) { response ->
+            dailyBusy = false
+            if (response.optBoolean("quota_blocked") || response.optBoolean("payment_required")) {
+                dailyStatusMessage = "انتهى رصيدك المجاني أثناء التحدي. يمكنك تفعيل الاشتراك والمتابعة."
+                dailyUncertain = false
+                dailyQuotaBlocked = true
+                saveDailyDraft(pendingReceipt = false)
+                if (activeScreen == "daily_challenge") renderDailyChallenge()
+                return@fetch
+            }
+            if (!response.optBoolean("ok")) {
+                dailyUncertain = true
+                saveDailyDraft(pendingReceipt = true)
+                if (activeScreen == "daily_challenge") renderDailyChallenge()
+                return@fetch
+            }
+            dailyDone = ExamRules.knownBoolean(response.opt("done")) == true
+            dailyScore = response.optInt("score", dailyScore)
+            dailyTotal = response.optInt("total", dailyTotal)
+            dailyReward = response.optInt("reward", dailyReward)
+            dailyGivenAnswer = response.optString("given_answer", dailyGivenAnswer)
+            dailyCorrectAnswer = response.optString("correct_answer", dailyCorrectAnswer)
+            dailyExplanation = response.optString("explanation", dailyExplanation)
+            dailyNextResetAt = response.optString("next_reset_at", dailyNextResetAt)
+            if (!dailyDone) {
+                // An accepted POST without a completion receipt must be reconciled.
+                dailyUncertain = true
+                dailyStatusMessage = "استجاب الخادم دون تأكيد إنهاء التحدي. تحقق من حالته."
+                saveDailyDraft(pendingReceipt = true)
+            } else {
+                dailyStatusMessage = ""
+                clearDailyDraft()
+                dailyAnswers.clear()
+                fetch("mobile/challenge.php", showError = false) { latest ->
+                    if (latest.optBoolean("ok") && ExamRules.knownBoolean(latest.opt("done")) == true) {
+                        dailyScore = latest.optInt("score", dailyScore)
+                        dailyTotal = latest.optInt("total", dailyTotal)
+                        dailyReward = latest.optInt("reward", dailyReward)
+                        dailyGivenAnswer = latest.optString("given_answer", dailyGivenAnswer)
+                        dailyCorrectAnswer = latest.optString("correct_answer", dailyCorrectAnswer)
+                        dailyExplanation = latest.optString("explanation", dailyExplanation)
+                        dailyNextResetAt = latest.optString("next_reset_at", dailyNextResetAt)
+                        if (activeScreen == "daily_challenge") renderDailyChallenge()
+                    }
+                }
+                fetch("mobile/bootstrap.php", showError = false) { updated ->
+                    if (updated.optBoolean("ok")) {
+                        homepage = withoutFrenchSubjects(updated)
+                        student = updated.optJSONObject("user") ?: student
+                        csrf = updated.optString("csrf", csrf)
+                        subscribed = updated.optBoolean("subscribed", subscribed)
+                    }
+                }
+            }
+            if (activeScreen == "daily_challenge") renderDailyChallenge()
+        }
+    }
+
+    private fun loadContest() {
+        activeScreen = "contest"
+        base("تحدي المليون", true)
+        caption("جارٍ تحميل ترتيبك والمتصدرين…")
+        fetch("mobile/contest.php") { first ->
+            if (activeScreen != "contest") return@fetch
+            if (!first.optBoolean("ok")) {
+                base("تحدي المليون", true)
+                caption("تعذر تحميل الترتيب. راجع اتصال الإنترنت ثم أعد المحاولة.")
+                button("إعادة المحاولة") { loadContest() }
+                return@fetch
+            }
+            contest = first
+            fetch("mobile/season.php", showError = false) { second ->
+                if (activeScreen != "contest") return@fetch
+                season = if (second.optBoolean("ok")) second else JSONObject()
+                renderContest()
+            }
+        }
+    }
+
+    private fun renderContest() {
+        activeScreen = "contest"
+        base("تحدي المليون", true)
+        addUiCard(uiCard().apply {
+            addView(uiText("تحدي المليون", 12f, true, blue))
+            addView(uiText("تقدمك بين الطلاب", 21f, true),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+            addView(uiText("الترتيب يعتمد على نقاط المنصة والإجابات الصحيحة ضمن فترة التحدي.",
+                14f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+        }, bottom = 16)
+        val configuration = contest.optJSONObject("config") ?: JSONObject()
+        val phase = configuration.optString("phase")
+        val phaseLabel = when (phase) {
+            "scheduled" -> "لم يبدأ تحدي المليون بعد"
+            "active" -> "تحدي المليون جارٍ الآن"
+            "ended" -> "انتهت فترة تحدي المليون"
+            else -> if (configuration.optBoolean("active")) "تحدي المليون جارٍ الآن" else "حالة التحدي غير متاحة"
+        }
+        addUiCard(uiCard().apply {
+            addView(uiText(phaseLabel, 17f, true, blue))
+            addView(uiText("موعد البداية: " + configuration.optString("start_at", "لم يحدد بعد"),
+                14f), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(9) })
+            addView(uiText("موعد النهاية: " + configuration.optString("end_at", "لم يحدد بعد"),
+                14f), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+            addView(uiText("التوقيت: بغداد · يتحدث الموعد عند فتح التحدي أو تحديثه.",
+                12f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        }, bottom = 14)
+        val mine = contest.optJSONObject("mine")
+        val active = ExamRules.knownBoolean(configuration.opt("active"))
+        addUiCard(uiCard().apply {
+            addView(uiText("مركزك الحالي", 13f, tint = mutedText))
+            addView(uiText(if (mine == null) "ابدأ الإجابة لتدخل الترتيب"
+                else "#${mine.optInt("rank")}", if (mine == null) 18f else 32f, true, blue),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
+            if (mine != null) addView(uiText("${mine.optInt("xp")} XP • ${mine.optInt("correct")} إجابة صحيحة",
+                13f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
+            if (active == true) addView(uiText("● نشط", 13f, true, Color.rgb(41,158,80)),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        }, bottom = 18)
+        // Both leaderboards are visible together as on iOS. Expanding one does not hide the other.
+        for ((mode, heading, data) in listOf(
+            Triple("contest", "متصدرو تحدي المليون", contest),
+            Triple("season", "ترتيب الموسم", season))) {
+            val ranking = data.optJSONArray("leaderboard") ?: JSONArray()
+            sectionHeader(heading, if (ranking.length() == 0) "لا توجد بيانات بعد" else "أعلى المراكز", "chart")
+            if (ranking.length() == 0) {
+                addUiCard(uiCard().apply { addView(uiText(if (mode == "season" && data.length() == 0)
+                    "تعذر تحميل ترتيب الموسم الآن. حدّث الصفحة لاحقاً."
+                    else "سيظهر الترتيب هنا عند توفر البيانات.", 14f, tint = mutedText)) })
+            }
+            val expanded = contestMode == mode && contestShowAll
+            val limit = if (expanded) ranking.length() else minOf(ranking.length(), 10)
+            for (i in 0 until limit) {
+                val entry = ranking.optJSONObject(i) ?: continue
+                val rank = entry.optInt("rank")
+                val name = entry.optString("name", "طالب")
+                val xp = entry.optInt("xp")
+                val grade = entry.optString("grade")
+                addUiCard(uiRow("#$rank  $name", "$xp XP" + if (grade.isBlank()) "" else " • $grade", "trophy") {
+                    AlertDialog.Builder(this).setTitle("المركز #$rank — $name")
+                        .setMessage(buildString {
+                            if (grade.isNotBlank()) append("الصف: $grade\n")
+                            append("النقاط: $xp XP")
+                            if (entry.has("correct")) append("\nالإجابات الصحيحة: ${entry.optInt("correct")}")
+                        })
+                        .setPositiveButton("حسناً", null).show()
+                }, bottom = 9)
+            }
+            if (ranking.length() > 10) button(if (expanded) "عرض أول 10 مراكز" else "عرض جميع المراكز", secondary = true) {
+                contestMode = mode
+                contestShowAll = !expanded
+                renderContest()
+            }
+        }
+        button("تعليمات التحدي", secondary = true) { contestInstructionsScreen() }
+        button("شارك في تحدي اليوم") { openCompetition("daily_challenge") }
+        button("اجمع نقاطاً بحل الأسئلة") { subjectsScreen() }
+        button("تابع إنجازاتك") { openCompetition("achievements") }
+        button("تحديث الترتيب", secondary = true) { loadContest() }
+    }
+
+    private fun loadAchievements() {
+        activeScreen = "achievements"
+        base("الإنجازات", true)
+        caption("جارٍ تحميل المستوى والشارات من حسابك…")
+        fetch("mobile/achievements.php") { response ->
+            if (activeScreen != "achievements") return@fetch
+            if (!response.optBoolean("ok")) {
+                base("الإنجازات", true)
+                caption("تعذر تحديث الشارات والمستوى. لن تُعرض بيانات قديمة بوصفها حديثة.")
+                button("إعادة المحاولة") { loadAchievements() }
+                return@fetch
+            }
+            achievements = response.optJSONArray("achievements") ?: JSONArray()
+            achievementStats = response.optJSONObject("stats") ?: JSONObject()
+            renderAchievements()
+        }
+    }
+
+    private fun isEarned(item: JSONObject): Boolean =
+        !item.isNull("earned_at") && item.optString("earned_at").isNotBlank()
+
+    private fun renderAchievements() {
+        activeScreen = "achievements"
+        base("إنجازاتي", true)
+        val earned = (0 until achievements.length()).count { i ->
+            achievements.optJSONObject(i)?.let(::isEarned) == true
+        }
+        sectionHeader("مستواك", "نقاطك وشاراتك من الخادم", "trophy")
+        addUiCard(uiCard().apply {
+            addView(uiText("المستوى ${achievementStats.optInt("level", 1)}", 22f, true, blue))
+            addView(uiText("${achievementStats.optInt("xp")} XP • $earned من ${achievements.length()} شارات مكتسبة",
+                14f, tint = mutedText), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+        }, bottom = 17)
+        sectionHeader("الإنجازات", "اضغط على الشارة لعرض تفاصيلها وتقدمك", "check")
+        val filters = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutDirection = View.LAYOUT_DIRECTION_RTL
+        }
+        for ((mode, label) in listOf( "all" to "الجميع", "earned" to "المكتسبة", "locked" to "المتبقية")) {
+            filters.addView(makeButton(label, secondary = achievementFilter != mode) {
+                achievementFilter = mode; renderAchievements()
+            }, LinearLayout.LayoutParams(0, dp(47), 1f).apply {
+                marginEnd = dp(3); marginStart = dp(3)
+            })
+        }
+        addUiCard(filters, bottom = 15)
+        var shown = 0
+        for (i in 0 until achievements.length()) {
+            val item = achievements.optJSONObject(i) ?: continue
+            val unlocked = isEarned(item)
+            if (achievementFilter == "earned" && !unlocked || achievementFilter == "locked" && unlocked) continue
+            shown++
+            val name = item.optString("title", "إنجاز")
+            val description = item.optString("description")
+            val subtitle = (if (unlocked) "مكتسب" else "لم تحصل عليه بعد") +
+                (if (description.isBlank()) "" else " • $description")
+            addUiCard(uiRow(name, subtitle, if (unlocked) "trophy" else "lock") {
+                AlertDialog.Builder(this).setTitle(name)
+                    .setMessage(buildString {
+                        append(description.ifBlank { "لم تُضف تفاصيل لهذا الإنجاز." })
+                        append("\n\n")
+                        append(if (unlocked) "مكتسب في: ${item.optString("earned_at")}" else "لم تحصل عليه بعد.")
+                        if (item.has("target") && item.optInt("target") > 0 && item.has("progress"))
+                            append("\nالتقدم: ${item.optInt("progress")} / ${item.optInt("target")}")
+                    })
+                    .setPositiveButton("إغلاق", null)
+                    .setNeutralButton(if (unlocked) "عرض الترتيب" else "ابدأ التحدي") { _, _ ->
+                        openCompetition(if (unlocked) "contest" else "daily_challenge")
+                    }.show()
+            }, bottom = 9)
+        }
+        if (shown == 0) caption(if (achievements.length() == 0) "لم يرسل الخادم إنجازات بعد." else "لا توجد شارات ضمن هذا التصنيف.")
+        button("تحدي اليوم • حقق إنجازاً جديداً") { openCompetition("daily_challenge") }
+        button("أكمل اختباراتك") { subjectsScreen() }
+        button("تحديث الإنجازات", secondary = true) { loadAchievements() }
+    }
+
+    private fun navigateBack() {
+        if (biometricOverlay != null) {
+            moveTaskToBack(true)
+            return
+        }
+        if (activeScreen == "plans" && paymentBusy) {
+            message("انتظر اكتمال التحقق من طلب الدفع حتى لا تضيع حالته.")
+            return
+        }
+        when (activeScreen) {
+            "offline_exam_question" -> offlineExamTopicsScreen()
+            "offline_exam_topics" -> if (offlineCoachMode) showOfflineCoachHome() else coachScreen()
+            "coach_question" -> coachScreen()
+            "performance_diagnostics" -> accountScreen()
+            "coach" -> if (offlineCoachMode) showOfflineCoachHome() else showHome(homepage)
+            "offline_coach_home" -> moveTaskToBack(true)
+            "bound_recovery" -> accountScreen()
+            "contest_instructions" -> loadContest()
+            "phone_reset" -> if (recoverReturnScreen == "account") boundRecoveryScreen() else recoverScreen()
+            "recover" -> if (recoverReturnScreen == "account") accountScreen() else loginScreen()
+            "practice_exam" -> { stopPracticeTicker(); practiceBuilderScreen() }
+            "practice_result" -> attemptHistoryScreen()
+            "daily_challenge", "contest", "achievements" -> {
+                val previous = CompetitionRules.backDestination(
+                    if (competitionHistory.isEmpty()) "home" else competitionHistory.removeLast())
+                when (previous) {
+                    "daily_challenge" -> loadDailyChallenge()
+                    "contest" -> loadContest()
+                    "achievements" -> loadAchievements()
+                    "account" -> accountScreen()
+                    "tests" -> testsTabScreen()
+                    "success" -> successTabScreen()
+                    "subjects" -> subjectsScreen()
+                    "topics" -> topicsScreen(topicsSubjectId, topicsSubjectName)
+                    else -> showHome(homepage)
+                }
+            }
+            "exam" -> leaveExam()
+            "topics" -> when (topicsReturnScreen) {
+                "home" -> showHome(homepage)
+                "tests" -> testsTabScreen()
+                else -> subjectsScreen()
+            }
+            "subjects" -> showHome(homepage)
+            "predictions_list" -> if (predictionsReturnScreen == "subjects") subjectsScreen(true)
+                else predictionsTabScreen()
+            "school_ad" -> when (schoolAdReturnScreen) {
+                "ads_tab" -> advertisementsTabScreen()
+                "account" -> accountScreen()
+                else -> showHome(homepage)
+            }
+            "tests", "success", "predictions_tab", "ads_tab" -> showHome(homepage)
+            "instructions" -> if (instructionsReturnScreen == "account") accountScreen() else loginScreen()
+            "account" -> showHome(homepage)
+            "plans" -> if (plansReturnScreen == "account") accountScreen() else showHome(homepage)
+            "register" -> {
+                val draft = registrationDraft
+                if (draft != null && draft.step > 1 && !draft.loading) {
+                    draft.step--
+                    draft.fieldError = ""
+                    draft.generalError = ""
+                    renderRegistration(draft)
+                } else if (registerReturnScreen == "login") loginScreen() else guestLandingScreen()
+            }
+            "verification" -> loginScreen()
+            "login" -> guestLandingScreen()
+            "guest" -> finish()
+            else -> if (homepage.optBoolean("ok")) showHome(homepage) else guestLandingScreen()
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() { navigateBack() }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Keep an active exam and its unsent answers intact on phone/tablet rotation.
+        screenFrame?.getChildAt(0)?.let { content ->
+            content.layoutParams = (content.layoutParams as FrameLayout.LayoutParams).apply {
+                width = contentWidth()
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            }
+        }
+        // Only idle screens reflow their action grid; active exams/forms keep entered state.
+        if (activeScreen == "home" && homepage.optBoolean("ok")) showHome(homepage)
+        else if (activeScreen == "plans") plansScreen()
+    }
+
+    private fun inspectInternet() {
+        val manager = connectivity ?: return
+        val caps = manager.getNetworkCapabilities(manager.activeNetwork)
+        val validated = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+        main.post {
+            val old = lastValidatedInternet
+            lastValidatedInternet = validated
+            if (old == true && !validated) message("انقطع اتصال الإنترنت. ستُحفظ الإجابات غير المرسلة في هذه الشاشة.")
+            // System connectivity can change several times during cold start.
+            // Do not obscure the welcome/guest/login screen with a transient toast.
+            if (old == false && validated && student.optInt("id") > 0) {
+                if (!offlineCoachMode && offlineExams.pendingCount(student.optInt("id")) > 0 &&
+                    csrf.isNotBlank()) {
+                    scheduleOfflineSync() // The queue checks existing server events before every retry.
+                } else message("عاد اتصال الإنترنت. يمكنك تحديث البيانات بأمان.")
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        connectivity = manager
+        if (networkCallback == null) {
+            networkCallback = object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) { inspectInternet() }
+                override fun onLost(network: Network) { inspectInternet() }
+                override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) { inspectInternet() }
+            }
+            manager.registerDefaultNetworkCallback(networkCallback!!)
+        }
+        inspectInternet()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val timeAwayMs = if (backgroundEnteredAt != 0L) {
+            SystemClock.elapsedRealtime() - backgroundEnteredAt
+        } else 0L
+        backgroundEnteredAt = 0L
+        appForeground = true
+        startSessionServices()
+        if (::api.isInitialized) {
+            val recorded = prefs.getLong("biometric_background_at", 0L)
+            val elapsed = if (biometricBackgroundAt > 0L) {
+                SystemClock.elapsedRealtime() - biometricBackgroundAt
+            } else if (recorded > 0L) {
+                (System.currentTimeMillis() - recorded).coerceAtLeast(0L)
+            } else 0L
+            if (BiometricRules.shouldLock(prefs.getBoolean("biometric_lock", false),
+                    student.optInt("id") > 0 || api.hasRememberedSession(),
+                    biometricAuthInProgress, biometricOverlay != null,
+                    prefs.getBoolean("biometric_unlock_required", false), elapsed,
+                    SystemClock.elapsedRealtime() - biometricLastSuccessAt)) {
+                showBiometricLock()
+            }
+        }
+        if (checkoutReturnPending && activeScreen == "plans") {
+            checkoutReturnPending = false
+            val order = prefs.getInt(lastPaymentKey(), 0)
+            if (order > 0) checkPaymentStatus(order)
+        }
+        if (student.optInt("id") > 0) StudentPush.attach(this, api, student.optInt("id"), csrf)
+        openPushInboxIfReady()
+        if (timeAwayMs >= 3000L && activeScreen != "welcome") {
+            if (biometricOverlay != null || biometricAuthInProgress) {
+                resumeWelcomeAfterUnlock = true
+            } else replayWelcomeAfterBackground()
+        }
+    }
+
+    override fun onStop() {
+        appForeground = false
+        backgroundEnteredAt = SystemClock.elapsedRealtime()
+        serviceTicker?.let { main.removeCallbacks(it) }
+        serviceTicker = null
+        if (prefs.getBoolean("biometric_lock", false) && !biometricAuthInProgress) {
+            biometricBackgroundAt = SystemClock.elapsedRealtime()
+            prefs.edit().putLong("biometric_background_at", System.currentTimeMillis()).apply()
+        }
+        networkCallback?.let { callback ->
+            try { connectivity?.unregisterNetworkCallback(callback) } catch (_: Exception) { }
+        }
+        networkCallback = null
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        stopHomeHeroTicker()
+        stopFocusTicker()
+        stopPracticeTicker()
+        serviceTicker?.let { main.removeCallbacks(it) }
+        currentAdDialog?.dismiss()
+        heroJobs.shutdownNow()
+        jobs.shutdownNow()
+        super.onDestroy()
+    }
 }
