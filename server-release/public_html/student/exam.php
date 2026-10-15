@@ -93,10 +93,9 @@ foreach ($questions as &$question) {
     }
     $question['match_items'] = is_array($question['_match_items']??null) ? $question['_match_items'] : ($matchMap[(int)$question['id']] ?? []);
     unset($question['_answer_rows'],$question['_match_items'],$question['_answer_mode']);
-    if ($isEnglishMatchChapter) {
-        $set=sixth_english_match_for_question((string)($question['question_text']??''));
-        if ($set) $question['english_match']=['left'=>$set['left']??[],'right'=>$set['right']??[],'map'=>$set['map']??[]];
-    }
+    $set=$question['_english_match']??murshid_v53_matching_definition((string)($question['question_text']??''));
+    if($set)$question['english_match']=$set;
+    unset($question['_english_match']);
 }
 unset($question);
 

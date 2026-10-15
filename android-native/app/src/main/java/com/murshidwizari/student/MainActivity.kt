@@ -4923,40 +4923,78 @@ class MainActivity : Activity() {
         addUiCard(card, bottom = 16)
     }
 
-    private fun englishMatchQuestion(question: JSONObject) {
-        val definition = question.optJSONObject("english_match") ?: return
-        val left = definition.optJSONObject("left") ?: JSONObject()
-        val right = definition.optJSONObject("right") ?: JSONObject()
-        val keys = ArrayList<String>()
-        val choices = ArrayList<String>()
-        val rightKeys = right.keys().asSequence().toList().sortedWith(compareBy({ it.toIntOrNull() ?: Int.MAX_VALUE }, { it }))
-        choices.add("اختر الوصل"); keys.add("")
-        for (key in rightKeys) {
-            keys.add(key); choices.add(key + " : " + right.optString(key))
+    private fun matchingDefinition(raw: JSONObject?): MatchingRules.Definition? {
+        if (raw == null) return null
+        fun side(name: String): Map<String,String> {
+            val values = raw.optJSONObject(name) ?: return emptyMap()
+            return values.keys().asSequence().associateWith { values.optString(it) }
         }
-        val pairFields = ArrayList<Pair<String, Spinner>>()
-        val card = examAnswersCard()
-        val leftKeys = left.keys().asSequence().toList().sortedWith(compareBy({ it.toIntOrNull() ?: Int.MAX_VALUE }, { it }))
-        for (key in leftKeys) {
-            card.addView(uiText(key + ". " + left.optString(key), 17f, true),
-                LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8); topMargin = dp(5) })
-            val spinner = examDraftPicker(question, "english_$key", keys, choices, card, "مطابقة العبارة $key")
-            pairFields.add(key to spinner)
+        return MatchingRules.Definition(side("left"), side("right"))
+    }
+
+    private fun matchingEditor(def: MatchingRules.Definition, initial: String, disabled: Boolean,
+                               parent: LinearLayout, changed: (String) -> Unit) {
+        var pairs = MatchingRules.parse(initial).filter { (k,v) -> k in def.left && v in def.right }
+        var pending = ""
+        val instructions = uiText("اختر عنصرًا من A ثم ما يناسبه من B. للتعديل اختر العنصر مجدداً.", 14f)
+        parent.addView(instructions)
+        val board = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; layoutDirection = View.LAYOUT_DIRECTION_LTR
         }
-        val submit = makeButton("إرسال الإجابة") submit@{
-            val lines = ArrayList<String>()
-            val used = HashSet<String>()
-            for ((key, spinner) in pairFields) {
-                val selected = keys.getOrNull(spinner.selectedItemPosition).orEmpty()
-                if (selected.isBlank()) { message("أكمل جميع التوصيلات أولاً."); return@submit }
-                if (!used.add(selected)) { message("لا يمكن وصل خيار واحد بأكثر من عبارة."); return@submit }
-                lines.add(key + "-" + selected)
+        parent.addView(board, LinearLayout.LayoutParams(-1,-2))
+        val status = uiText("", 13f).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
+        parent.addView(status)
+        fun paint() {
+            board.removeAllViews()
+            for ((name, labels) in listOf("A" to def.left, "B" to def.right)) {
+                val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                board.addView(column, LinearLayout.LayoutParams(0,-2,1f).apply {
+                    marginStart = dp(3); marginEnd = dp(3)
+                })
+                column.addView(uiText(name,16f,true).apply { gravity = Gravity.CENTER })
+                for (key in MatchingRules.keys(labels)) {
+                    val partner = if (name == "A") pairs[key] else pairs.entries.firstOrNull { it.value == key }?.key
+                    val title = key + ". " + labels[key] + (partner?.let { "  ↔ " + (if(name == "A") "B" else "A") + it } ?: "")
+                    val item = makeButton(title) {
+                        if (name == "A") pending = key else if (pending.isNotBlank()) {
+                            pairs = MatchingRules.assign(pairs,pending,key); pending = ""
+                            changed(MatchingRules.encode(pairs))
+                        }
+                        paint()
+                    }.apply {
+                        minWidth = 0; minimumWidth = 0; minHeight = dp(48)
+                        textSize = 15f; textDirection = View.TEXT_DIRECTION_FIRST_STRONG
+                        gravity = Gravity.START or Gravity.CENTER_VERTICAL
+                        setPadding(dp(8),dp(10),dp(8),dp(10))
+                        isEnabled = !disabled && (name == "A" || pending.isNotBlank())
+                        isSelected = name == "A" && pending == key
+                        contentDescription = name + key + ": " + labels[key] + (partner?.let { "، مرتبط بـ $it" } ?: "")
+                        background = shape(if(isSelected) blue else if(night) Color.rgb(44,44,48) else Color.rgb(240,244,250),dp(12).toFloat())
+                        setTextColor(if(isSelected) Color.WHITE else textColor)
+                    }
+                    column.addView(item,LinearLayout.LayoutParams(-1,-2).apply { topMargin = dp(7) })
+                }
             }
-            sendAnswer(question, lines.joinToString(", "), 0)
+            status.text = "تم توصيل ${pairs.size} من ${def.left.size}"
+            instructions.text = if(pending.isBlank()) "اختر عنصرًا من A ثم ما يناسبه من B. للتعديل اختر العنصر مجدداً." else "اختر العنصر المناسب من القائمة B."
+        }
+        paint()
+    }
+
+    private fun englishMatchQuestion(question: JSONObject) {
+        val definition = matchingDefinition(question.optJSONObject("english_match")) ?: return
+        val card = examAnswersCard()
+        var answer = examFieldsDraft(question).optString("matching_answer")
+        matchingEditor(definition, answer, false, card) {
+            answer = it; examFieldsDraft(question).put("matching_answer", it)
+        }
+        val submit = makeButton("إرسال الإجابة") {
+            if (!MatchingRules.complete(definition,answer)) message("أكمل جميع التوصيلات أولاً.")
+            else sendAnswer(question,answer,0)
         }
         examSubmitButton = submit
-        card.addView(submit, LinearLayout.LayoutParams(-1, -2))
-        addUiCard(card, bottom = 16)
+        card.addView(submit, LinearLayout.LayoutParams(-1,-2))
+        addUiCard(card,bottom=16)
     }
 
     private fun reportQuestion(id: Int) {
@@ -6307,7 +6345,14 @@ class MainActivity : Activity() {
         if (details.isNotEmpty()) caption(details.joinToString(" • "))
         caption("إجابتك")
         val options = question.optJSONArray("options") ?: JSONArray()
-        if (options.length() > 0) {
+        val matching = matchingDefinition(question.optJSONObject("english_match"))
+        if (matching != null) {
+            val card = uiCard()
+            matchingEditor(matching,practiceAnswers[id].orEmpty(),practiceBusy || practiceUncertain,card) {
+                practiceAnswers[id] = it; persistPracticeAnswers()
+            }
+            addUiCard(card)
+        } else if (options.length() > 0) {
             for (i in 0 until options.length()) {
                 val option = options.optJSONObject(i)?.optString("text") ?: options.optString(i)
                 val selected = practiceAnswers[id] == option
@@ -6337,12 +6382,12 @@ class MainActivity : Activity() {
             if (!practiceBusy) { practiceCurrent--; persistPracticeAnswers(); renderPracticeQuestion() }
         }
         if (practiceCurrent < practiceQuestions.length() - 1) button("التالي") {
-            if (!PracticeRules.answered(practiceAnswers[id])) message("أجب عن السؤال الحالي أولاً.")
+            if ((!PracticeRules.answered(practiceAnswers[id]) || (matching != null && !MatchingRules.complete(matching,practiceAnswers[id].orEmpty())))) message("أجب عن السؤال الحالي أولاً.")
             else if (!practiceBusy) {
                 practiceCurrent++; persistPracticeAnswers(); renderPracticeQuestion()
             }
         } else button("إنهاء الاختبار والتصحيح") {
-            if (!PracticeRules.answered(practiceAnswers[id])) { message("أجب عن السؤال الأخير أولاً."); return@button }
+            if ((!PracticeRules.answered(practiceAnswers[id]) || (matching != null && !MatchingRules.complete(matching,practiceAnswers[id].orEmpty())))) { message("أجب عن السؤال الأخير أولاً."); return@button }
             AlertDialog.Builder(this).setTitle("إنهاء الاختبار")
                 .setMessage("هل تريد إرسال جميع إجاباتك للتصحيح وعرض النتيجة؟")
                 .setPositiveButton("إنهاء") { _, _ -> finishPracticeSession() }
@@ -6747,6 +6792,7 @@ class MainActivity : Activity() {
                 id = row.optInt("id"),
                 type = row.optString("type", "text"),
                 text = row.optString("question_text").ifBlank { row.optString("text") },
+                matching = matchingDefinition(row.optJSONObject("english_match")),
                 options = (0 until options.length()).map { j ->
                     val option = options.optJSONObject(j)
                     if (option != null) option.optString("answer_text").ifBlank { option.optString("text") }
@@ -6910,7 +6956,11 @@ class MainActivity : Activity() {
             questionCard.addView(uiText(question.text, 17f, true),
                 LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
             val choices = question.choices()
-            if (choices.isNotEmpty()) {
+            if (question.matching != null) {
+                matchingEditor(question.matching,dailyAnswers[question.id].orEmpty(),dailyBusy,questionCard) {
+                    dailyAnswers[question.id] = it; saveDailyDraft()
+                }
+            } else if (choices.isNotEmpty()) {
                 val group = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
                 val ids = HashMap<Int, String>()
                 for (choice in choices) {

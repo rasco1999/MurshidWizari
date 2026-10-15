@@ -47,6 +47,7 @@ internal object ExamRules {
 
     /** Return a visible issue; never let a malformed question consume a free answer. */
     fun issue(q: Shape): String? {
+        if (MatchingRules.generated(q.text)) return "صياغة السؤال تحتاج مراجعة؛ حدّث الموضوع أثناء الاتصال."
         if (q.id <= 0 || q.text.trim().length < 4) return "نص السؤال أو معرّفه غير مكتمل."
         if (q.correctAnswer.isBlank()) return "الإجابة النموذجية غير متاحة من الخادم."
         val type = q.type.trim().lowercase()

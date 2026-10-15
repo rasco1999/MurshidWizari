@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__.'/question_presentation_v53.php';
 
 /**
  * v48 — طبقة سلامة وربط السؤال من المصدر حتى التصحيح.
@@ -100,6 +101,7 @@ function murshid_v48_canonical_question(array $row,array $options=[],array $matc
     $row['type']=murshid_v48_normalize_type((string)($row['type']??'text'));
     $row['question_text']=trim((string)($row['question_text']??''));
     $row['correct_answer']=trim((string)($row['correct_answer']??''));
+    if(murshid_v53_generated_prompt($row['question_text']))return ['valid'=>false,'reason'=>'generated_validation_wrapper','row'=>$row,'options'=>[],'match_items'=>[],'answer_mode'=>'invalid'];
     $display=public_question_display_text($row['question_text']);
     $options=murshid_v48_unique_options($options);
     $matchItems=array_values(array_filter($matchItems,static fn($x)=>is_array($x)));
@@ -107,6 +109,14 @@ function murshid_v48_canonical_question(array $row,array $options=[],array $matc
     if($display===''||$row['correct_answer']==='') return ['valid'=>false,'reason'=>'missing_prompt_or_answer','row'=>$row,'options'=>$options,'match_items'=>$matchItems,'answer_mode'=>'invalid'];
     if(function_exists('murshid_v47_is_internal_validation_prompt')&&murshid_v47_is_internal_validation_prompt($row['question_text']))return ['valid'=>false,'reason'=>'internal_validation','row'=>$row,'options'=>$options,'match_items'=>$matchItems,'answer_mode'=>'invalid'];
 
+    $matching=murshid_v53_matching_definition($row['question_text']);
+    if($matching){
+        $expected=murshid_v53_parse_pairs($row['correct_answer']);
+        $map=$matching['map'];ksort($map,SORT_NATURAL);
+        if($expected!==$map)return ['valid'=>false,'reason'=>'matching_key_conflict','row'=>$row,'options'=>[],'match_items'=>[],'answer_mode'=>'invalid'];
+        $row['type']='text';$row['_english_match']=$matching;
+        return ['valid'=>true,'reason'=>'','row'=>$row,'options'=>[],'match_items'=>[],'answer_mode'=>'english_match'];
+    }
     $type=(string)$row['type'];
     $choiceRequired=murshid_v48_choice_required_prompt($display);
     $tfPrompt=murshid_v48_true_false_prompt($display);

@@ -99,10 +99,10 @@ foreach($incoming as $qid=>$a){
     if(!isset($correct[$qid]))continue;
     $given=trim((string)($a['text']??$a['selected_text']??''));
     if($given==='')continue;
-        $isEnglishPair=$isEnglishMatchChapter && str_starts_with(ltrim((string)($questionTexts[$qid]??'')),'Match /');
+        $isEnglishPair=murshid_v53_matching_definition((string)($questionTexts[$qid]??''))!==null;
     if($isEnglishPair){
-        $givenPairs=$parseEnglishPairs($given);$correctPairs=$parseEnglishPairs($correct[$qid]);
-        $pairOk=$givenPairs!==[] && $givenPairs===$correctPairs;
+        $givenPairs=murshid_v53_parse_pairs($given);$correctPairs=murshid_v53_parse_pairs($correct[$qid]);
+        $pairOk=$givenPairs!==null && $givenPairs===$correctPairs;
         $grade=['is_correct'=>$pairOk,'status'=>$pairOk?'correct':'incorrect','score'=>$pairOk?100:0,'message'=>$pairOk?'جميع التوصيلات صحيحة':'توجد توصيلات غير صحيحة'];
     }else{
         if(($types[$qid]??'')==='calculation' && isset($calculationDefs[$qid])){

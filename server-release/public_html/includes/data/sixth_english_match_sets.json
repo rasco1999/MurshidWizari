@@ -1,0 +1,1195 @@
+[
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 vacancy a Without someone looking after it.\nA computer program that is useful if you are\n2 pollution b working with numbers.\n3 unattended c The company has a space for new employee.\n4 pickpocket d A person who steals money from your pocket.\nThe process of damaging the air, water or land\n5 spreadsheet e with chemicals.",
+    "answer": "1-c, 2-e, 3-a, 4-d, 5-b",
+    "year": 2014,
+    "round": "التمهيدي",
+    "left": {
+      "1": "vacancy",
+      "2": "pollution",
+      "3": "unattended",
+      "4": "pickpocket",
+      "5": "spreadsheet"
+    },
+    "right": {
+      "a": "Without someone looking after it.",
+      "b": "A computer program that is useful if you are working with numbers.",
+      "c": "The company has a space for new employee.",
+      "d": "A person who steals money from your pocket.",
+      "e": "The process of damaging the air, water or land with chemicals."
+    },
+    "map": {
+      "1": "c",
+      "2": "e",
+      "3": "a",
+      "4": "d",
+      "5": "b"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 I'm writing to inquire a because it is very easy.\n2 If the cases are too heavy b because it's a very nice hotel.\nYou shouldn't have any trouble\n3 doing the work. c about my ATM card.\n4 Food goes bad d complain about the noise.\n5 They should be very comfortable e you have to pay extra\n6 People who live near wind farms f unless you keep it in the fridge",
+    "answer": "1-c, 2-e, 3-a, 4-f, 5-b, 6-d",
+    "year": 2014,
+    "round": "الدور الأول",
+    "left": {
+      "1": "I'm writing to inquire",
+      "2": "If the cases are too heavy",
+      "3": "You shouldn't have any trouble doing the work.",
+      "4": "Food goes bad",
+      "5": "They should be very comfortable",
+      "6": "People who live near wind farms"
+    },
+    "right": {
+      "a": "because it is very easy.",
+      "b": "because it's a very nice hotel.",
+      "c": "about my ATM card.",
+      "d": "complain about the noise.",
+      "e": "you have to pay extra",
+      "f": "unless you keep it in the fridge"
+    },
+    "map": {
+      "1": "c",
+      "2": "e",
+      "3": "a",
+      "4": "f",
+      "5": "b",
+      "6": "d"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 ambitious a out of job\n2 unemployed b witness\n3 a fine welcome c want to succeed\na large meeting to discuss\n4 something d hospitality\na person who saw or heard\n5 something e conference",
+    "answer": "1-c, 2-a, 3-d, 4-e, 5-b",
+    "year": 2014,
+    "round": "الدور الثاني",
+    "left": {
+      "1": "ambitious",
+      "2": "unemployed",
+      "3": "a fine welcome",
+      "4": "a large meeting to discuss something",
+      "5": "a person who saw or heard something"
+    },
+    "right": {
+      "a": "out of job",
+      "b": "witness",
+      "c": "want to succeed",
+      "d": "hospitality",
+      "e": "conference"
+    },
+    "map": {
+      "1": "c",
+      "2": "a",
+      "3": "d",
+      "4": "e",
+      "5": "b"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\nyou need to get a special li-\n1 cence. a to take our passports\nbecause I don't want to be late\n2 If he's used computers before b again.\n3 we mustn't forget. c leave so soon.\n4 I must get up early tomorrow d to drive a lorry\n5 I don't have to e when I will receive my card?\nhe should know how to use this\n6 Could you please let me know. f software.",
+    "answer": "1-d, 2-f, 3-a, 4-b, 5-c, 6-e",
+    "year": 2014,
+    "round": "الدور الثالث",
+    "left": {
+      "1": "you need to get a special licence.",
+      "2": "If he's used computers before",
+      "3": "we mustn't forget.",
+      "4": "I must get up early tomorrow",
+      "5": "I don't have to",
+      "6": "Could you please let me know."
+    },
+    "right": {
+      "a": "to take our passports",
+      "b": "because I don't want to be late again.",
+      "c": "leave so soon.",
+      "d": "to drive a lorry",
+      "e": "when I will receive my card?",
+      "f": "he should know how to use this software."
+    },
+    "map": {
+      "1": "d",
+      "2": "f",
+      "3": "a",
+      "4": "b",
+      "5": "c",
+      "6": "e"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\nthe company has a space for a new employ-\n1 ferry a ee.\n2 boarding card b activity in your bank account.\nhotels will often given you this if you're going\n3 spectacular c on a full-day excursion.\n4 transaction d if you lose this, you can't get on an airplane.\n5 vacancy e a boat that transports people and goods.\n6 packed lunch f something which is wonderful to look at.",
+    "answer": "1-e, 2-d, 3-f, 4-b, 5-a, 6-c",
+    "year": 2015,
+    "round": "الدور الثاني",
+    "left": {
+      "1": "ferry",
+      "2": "boarding card",
+      "3": "spectacular",
+      "4": "transaction",
+      "5": "vacancy",
+      "6": "packed lunch"
+    },
+    "right": {
+      "a": "the company has a space for a new employee.",
+      "b": "activity in your bank account.",
+      "c": "hotels will often given you this if you're going on a full-day excursion.",
+      "d": "if you lose this, you can't get on an airplane.",
+      "e": "a boat that transports people and goods.",
+      "f": "something which is wonderful to look at."
+    },
+    "map": {
+      "1": "e",
+      "2": "d",
+      "3": "f",
+      "4": "b",
+      "5": "a",
+      "6": "c"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\na person who saw or heard some-\n1 thing at the time of a crime. a conference.\n2 ambitious. b hospitality.\na large meeting to discuss some-\n3 thing. c the emergency service\n4 unemployed. d witness.\nthe police, fire department, ambu-\n5 lance. e Want to succeed\n6 a fine welcome. f Out of job",
+    "answer": "1-d, 2-e, 3-a, 4-f, 5-c, 6-b",
+    "year": 2015,
+    "round": "الدور الثالث",
+    "left": {
+      "1": "a person who saw or heard something at the time of",
+      "2": "ambitious.",
+      "3": "a large meeting to discuss something.",
+      "4": "unemployed.",
+      "5": "the police, fire department, ambulance.",
+      "6": "a fine welcome."
+    },
+    "right": {
+      "a": "crime. a conference.",
+      "b": "hospitality.",
+      "c": "the emergency service",
+      "d": "witness.",
+      "e": "Want to succeed",
+      "f": "Out of job"
+    },
+    "map": {
+      "1": "d",
+      "2": "e",
+      "3": "a",
+      "4": "f",
+      "5": "c",
+      "6": "b"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 Headphones a A person who is looking for a job\n2 Vacancy b Written request\nThings you put over your ears to listen\n3 Jobseeker c privately\n4 Seat belt d Company has space for a new employee\n5 Application e Medical helpers not doctors or nurses\nThis protect you when you are driving or\n6 Paramedics f flying",
+    "answer": "1-c, 2-d, 3-a, 4-f, 5-b, 6-e",
+    "year": 2016,
+    "round": "الدور الثاني",
+    "left": {
+      "1": "Headphones",
+      "2": "Vacancy",
+      "3": "Jobseeker",
+      "4": "Seat belt",
+      "5": "Application",
+      "6": "Paramedics"
+    },
+    "right": {
+      "a": "A person who is looking for a job",
+      "b": "Written request",
+      "c": "Things you put over your ears to listen privately",
+      "d": "Company has space for a new employee",
+      "e": "Medical helpers not doctors or nurses",
+      "f": "This protect you when you are driving or flying"
+    },
+    "map": {
+      "1": "c",
+      "2": "d",
+      "3": "a",
+      "4": "f",
+      "5": "b",
+      "6": "e"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 withdrawal a the same as or similar to\nThe process of damaging the air , water, or the\n2 empty b land with chemical\n3 overdraft facilities c money taken out of your account.\n4 Pollution d working quickly and well.\n5 Efficient e there is nothing in it.\nAbility to use more money than you have in\n6 Equivalent f your account at the moment.",
+    "answer": "1-c, 2-e, 3-f, 4-b, 5-d, 6-a",
+    "year": 2016,
+    "round": "الدور الثالث",
+    "left": {
+      "1": "withdrawal",
+      "2": "empty",
+      "3": "overdraft facilities",
+      "4": "Pollution",
+      "5": "Efficient",
+      "6": "Equivalent"
+    },
+    "right": {
+      "a": "the same as or similar to",
+      "b": "The process of damaging the air, water, or the land with chemical",
+      "c": "money taken out of your account.",
+      "d": "working quickly and well.",
+      "e": "there is nothing in it.",
+      "f": "Ability to use more money than you have in your account at the moment."
+    },
+    "map": {
+      "1": "c",
+      "2": "e",
+      "3": "f",
+      "4": "b",
+      "5": "d",
+      "6": "a"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 waste a operates on people in hospital\n2 logging b this means that you really want to succeed\n3 surgeon c if you lose it you can't get on an airplane.\n4 ambitious d cutting down trees for wood.\n5 boarding card e damaging the air, water or land with chemicals.\nf useless materials left after using something.",
+    "answer": "1-f, 2-d, 3-a, 4-b, 5-c",
+    "year": 2016,
+    "round": "الدور الثاني خارج العراق",
+    "left": {
+      "1": "waste",
+      "2": "logging",
+      "3": "surgeon",
+      "4": "ambitious",
+      "5": "boarding card"
+    },
+    "right": {
+      "a": "operates on people in hospital",
+      "b": "this means that you really want to succeed",
+      "c": "if you lose it you can't get on an airplane.",
+      "d": "cutting down trees for wood.",
+      "e": "damaging the air, water or land with chemicals.",
+      "f": "useless materials left after using something."
+    },
+    "map": {
+      "1": "f",
+      "2": "d",
+      "3": "a",
+      "4": "b",
+      "5": "c"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 I can speak English and Arabic, a I would save a lot of time.\n2 If I had an ATM card, b because it's a very nice hotel.\n3 I can't stay long because c when I will receive my card?\nso I should be able to talk to\n4 They should be very comfortable, d most of the visitors.\nIf I could check my account bal- I'm meeting my brother at\n5 ance by telephone, e 6.00.\nI could withdraw money on\nCould you please let me know f my way to work.",
+    "answer": "1-d, 2-f, 3-e, 4-b, 5-a, 6-c",
+    "year": 2017,
+    "round": "التمهيدي",
+    "left": {
+      "1": "I can speak English and Arabic,",
+      "2": "If I had an ATM card,",
+      "3": "I can't stay long because",
+      "4": "They should be very comfortable,",
+      "5": "If I could check my account balance by telephone,",
+      "6": ".00. Could you please let me know"
+    },
+    "right": {
+      "a": "I would save a lot of time.",
+      "b": "because it's a very nice hotel.",
+      "c": "when I will receive my card?",
+      "d": "so I should be able to talk to most of the visitors.",
+      "e": "I'm meeting my brother at",
+      "f": "I could withdraw money on my way to work."
+    },
+    "map": {
+      "1": "d",
+      "2": "f",
+      "3": "e",
+      "4": "b",
+      "5": "a",
+      "6": "c"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 wanted and needed a working quickly and well.\n2 without success b surprised\n3 expired c in demand.\n4 Astounded d hospitality\n5 a fine welcome e come to an end\n6 efficient f to no avail.\n7 very important. G vital",
+    "answer": "1-c, 2-f, 3-e, 4-b, 5-d, 6-a, 7-g",
+    "year": 2017,
+    "round": "الدور الأول",
+    "left": {
+      "1": "wanted and needed",
+      "2": "without success",
+      "3": "expired",
+      "4": "Astounded",
+      "5": "a fine welcome",
+      "6": "efficient",
+      "7": "very important."
+    },
+    "right": {
+      "a": "working quickly and well.",
+      "b": "surprised",
+      "c": "in demand.",
+      "d": "hospitality",
+      "e": "come to an end",
+      "f": "to no avail.",
+      "g": "vital"
+    },
+    "map": {
+      "1": "c",
+      "2": "f",
+      "3": "e",
+      "4": "b",
+      "5": "d",
+      "6": "a",
+      "7": "g"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 metal a scene\n2 speed b lunch\n3 web c limit\n4 crime d fees\n5 course e detector\n6 Packed f design",
+    "answer": "1-c, 2-f, 3-e, 4-a, 5-d, 6-b",
+    "year": 2017,
+    "round": "الدور الثاني",
+    "left": {
+      "1": "metal",
+      "2": "speed",
+      "3": "web",
+      "4": "crime",
+      "5": "course",
+      "6": "Packed"
+    },
+    "right": {
+      "a": "scene",
+      "b": "lunch",
+      "c": "limit",
+      "d": "fees",
+      "e": "detector",
+      "f": "design"
+    },
+    "map": {
+      "1": "c",
+      "2": "f",
+      "3": "e",
+      "4": "a",
+      "5": "d",
+      "6": "b"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\nMatch the words with their definitions. There is one extra definition.\n1 Waste a Money that you put in your bank account\n2 Surgeon b Monet taken from your account\n3 Deposit c A joint in the leg\n4 Venue d A place where you hold a course or a concert\nUseless materials that are left after you have used\n5 Ankle e something\nf Someone who operates on people in a hospital.",
+    "answer": "1-e, 2-f, 3-a, 4-d, 5-c",
+    "year": 2017,
+    "round": "الدور الأول خارج العراق",
+    "left": {
+      "1": "Waste",
+      "2": "Surgeon",
+      "3": "Deposit",
+      "4": "Venue",
+      "5": "Ankle"
+    },
+    "right": {
+      "a": "Money that you put in your bank account",
+      "b": "Money taken from your account",
+      "c": "A joint in the leg",
+      "d": "A place where you hold a course or a concert",
+      "e": "Useless materials that are left after you have used something",
+      "f": "Someone who operates on people in a hospital."
+    },
+    "map": {
+      "1": "e",
+      "2": "f",
+      "3": "a",
+      "4": "d",
+      "5": "c"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\nMatch words with their definitions. (There is one extra definitions)\n1 Plumber a A writen request.\n2 Transaction b Don't have confidence in someone.\n3 Application c An activity in your bank account.\n4 Distrust d Someone who installs and fixes pipes for water.\nThe process of damaging the air, water or land\n5 Pollution e with chemicals\nf Someone who writes articles",
+    "answer": "1-d, 2-c, 3-a, 4-b, 5-e",
+    "year": 2017,
+    "round": "الدور الثاني خارج العراق",
+    "left": {
+      "1": "Plumber",
+      "2": "Transaction",
+      "3": "Application",
+      "4": "Distrust",
+      "5": "Pollution"
+    },
+    "right": {
+      "a": "A writen request.",
+      "b": "Don't have confidence in someone.",
+      "c": "An activity in your bank account.",
+      "d": "Someone who installs and fixes pipes for water.",
+      "e": "The process of damaging the air, water or land with chemicals f Someone who writes articles"
+    },
+    "map": {
+      "1": "d",
+      "2": "c",
+      "3": "a",
+      "4": "b",
+      "5": "e"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 1. jobseeker a get on a list of people.\na place to stay where you cook your own\n2 2. charity b food.\n3 3. balance c a person who is looking for a job.\n4. self-catering an organization that provides help or raises\n4 apartment d money for people in need.\nto suggest that someone does something\n5 5. register e that you believe would be good.\n6. encourage f the total amount of money in your account.",
+    "answer": "1-c, 2-d, 3-f, 4-b, 5-a, 6-e",
+    "year": 2018,
+    "round": "التمهيدي",
+    "left": {
+      "1": "1. jobseeker",
+      "2": "2. charity",
+      "3": "3. balance",
+      "4": ". \u0007self-catering apartment",
+      "5": "5. register",
+      "6": ". encourage"
+    },
+    "right": {
+      "a": "get on a list of people.",
+      "b": "a place to stay where you cook your own food.",
+      "c": "a person who is looking for a job.",
+      "d": "an organization that provides help or raises money for people in need.",
+      "e": "to suggest that someone does something that you believe would be good.",
+      "f": "the total amount of money in your account."
+    },
+    "map": {
+      "1": "c",
+      "2": "d",
+      "3": "f",
+      "4": "b",
+      "5": "a",
+      "6": "e"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\nMatch the beginnings in List A and their endings in List B: (Do 5 only)\n1 If he's used computers before. a saw that classes started in June.\n2 Could you please let me know b you should get it by Sunday.\nThey didn't stay for dinner be-\n3 cause c wear a uniform at her new job.\nthey were having dinner with a\n4 She has to d friend\nhe should know how to use this\n5 When I read the catalogue, I e software.\nIf you send the letter today f When I will receive my card?",
+    "answer": "1-e, 2-f, 3-d, 4-c, 5-a, 6-b",
+    "year": 2018,
+    "round": "الدور الثالث",
+    "left": {
+      "1": "If he's used computers before.",
+      "2": "Could you please let me know",
+      "3": "They didn't stay for dinner because",
+      "4": "She has to",
+      "5": "When I read the catalogue, I",
+      "6": "If you send the letter today"
+    },
+    "right": {
+      "a": "saw that classes started in June.",
+      "b": "you should get it by Sunday.",
+      "c": "wear a uniform at her new job.",
+      "d": "they were having dinner with a friend",
+      "e": "he should know how to use this software.",
+      "f": "When I will receive my card?"
+    },
+    "map": {
+      "1": "e",
+      "2": "f",
+      "3": "d",
+      "4": "c",
+      "5": "a",
+      "6": "b"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 a written request. a Ferry\n2 a piece of paper you can use to pay for things. b Headphones\n3 activity in your bank account. c Application\n4 a boat that transports people and goods. d Transaction\n5 a good salary, compared with other employers e Competitive salary\n6 things you put over your ears to listen privately. f Cheque",
+    "answer": "1-c, 2-f, 3-d, 4-a, 5-e, 6-b",
+    "year": 2018,
+    "round": "الدور الأول خارج العراق",
+    "left": {
+      "1": "a written request.",
+      "2": "a piece of paper you can use to pay for things.",
+      "3": "activity in your bank account.",
+      "4": "a boat that transports people and goods.",
+      "5": "a good salary, compared with other employers",
+      "6": "things you put over your ears to listen privately."
+    },
+    "right": {
+      "a": "Ferry",
+      "b": "Headphones",
+      "c": "Application",
+      "d": "Transaction",
+      "e": "Competitive salary",
+      "f": "Cheque"
+    },
+    "map": {
+      "1": "c",
+      "2": "f",
+      "3": "d",
+      "4": "a",
+      "5": "e",
+      "6": "b"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\nThey should be very I could withdraw money on my\n1 comfortable a way to work.\nso I should be able to talk to most\n2 If I had an ATM Card. b of the visitors.\n3 She felt sleepy and decided c don't like it.\nyou don't have to pay for plane\n4 I can speak English and Arabic d tickets.\n5 If you work for an airline, e because it's a very nice hotel.\n6 If you dislike something, you: f She was going to get to bed early.",
+    "answer": "1-e, 2-a, 3-f, 4-b, 5-d, 6-c",
+    "year": 2018,
+    "round": "الدور الثاني خارج العراق",
+    "left": {
+      "1": "They should be very comfortable",
+      "2": "If I had an ATM Card.",
+      "3": "She felt sleepy and decided",
+      "4": "I can speak English and Arabic",
+      "5": "If you work for an airline,",
+      "6": "If you dislike something, you:"
+    },
+    "right": {
+      "a": "I could withdraw money on my way to work.",
+      "b": "so I should be able to talk to most of the visitors.",
+      "c": "don't like it.",
+      "d": "you don't have to pay for plane tickets.",
+      "e": "because it's a very nice hotel.",
+      "f": "She was going to get to bed early."
+    },
+    "map": {
+      "1": "e",
+      "2": "a",
+      "3": "f",
+      "4": "b",
+      "5": "d",
+      "6": "c"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 Course a connection\n2 Boarding b belt\n3 Sea c fees\n4 Conveyor d deal\n5 Internet e card\n6 Package f front",
+    "answer": "1-c, 2-e, 3-f, 4-b, 5-a, 6-d",
+    "year": 2018,
+    "round": "الدور الأول خارج العراق",
+    "left": {
+      "1": "Course",
+      "2": "Boarding",
+      "3": "Sea",
+      "4": "Conveyor",
+      "5": "Internet",
+      "6": "Package"
+    },
+    "right": {
+      "a": "connection",
+      "b": "belt",
+      "c": "fees",
+      "d": "deal",
+      "e": "card",
+      "f": "front"
+    },
+    "map": {
+      "1": "c",
+      "2": "e",
+      "3": "f",
+      "4": "b",
+      "5": "a",
+      "6": "d"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 considerable a a place to stay where you cook your own food.\n2 Headphones b a fine welcome.\n3 Self catering apartment c a lot (of ).\n4 Transaction d activity in your bank account.\nmoney you pay the bank every year if\n5 Hospitality e you have a credit card.\n6 Credit card fee f things you put over your ears to listen privately.",
+    "answer": "1-c, 2-f, 3-a, 4-d, 5-b, 6-e",
+    "year": 2019,
+    "round": "الدور الأول",
+    "left": {
+      "1": "considerable",
+      "2": "Headphones",
+      "3": "Self catering apartment",
+      "4": "Transaction",
+      "5": "Hospitality",
+      "6": "Credit card fee"
+    },
+    "right": {
+      "a": "a place to stay where you cook your own food.",
+      "b": "a fine welcome.",
+      "c": "a lot (of).",
+      "d": "activity in your bank account.",
+      "e": "money you pay the bank every year if you have a credit card.",
+      "f": "things you put over your ears to listen privately."
+    },
+    "map": {
+      "1": "c",
+      "2": "f",
+      "3": "a",
+      "4": "d",
+      "5": "b",
+      "6": "e"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 ambitious a give an idea of the meaning.\n2 empty b this means that you really want to succeed.\n3 register c without someone looking after it.\n4 convey the sense d get on a list of people.\n5 Speciality e there is nothing in it.\n6 Unattended f something special to a locality.",
+    "answer": "1-b, 2-e, 3-d, 4-a, 5-f, 6-c",
+    "year": 2019,
+    "round": "الدور الثالث",
+    "left": {
+      "1": "ambitious",
+      "2": "empty",
+      "3": "register",
+      "4": "convey the sense",
+      "5": "Speciality",
+      "6": "Unattended"
+    },
+    "right": {
+      "a": "give an idea of the meaning.",
+      "b": "this means that you really want to succeed.",
+      "c": "without someone looking after it.",
+      "d": "get on a list of people.",
+      "e": "there is nothing in it.",
+      "f": "something special to a locality."
+    },
+    "map": {
+      "1": "b",
+      "2": "e",
+      "3": "d",
+      "4": "a",
+      "5": "f",
+      "6": "c"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\nYou shouldn't have any trouble he should know how to use this\n1 doing the work a software.\n2 They should be very comfortable b because there isn't much traffic.\n3 If he used computers before, c to drive a lorry.\nIt shouldn't take me more than 15\n4 minutes to drive there d she should get it by Monday.\n5 I can speak English and Arabic, e because it's a very nice hotel.\nso I should be able to talk to\n6 If you send the letter today, f most of the visitors.\n7 You need to get a special licence. h because it's very easy.",
+    "answer": "1-h, 2-e, 3-a, 4-b, 5-f, 6-d, 7-c",
+    "year": 2020,
+    "round": "التمهيدي علمي",
+    "left": {
+      "1": "You shouldn't have any trouble doing the work",
+      "2": "They should be very comfortable",
+      "3": "If he used computers before,",
+      "4": "It shouldn't take me more than 15 minutes to drive there",
+      "5": "I can speak English and Arabic,",
+      "6": "If you send the letter today,",
+      "7": "You need to get a special licence."
+    },
+    "right": {
+      "a": "he should know how to use this software.",
+      "b": "because there isn't much traffic.",
+      "c": "to drive a lorry.",
+      "d": "she should get it by Monday.",
+      "e": "because it's a very nice hotel.",
+      "f": "so I should be able to talk to most of the visitors.",
+      "h": "because it's very easy."
+    },
+    "map": {
+      "1": "h",
+      "2": "e",
+      "3": "a",
+      "4": "b",
+      "5": "f",
+      "6": "d",
+      "7": "c"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 empty a things you put over your ears to listen privately.\n2 Indemand b throw away / get rid of.\n3 Headphones c the box-like room where interpreters work.\n4 Unattended d there is nothing in it.\n5 Booth e without someone looking after it.\n6 Dispose of f wanted and needed.",
+    "answer": "1-d, 2-f, 3-a, 4-e, 5-c, 6-b",
+    "year": 2020,
+    "round": "التمهيدي أدبي",
+    "left": {
+      "1": "empty",
+      "2": "Indemand",
+      "3": "Headphones",
+      "4": "Unattended",
+      "5": "Booth",
+      "6": "Dispose of"
+    },
+    "right": {
+      "a": "things you put over your ears to listen privately.",
+      "b": "throw away / get rid of.",
+      "c": "the box-like room where interpreters work.",
+      "d": "there is nothing in it.",
+      "e": "without someone looking after it.",
+      "f": "wanted and needed."
+    },
+    "map": {
+      "1": "d",
+      "2": "f",
+      "3": "a",
+      "4": "e",
+      "5": "c",
+      "6": "b"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 x-ray a camera\n2 security b belt\n3 conveyor c machine\n4 crime d detector\n5 metal e ticket\n6 Speeding f scene",
+    "answer": "1-c, 2-a, 3-b, 4-f, 5-d, 6-e",
+    "year": 2020,
+    "round": "الدور الأول أحيائي",
+    "left": {
+      "1": "x-ray",
+      "2": "security",
+      "3": "conveyor",
+      "4": "crime",
+      "5": "metal",
+      "6": "Speeding"
+    },
+    "right": {
+      "a": "camera",
+      "b": "belt",
+      "c": "machine",
+      "d": "detector",
+      "e": "ticket",
+      "f": "scene"
+    },
+    "map": {
+      "1": "c",
+      "2": "a",
+      "3": "b",
+      "4": "f",
+      "5": "d",
+      "6": "e"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 unattended a there is nothing in it.\n2 Vacancy b a good salary, compared with other employers.\nA competitive sal-\n3 ary c without someone looking after it.\n4 Declare d this means that you really want to succeed.\nsay you are carrying something you need to\n5 Empty e pay duty on.\n6 Ambitious f the company has a space for a new employee.",
+    "answer": "1-c, 2-f, 3-b, 4-e, 5-a, 6-d",
+    "year": 2020,
+    "round": "الدور الأول أدبي",
+    "left": {
+      "1": "unattended",
+      "2": "Vacancy",
+      "3": "A competitive salary",
+      "4": "Declare",
+      "5": "Empty",
+      "6": "Ambitious"
+    },
+    "right": {
+      "a": "there is nothing in it.",
+      "b": "a good salary, compared with other employers.",
+      "c": "without someone looking after it.",
+      "d": "this means that you really want to succeed.",
+      "e": "say you are carrying something you need to pay duty on.",
+      "f": "the company has a space for a new employee."
+    },
+    "map": {
+      "1": "c",
+      "2": "f",
+      "3": "b",
+      "4": "e",
+      "5": "a",
+      "6": "d"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 luxurious a something special to a locality\n2 Out of job b in a difficult situation.\n3 Under pressure c a boat that transports people and goods.\n4 Ferry d a fine welcome.\n5 Speciality e unemployed.\n6 Hospitality f extremely comfortable",
+    "answer": "1-f, 2-e, 3-b, 4-c, 5-a, 6-d",
+    "year": 2020,
+    "round": "الدور الثاني تكميلي",
+    "left": {
+      "1": "luxurious",
+      "2": "Out of job",
+      "3": "Under pressure",
+      "4": "Ferry",
+      "5": "Speciality",
+      "6": "Hospitality"
+    },
+    "right": {
+      "a": "something special to a locality",
+      "b": "in a difficult situation.",
+      "c": "a boat that transports people and goods.",
+      "d": "a fine welcome.",
+      "e": "unemployed.",
+      "f": "extremely comfortable"
+    },
+    "map": {
+      "1": "f",
+      "2": "e",
+      "3": "b",
+      "4": "c",
+      "5": "a",
+      "6": "d"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 She was nervous on the plane a because we hadn't booked.\nbecause our room hadn't been\n2 When you are in a meeting, b cleaned.\n3 We couldn't get a room c you need good computer skills.\n4 I didn't recognize the place. d because it had changed so much.\n5 To be a good secretary, e because she hadn't flown before.\n6 We complained to the manager. f you should turn your mobile off.",
+    "answer": "1-e, 2-f, 3-a, 4-d, 5-c, 6-b",
+    "year": 2020,
+    "round": "الدور الثالث",
+    "left": {
+      "1": "She was nervous on the plane",
+      "2": "When you are in a meeting,",
+      "3": "We couldn't get a room",
+      "4": "I didn't recognize the place.",
+      "5": "To be a good secretary,",
+      "6": "We complained to the manager."
+    },
+    "right": {
+      "a": "because we hadn't booked.",
+      "b": "because our room hadn't been cleaned.",
+      "c": "you need good computer skills.",
+      "d": "because it had changed so much.",
+      "e": "because she hadn't flown before.",
+      "f": "you should turn your mobile off."
+    },
+    "map": {
+      "1": "e",
+      "2": "f",
+      "3": "a",
+      "4": "d",
+      "5": "c",
+      "6": "b"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 ski a lunch\n2 sea b belt\n3 packed c hotel\n4 boarding d resort\n5 seat e card\n6 five-star f front",
+    "answer": "1-d, 2-f, 3-a, 4-e, 5-b, 6-c",
+    "year": 2021,
+    "round": "التمهيدي",
+    "left": {
+      "1": "ski",
+      "2": "sea",
+      "3": "packed",
+      "4": "boarding",
+      "5": "seat",
+      "6": "five-star"
+    },
+    "right": {
+      "a": "lunch",
+      "b": "belt",
+      "c": "hotel",
+      "d": "resort",
+      "e": "card",
+      "f": "front"
+    },
+    "map": {
+      "1": "d",
+      "2": "f",
+      "3": "a",
+      "4": "e",
+      "5": "b",
+      "6": "c"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\nhe should know how to use this\n1 She studied English because. a software.\n2 I didn't recognize the place b I would receive it within a week.\n3 If he's used computer before c saw that classes started in June.\n4 I was told that d because it had changed so much.\nshe knew she would be travelling for\n5 I couldn't board the place e work.\n6 When I read catalogue f because I had lost my boarding card.",
+    "answer": "1-e, 2-d, 3-a, 4-b, 5-f, 6-c",
+    "year": 2021,
+    "round": "التمهيدي",
+    "left": {
+      "1": "She studied English because.",
+      "2": "I didn't recognize the place",
+      "3": "If he's used computer before",
+      "4": "I was told that",
+      "5": "I couldn't board the place",
+      "6": "When I read catalogue"
+    },
+    "right": {
+      "a": "he should know how to use this software.",
+      "b": "I would receive it within a week.",
+      "c": "saw that classes started in June.",
+      "d": "because it had changed so much.",
+      "e": "she knew she would be travelling for work.",
+      "f": "because I had lost my boarding card."
+    },
+    "map": {
+      "1": "e",
+      "2": "d",
+      "3": "a",
+      "4": "b",
+      "5": "f",
+      "6": "c"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 admitted a the box - like room where interpreters work.\n2 booth b a practical lesson\n3 account number c allowed into a place\nmoney you pay the bank every year if you\n4 ferry d have a credit card.\nthe number that is used to identify your ac-\n5 workshop e count.\n6 credit card fee f a boat that transports people and goods.",
+    "answer": "1-c, 2-a, 3-e, 4-f, 5-b, 6-d",
+    "year": 2021,
+    "round": "التمهيدي",
+    "left": {
+      "1": "admitted",
+      "2": "booth",
+      "3": "account number",
+      "4": "ferry",
+      "5": "workshop",
+      "6": "credit card fee"
+    },
+    "right": {
+      "a": "the box like room where interpreters work.",
+      "b": "a practical lesson",
+      "c": "allowed into a place",
+      "d": "money you pay the bank every year if you have a credit card.",
+      "e": "the number that is used to identify your account.",
+      "f": "a boat that transports people and goods."
+    },
+    "map": {
+      "1": "c",
+      "2": "a",
+      "3": "e",
+      "4": "f",
+      "5": "b",
+      "6": "d"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 hospitality a the total amount of money in your account.\n2 chat b something which is wonderful to look at.\ntalk or communicate informally for example on the\n3 efficient c Internet.\n4 balance d a fine welcome.\n5 charity e working quickly and well.\nan organization that provides help or raises money\n6 spectacular f for people in need.",
+    "answer": "1-d, 2-c, 3-e, 4-a, 5-f, 6-b",
+    "year": 2021,
+    "round": "الدور الثاني أحيائي",
+    "left": {
+      "1": "hospitality",
+      "2": "chat",
+      "3": "efficient",
+      "4": "balance",
+      "5": "charity",
+      "6": "spectacular"
+    },
+    "right": {
+      "a": "the total amount of money in your account.",
+      "b": "something which is wonderful to look at.",
+      "c": "talk or communicate informally for example on the Internet.",
+      "d": "a fine welcome.",
+      "e": "working quickly and well.",
+      "f": "an organization that provides help or raises money for people in need."
+    },
+    "map": {
+      "1": "d",
+      "2": "c",
+      "3": "e",
+      "4": "a",
+      "5": "f",
+      "6": "b"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 computer a agency\n2 car b design\n3 packed c discipline\n4 web d skills\n5 self e hire\n6 travel f lunch",
+    "answer": "1-d, 2-e, 3-f, 4-b, 5-c, 6-a",
+    "year": 2021,
+    "round": "الدور الثاني تطبيقي أدبي",
+    "left": {
+      "1": "computer",
+      "2": "car",
+      "3": "packed",
+      "4": "web",
+      "5": "self",
+      "6": "travel"
+    },
+    "right": {
+      "a": "agency",
+      "b": "design",
+      "c": "discipline",
+      "d": "skills",
+      "e": "hire",
+      "f": "lunch"
+    },
+    "map": {
+      "1": "d",
+      "2": "e",
+      "3": "f",
+      "4": "b",
+      "5": "c",
+      "6": "a"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\nhe should know how to use\n1 I can speak English and Arabic, a this software.\n2 You need to get a special licence b on a weekend trip.\nIf I could check my account balance she was going to get to bed\n3 by telephone c early.\nso I should be able to talk to\n4 You needn't take so much baggage d most of the visitors.\n5 She felt sleepy and decided e I would save a lot of time.\n6 If he's used computers before, f to drive a lorry.",
+    "answer": "1-d, 2-f, 3-e, 4-b, 5-c, 6-a",
+    "year": 2021,
+    "round": "الدور الثاني تكميلي",
+    "left": {
+      "1": "I can speak English and Arabic,",
+      "2": "You need to get a special licence",
+      "3": "If I could check my account balance by telephone",
+      "4": "You needn't take so much baggage",
+      "5": "She felt sleepy and decided",
+      "6": "If he's used computers before,"
+    },
+    "right": {
+      "a": "he should know how to use this software.",
+      "b": "on a weekend trip.",
+      "c": "she was going to get to bed early.",
+      "d": "so I should be able to talk to most of the visitors.",
+      "e": "I would save a lot of time.",
+      "f": "to drive a lorry."
+    },
+    "map": {
+      "1": "d",
+      "2": "f",
+      "3": "e",
+      "4": "b",
+      "5": "c",
+      "6": "a"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 If you send the letter today, a if I'd spoken more languages.\n2 We couldn't get a room b saw that classes started in June.\n3 I could have been a good tour guide c because I had already been there twice.\nI didn't go on the excursion to\n4 Khor Al Zubeir in Basra d because we hadn't booked.\n5 When I read the catalogue, I e about my ATM card.\n6 I'm writing to inquire f she should get it by Monday.",
+    "answer": "1-f, 2-d, 3-a, 4-c, 5-b, 6-e",
+    "year": 2022,
+    "round": "الدور الأول أحيائي",
+    "left": {
+      "1": "If you send the letter today,",
+      "2": "We couldn't get a room",
+      "3": "I could have been a good tour guide",
+      "4": "I didn't go on the excursion to Khor Al Zubeir in Basra",
+      "5": "When I read the catalogue, I",
+      "6": "I'm writing to inquire"
+    },
+    "right": {
+      "a": "if I'd spoken more languages.",
+      "b": "saw that classes started in June.",
+      "c": "because I had already been there twice.",
+      "d": "because we hadn't booked.",
+      "e": "about my ATM card.",
+      "f": "she should get it by Monday."
+    },
+    "map": {
+      "1": "f",
+      "2": "d",
+      "3": "a",
+      "4": "c",
+      "5": "b",
+      "6": "e"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 venue a a boat that transports people and goods.\n2 enrol b a place to stay where you cook your own food.\n3 self-catering apartment c money that you put in your bank account.\n4 ferry d a good salary, compared with other employers.\nthe place where you hold a course or con-\n5 deposit e cert, for example.\n6 a competitive salary f be on a list for a class.",
+    "answer": "1-e, 2-f, 3-b, 4-a, 5-c, 6-d",
+    "year": 2022,
+    "round": "الدور الأول تطبيقي أدبي",
+    "left": {
+      "1": "venue",
+      "2": "enrol",
+      "3": "self-catering apartment",
+      "4": "ferry",
+      "5": "deposit",
+      "6": "a competitive salary"
+    },
+    "right": {
+      "a": "a boat that transports people and goods.",
+      "b": "a place to stay where you cook your own food.",
+      "c": "money that you put in your bank account.",
+      "d": "a good salary, compared with other employers.",
+      "e": "the place where you hold a course or concert, for example.",
+      "f": "be on a list for a class."
+    },
+    "map": {
+      "1": "e",
+      "2": "f",
+      "3": "b",
+      "4": "a",
+      "5": "c",
+      "6": "d"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 maintain a an account\n2 charge b interest\n3 open c a minimum balance\n4 deposit d a withdrawal\n5 make e 5 million Iraqi dinars\n6 pay f a fee",
+    "answer": "1-c, 2-f, 3-a, 4-e, 5-d, 6-b",
+    "year": 2022,
+    "round": "الدور الأول تطبيقي أدبي",
+    "left": {
+      "1": "maintain",
+      "2": "charge",
+      "3": "open",
+      "4": "deposit",
+      "5": "make",
+      "6": "pay"
+    },
+    "right": {
+      "a": "an account",
+      "b": "interest",
+      "c": "a minimum balance",
+      "d": "a withdrawal",
+      "e": "5 million Iraqi dinars",
+      "f": "a fee"
+    },
+    "map": {
+      "1": "c",
+      "2": "f",
+      "3": "a",
+      "4": "e",
+      "5": "d",
+      "6": "b"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 computer a design\n2 self b skills\n3 internet c resort\n4 web d connection\n5 course e discipline\n6 ski f fees",
+    "answer": "1-b, 2-e, 3-d, 4-a, 5-f, 6-c",
+    "year": 2023,
+    "round": "التمهيدي",
+    "left": {
+      "1": "computer",
+      "2": "self",
+      "3": "internet",
+      "4": "web",
+      "5": "course",
+      "6": "ski"
+    },
+    "right": {
+      "a": "design",
+      "b": "skills",
+      "c": "resort",
+      "d": "connection",
+      "e": "discipline",
+      "f": "fees"
+    },
+    "map": {
+      "1": "b",
+      "2": "e",
+      "3": "d",
+      "4": "a",
+      "5": "f",
+      "6": "c"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\nshe knew she would be travelling\n1 We complained to the manager a for work.\n2 If he's used computers before, b hadn't been so unfit.\nI could withdraw money on my\n3 She studied English because c way to work.\n4 If I had an ATM card, d because our room hadn't been cleaned\nI would have stayed in the\n5 police force if I e don't have confidence in them.\nhe should know how to use this\n6 If you distrust someone, you: f software",
+    "answer": "1-d, 2-f, 3-a, 4-c, 5-b, 6-e",
+    "year": 2023,
+    "round": "الدور الأول أحيائي",
+    "left": {
+      "1": "We complained to the manager",
+      "2": "If he's used computers before,",
+      "3": "She studied English because",
+      "4": "If I had an ATM card,",
+      "5": "I would have stayed in the police force if I",
+      "6": "If you distrust someone, you:"
+    },
+    "right": {
+      "a": "she knew she would be travelling for work.",
+      "b": "hadn't been so unfit.",
+      "c": "I could withdraw money on my way to work.",
+      "d": "because our room hadn't been cleaned",
+      "e": "don't have confidence in them.",
+      "f": "he should know how to use this software"
+    },
+    "map": {
+      "1": "d",
+      "2": "f",
+      "3": "a",
+      "4": "c",
+      "5": "b",
+      "6": "e"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 deposit a there is nothing in it.\n2 charity b the box-like room where interpreters work.\n3 empty c outside the military.\n4 booth d money that you put in your bank account.\n5 civilian e rules that everybody in the country must follow.\nan organization that provides help or raises\n6 laws f money for people in need.",
+    "answer": "1-d, 2-f, 3-a, 4-b, 5-c, 6-e",
+    "year": 2023,
+    "round": "الدور الثاني",
+    "left": {
+      "1": "deposit",
+      "2": "charity",
+      "3": "empty",
+      "4": "booth",
+      "5": "civilian",
+      "6": "laws"
+    },
+    "right": {
+      "a": "there is nothing in it.",
+      "b": "the box-like room where interpreters work.",
+      "c": "outside the military.",
+      "d": "money that you put in your bank account.",
+      "e": "rules that everybody in the country must follow.",
+      "f": "an organization that provides help or raises money for people in need."
+    },
+    "map": {
+      "1": "d",
+      "2": "f",
+      "3": "a",
+      "4": "b",
+      "5": "c",
+      "6": "e"
+    }
+  },
+  {
+    "question": "Match / صِل بين عناصر List A و List B:\n1 web a discipline\n2 Sea b design\n3 Packed c belt\n4 X ray d front\n5 Self e lunch\n6 Conveyor f machine",
+    "answer": "1-b, 2-d, 3-e, 4-f, 5-a, 6-c",
+    "year": 2023,
+    "round": "الدور الثالث",
+    "left": {
+      "1": "web",
+      "2": "Sea",
+      "3": "Packed",
+      "4": "X ray",
+      "5": "Self",
+      "6": "Conveyor"
+    },
+    "right": {
+      "a": "discipline",
+      "b": "design",
+      "c": "belt",
+      "d": "front",
+      "e": "lunch",
+      "f": "machine"
+    },
+    "map": {
+      "1": "b",
+      "2": "d",
+      "3": "e",
+      "4": "f",
+      "5": "a",
+      "6": "c"
+    }
+  }
+]

@@ -1,6 +1,7 @@
 <?php
 /** One daily difficult question per grade, Baghdad calendar day, no user XP or quota impact. */
 declare(strict_types=1);
+require_once __DIR__.'/question_integrity_v48.php';
 function murshid_daily_v48_schema(PDO $pdo): void {
     $pdo->exec("CREATE TABLE IF NOT EXISTS daily_challenge_v48_attempts (
       user_id INT UNSIGNED NOT NULL, challenge_date DATE NOT NULL, question_id INT UNSIGNED NOT NULL,
@@ -17,12 +18,13 @@ function murshid_daily_v48_question(PDO $pdo,int $gradeId): ?array {
       WHERE s.grade_id=? AND q.status=1 AND c.status=1 AND s.status=1 AND q.type IN ('mcq','text','fill','meaning','true_false')
         AND s.name NOT LIKE '%فرن%' AND LOWER(s.name) NOT LIKE '%french%'
         AND q.correct_answer IS NOT NULL AND q.correct_answer<>''
-      ORDER BY (CHAR_LENGTH(q.question_text)>=110) DESC, CRC32(CONCAT(?,':',q.id)) DESC LIMIT 1");
-    $q->execute([$gradeId,$today]);$question=$q->fetch(PDO::FETCH_ASSOC);
-    if(!$question)return null;
-    $op=$pdo->prepare("SELECT answer_text FROM answers WHERE question_id=? ORDER BY sort_order,id");$op->execute([(int)$question['id']]);
-    $question['options']=array_values(array_filter($op->fetchAll(PDO::FETCH_COLUMN),static fn($v)=>trim((string)$v)!==''));
-    if($question['type']==='true_false' && !$question['options'])$question['options']=['صح','خطأ'];
+      ORDER BY (CHAR_LENGTH(q.question_text)>=110) DESC, CRC32(CONCAT(?,':',q.id)) DESC LIMIT 1500");
+    $q->execute([$gradeId,$today]);
+    $rows=murshid_v48_prepare_rows($pdo,$q->fetchAll(PDO::FETCH_ASSOC)?:[],true);
+    if(!$rows)return null;
+    $question=$rows[0];
+    $question['options']=array_values(array_map(static fn($o)=>(string)$o['answer_text'],$question['_answer_rows']??[]));
+    $question['english_match']=murshid_v53_public_matching($question['_english_match']??null);
     return $question;
 }
 function murshid_daily_v48_attempt(PDO $pdo,int $userId): ?array {

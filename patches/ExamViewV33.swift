@@ -79,7 +79,7 @@ struct ExamView: View {
                         .background(Color.murshidBlue.opacity(0.10), in: Capsule())
                     Spacer()
                 }
-                Text(murshidQuestionDisplayText(q.text)).font(.title3.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+                Text(q.englishMatch == nil ? murshidQuestionDisplayText(q.text) : "صِل كل عنصر من القائمة A بما يناسبه من القائمة B.").font(.title3.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -214,7 +214,7 @@ struct ExamView: View {
     }
 
     private func hasAnswer(_ q: Question) -> Bool {
-        if q.englishMatch != nil { return !(english[q.id] ?? [:]).isEmpty }
+        if let definition = q.englishMatch { return V53MatchingRules.complete(definition, english[q.id] ?? [:]) }
         if !visibleOptions(q).isEmpty { return !(answers[q.id] ?? "").isEmpty }
         if q.type == "match" { return q.matchItems.allSatisfy { let d = matches[q.id]?[$0.id]; return !(d?.type ?? "").isEmpty && !(d?.reason ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } }
         if !q.stages.isEmpty {
@@ -328,23 +328,122 @@ struct MatchInput: View {
     }
 }
 
-struct EnglishMatchInput: View {
+enum V53MatchingRules {
+    static func labels(_ definition: JSON, _ side: String) -> [String: String] {
+        let raw = definition[side] as? JSON ?? [:]
+        return raw.mapValues { jString($0) }
+    }
+    static func keys(_ labels: [String: String]) -> [String] {
+        labels.keys.sorted { a, b in
+            let x = Int(a), y = Int(b)
+            if let x, let y { return x < y }
+            return a < b
+        }
+    }
+    static func pairs(_ answer: String) -> [String: String] {
+        var result: [String: String] = [:]
+        for token in answer.split(separator: ",") {
+            let pair = token.split(separator: "-", omittingEmptySubsequences: false)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            guard pair.count == 2, Int(pair[0]) != nil, pair[1].count == 1,
+                  pair[1].range(of: #"^[a-z]$"#, options: .regularExpression) != nil,
+                  result[pair[0]] == nil, !result.values.contains(pair[1]) else { return [:] }
+            result[pair[0]] = pair[1]
+        }
+        return result
+    }
+    static func encode(_ values: [String: String]) -> String {
+        keys(values).map { "\($0)-\(values[$0] ?? "")" }.joined(separator: ", ")
+    }
+    static func complete(_ definition: JSON, _ values: [String: String]) -> Bool {
+        let left = labels(definition, "left"), right = labels(definition, "right")
+        return left.count >= 2 && values.count == left.count &&
+            Set(values.values).count == left.count && left.allSatisfy { key, label in
+                !label.isEmpty && !(right[values[key] ?? ""] ?? "").isEmpty
+            }
+    }
+    static func assign(_ left: String, _ right: String, to values: [String: String]) -> [String: String] {
+        var next = values.filter { $0.value != right }
+        next[left] = right
+        return next
+    }
+}
+
+struct V53MatchingInput: View {
     let definition: JSON
     @Binding var values: [String: String]
+    @State private var pending = ""
+
     var body: some View {
-        let left = definition["left"] as? JSON ?? [:]
-        let right = definition["right"] as? JSON ?? [:]
-        let keys = left.keys.sorted { (Int($0) ?? 0) < (Int($1) ?? 0) }
-        VStack(spacing: 12) {
-            ForEach(keys, id: \.self) { key in
-                VStack(alignment: .leading, spacing: 7) {
-                    Text("\(key). \(jString(left[key]))").font(.headline)
-                    Picker("اختر المطابقة", selection: Binding(get: { values[key] ?? "" }, set: { values[key] = $0 })) {
-                        Text("اختر").tag("")
-                        ForEach(right.keys.sorted(), id: \.self) { rkey in Text("\(rkey) — \(jString(right[rkey]))").tag(rkey) }
-                    }.pickerStyle(.menu)
-                }.padding(10).background(Color.primary.opacity(0.035)).clipShape(RoundedRectangle(cornerRadius: 13))
+        let left = V53MatchingRules.labels(definition, "left")
+        let right = V53MatchingRules.labels(definition, "right")
+        VStack(alignment: .leading, spacing: 12) {
+            Text(pending.isEmpty ? "اختر عنصرًا من A ثم ما يناسبه من B. يمكنك تعديل أي توصيل." : "اختر العنصر المناسب من القائمة B.")
+                .font(.subheadline).foregroundStyle(.secondary)
+            HStack(alignment: .top, spacing: 10) {
+                column("A", labels: left, isLeft: true)
+                column("B", labels: right, isLeft: false)
+            }.environment(\.layoutDirection, .leftToRight)
+            Text("تم توصيل \(values.count) من \(left.count)")
+                .font(.caption)
+            if !values.isEmpty {
+                Button("مسح التوصيلات") { values = [:]; pending = "" }
+                    .font(.subheadline).frame(minHeight: 44)
             }
         }
     }
+
+    private func column(_ name: String, labels: [String: String], isLeft: Bool) -> some View {
+        VStack(spacing: 8) {
+            Text(name).font(.headline)
+            ForEach(V53MatchingRules.keys(labels), id: \.self) { key in
+                let partner = isLeft ? values[key] : values.first(where: { $0.value == key })?.key
+                let selected = isLeft && pending == key
+                Button {
+                    if isLeft { pending = key }
+                    else if !pending.isEmpty {
+                        values = V53MatchingRules.assign(pending, key, to: values)
+                        pending = ""
+                    }
+                    selectionHaptic()
+                } label: {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("\(key). \(labels[key] ?? "")")
+                            .font(.body).fixedSize(horizontal: false, vertical: true)
+                        if let partner {
+                            Text("↔ \(isLeft ? "B" : "A")\(partner)")
+                                .font(.caption.bold()).foregroundStyle(Color.murshidBlue)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                    .padding(10)
+                    .background(selected ? Color.murshidBlue.opacity(0.15) : Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(selected ? Color.murshidBlue : Color.primary.opacity(partner == nil ? 0.10 : 0.30), lineWidth: selected ? 2 : 1))
+                }
+                .buttonStyle(.plain).foregroundStyle(.primary)
+                .disabled(!isLeft && pending.isEmpty)
+                .accessibilityIdentifier("v53-match-\(name)-\(key)")
+                .accessibilityLabel("\(name)\(key): \(labels[key] ?? "")")
+                .accessibilityValue(partner.map { "مرتبط بـ \($0)" } ?? "غير موصول")
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }.frame(maxWidth: .infinity, alignment: .top)
+    }
+}
+
+struct V53SerializedMatchInput: View {
+    let definition: JSON
+    @Binding var answer: String
+    var body: some View {
+        V53MatchingInput(definition: definition, values: Binding(
+            get: { V53MatchingRules.pairs(answer) },
+            set: { answer = V53MatchingRules.encode($0) }
+        ))
+    }
+}
+
+struct EnglishMatchInput: View {
+    let definition: JSON
+    @Binding var values: [String: String]
+    var body: some View { V53MatchingInput(definition: definition, values: $values) }
 }

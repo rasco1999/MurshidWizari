@@ -26,6 +26,10 @@ internal object DailyDraftRules {
                 append(question.id).append('\u001f').append(question.type).append('\u001f')
                 append(question.text).append('\u001f')
                 question.options.forEach { append(it.length).append(':').append(it).append('\u001e') }
+                question.matching?.let { def ->
+                    for (side in listOf(def.left, def.right)) for (key in MatchingRules.keys(side))
+                        append(key).append(':').append(side[key]).append('\u001e')
+                }
                 append('\n')
             }
         }

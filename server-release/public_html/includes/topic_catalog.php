@@ -117,7 +117,15 @@ function topic_live_sql(string $alias='q'): string {
         ." AND $alias.question_text NOT LIKE '%هل الإجابة «%» صحيحة%'"
         ." AND $alias.question_text NOT LIKE 'الإجابة عن «%» هي «%'"
         ." AND $alias.question_text NOT LIKE 'صح أم خطأ: الإجابة عن «%» هي «%'"
-        ." AND $alias.question_text NOT LIKE '%تدريب تحقق وزاري:%'";
+        ." AND $alias.question_text NOT LIKE '%تدريب تحقق وزاري:%'"
+        ." AND $alias.question_text NOT LIKE '%الإجابة المناسبة للسؤال%'"
+        ." AND $alias.question_text NOT LIKE '%عند الإجابة عن «%'"
+        ." AND $alias.question_text NOT LIKE '%راجع المعلومة: يرتبط السؤال%'"
+        ." AND $alias.question_text NOT LIKE '%تدريب تثبيت: الجواب%'"
+        ." AND $alias.question_text NOT LIKE '%وفق المفهوم الدراسي، هل إجابة%'"
+        ." AND $alias.question_text NOT LIKE '%قيّم العبارة: إذا سُئلت%'"
+        ." AND $alias.question_text NOT LIKE '%اختر صح أو خطأ للرابطة%'"
+        ." AND $alias.question_text NOT LIKE '%تأكد من المراجعة: يقابل السؤال%'";
 }
 
 /** Pure grouping is shared by queries and tests. No question is discarded by deduplication. */

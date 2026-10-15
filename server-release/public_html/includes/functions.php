@@ -753,6 +753,8 @@ function arabic_grade_event_conflict(string $given,string $correct): bool {
     return false;
 }
 function grade_arabic_answer(string $given,string $correct,string $type='text',string $questionText=''): array {
+    require_once __DIR__.'/question_presentation_v53.php';
+    $pairGrade=murshid_v53_pair_grade($given,$correct);if($pairGrade!==null)return $pairGrade;
     $given=trim($given);$correct=trim($correct);
     if($type==='true_false'){
         $tf=static function(string $v): string {

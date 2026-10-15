@@ -453,7 +453,7 @@ struct V3ExamView: View {
     }
 
     private func hasAnswer(_ q: Question) -> Bool {
-        if q.englishMatch != nil { return !(english[q.id] ?? [:]).isEmpty }
+        if let definition = q.englishMatch { return V53MatchingRules.complete(definition, english[q.id] ?? [:]) }
         if !q.options.isEmpty { return !(answers[q.id] ?? "").isEmpty }
         if q.type == "match" {
             return q.matchItems.allSatisfy {

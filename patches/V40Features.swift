@@ -584,11 +584,13 @@ struct V40CustomExamBuilderView: View {
 private struct V40PracticeQuestion: Identifiable {
     let id: Int
     let text: String
+    let matching: JSON?
     let options: [QuestionOption]
     let year: String
     let round: String
 
     init(_ j: JSON) {
+        matching = j["english_match"] as? JSON
         id = jInt(j["id"])
         text = jString(j["text"])
         options = jArray(j["options"]).map(QuestionOption.init)
@@ -718,7 +720,11 @@ struct V40CustomExamSessionView: View {
         MurshidCard {
             VStack(alignment: .leading, spacing: 10) {
                 Text("إجابتك").font(.headline)
-                if !q.options.isEmpty {
+                if let definition = q.matching {
+                    V53SerializedMatchInput(definition: definition, answer: Binding(
+                        get: { answers[q.id] ?? "" }, set: { answers[q.id] = $0 }
+                    )).disabled(submitting)
+                } else if !q.options.isEmpty {
                     ForEach(Array(q.options.enumerated()), id: \.element.id) { index, option in
                         let selected = answers[q.id] == option.text
                         Button {
@@ -760,6 +766,8 @@ struct V40CustomExamSessionView: View {
 
     private var hasCurrentAnswer: Bool {
         guard !questions.isEmpty else { return false }
+        let q = questions[current]
+        if let definition = q.matching { return V53MatchingRules.complete(definition, V53MatchingRules.pairs(answers[q.id] ?? "")) }
         return !(answers[questions[current].id] ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .isEmpty
@@ -1310,9 +1318,11 @@ private struct V40DailyQuestion: Identifiable {
     let id: Int
     let type: String
     let text: String
+    let matching: JSON?
     let options: [String]
 
     init(_ json: JSON) {
+        matching = json["english_match"] as? JSON
         id = jInt(json["id"])
         type = jString(json["type"], default: "text")
         text = jString(json["question_text"], default: jString(json["text"]))
@@ -1368,7 +1378,11 @@ struct V40DailyChallengeView: View {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("سؤال \(index + 1)").font(.caption.bold()).foregroundStyle(Color.murshidBlue)
                                 Text(murshidQuestionDisplayText(q.text)).font(.headline).fixedSize(horizontal: false, vertical: true)
-                                if q.type == "true_false" && q.options.isEmpty {
+                                if let definition = q.matching {
+                                    V53SerializedMatchInput(definition: definition, answer: Binding(
+                                        get: { answers[q.id] ?? "" }, set: { answers[q.id] = $0 }
+                                    )).disabled(busy)
+                                } else if q.type == "true_false" && q.options.isEmpty {
                                     choices(q, ["صح", "خطأ"])
                                 } else if !q.options.isEmpty {
                                     choices(q, q.options)
@@ -1413,8 +1427,9 @@ struct V40DailyChallengeView: View {
     }
 
     private var allAnswered: Bool {
-        !questions.isEmpty && questions.allSatisfy {
-            !(answers[$0.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !questions.isEmpty && questions.allSatisfy { q in
+            if let definition = q.matching { return V53MatchingRules.complete(definition, V53MatchingRules.pairs(answers[q.id] ?? "")) }
+            return !(answers[q.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
     }
 

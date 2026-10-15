@@ -69,6 +69,8 @@ func murshidQuestionDisplayText(_ raw: String) -> String {
 func murshidQuestionIsStudentReady(_ raw: String) -> Bool {
     let text = murshidQuestionDisplayText(raw)
     guard text.count >= 4 else { return false }
+    let generated = ["الإجابة المناسبة للسؤال", "— هل الإجابة", "الإجابة عن «", "عند الإجابة عن «", "راجع المعلومة: يرتبط السؤال", "تدريب تثبيت: الجواب", "وفق المفهوم الدراسي، هل إجابة", "قيّم العبارة: إذا سُئلت", "اختر صح أو خطأ للرابطة", "تأكد من المراجعة: يقابل السؤال"]
+    if generated.contains(where: { raw.contains($0) }) { return false }
 
     let blockedPatterns = [
         #"^\s*هل\s+(?:الإجابة|الاجابة|الجواب|الحل)\b"#,
@@ -3037,7 +3039,7 @@ struct V3ExamView: View {
                         .background(Color.murshidBlue.opacity(0.10), in: Capsule())
                     Spacer()
                 }
-                Text(murshidQuestionDisplayText(q.text))
+                Text(q.englishMatch == nil ? murshidQuestionDisplayText(q.text) : "صِل كل عنصر من القائمة A بما يناسبه من القائمة B.")
                     .font(.title3.weight(.semibold))
                     .lineSpacing(5)
                     .fixedSize(horizontal: false, vertical: true)
@@ -3431,7 +3433,7 @@ struct V3ExamView: View {
     }
 
     private func hasAnswer(_ q: Question) -> Bool {
-        if q.englishMatch != nil { return !(english[q.id] ?? [:]).isEmpty }
+        if let definition = q.englishMatch { return V53MatchingRules.complete(definition, english[q.id] ?? [:]) }
         if !visibleOptions(q).isEmpty { return !(answers[q.id] ?? "").isEmpty }
         if q.type == "match" {
             return q.matchItems.allSatisfy {
