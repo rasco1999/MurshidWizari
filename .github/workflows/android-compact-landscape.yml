@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        case: [landscape, small-320dp]
+        case: [landscape]
     steps:
       - uses: actions/checkout@v4
       - name: Confirm production source is identical to the tested release

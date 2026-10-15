@@ -6,6 +6,24 @@ import anonymous_emulator_qa as ui
 import student_fixture_qa as fixture
 
 
+def reveal_inside_scroll(text,width,height):
+    # Short landscape windows have a large bottom system gesture region. Derive
+    # swipe coordinates from the actual app ScrollView, well away from Home.
+    for attempt in range(16):
+        tree,_=ui.ui_tree();node=ui.find(tree,text)
+        if node is not None:
+            match=ui.BOUNDS.fullmatch(node.attrib.get('bounds',''))
+            if match:
+                left,top,right,bottom=map(int,match.groups())
+                if right>left and bottom>top and 24<(top+bottom)//2<height-24:return node
+        scroll=next((n for n in tree.iter('node') if n.attrib.get('class')=='android.widget.ScrollView' and n.attrib.get('scrollable')=='true' and n.attrib.get('package')==ui.PACKAGE),None)
+        assert scroll is not None,('Native scroll area missing',ui.visible_texts(tree))
+        left,top,right,bottom=map(int,ui.BOUNDS.fullmatch(scroll.attrib['bounds']).groups())
+        x=(left+right)//2;start=top+(bottom-top)*3//5;end=top+(bottom-top)//5
+        ui.adb('shell','input','swipe',str(x),str(start),str(x),str(end),'350');time.sleep(.35)
+    raise AssertionError(('Cannot reach native control',text,ui.visible_texts(tree)))
+
+
 def main():
     p=argparse.ArgumentParser();p.add_argument('--output',type=Path,required=True);p.add_argument('--smoke',action='store_true');p.add_argument('--case');a=p.parse_args()
     a.output.mkdir(parents=True,exist_ok=True)
@@ -22,6 +40,7 @@ def main():
     try:
         for name,w,h,density,scale in cases:
             out=a.output/name;out.mkdir(exist_ok=True)
+            if name=='landscape':ui.reveal=reveal_inside_scroll
             ui.adb('shell','am','force-stop',ui.PACKAGE);ui.adb('shell','pm','clear',ui.PACKAGE)
             ui.adb('shell','settings','put','system','accelerometer_rotation','0')
             ui.adb('shell','settings','put','system','user_rotation','0')
