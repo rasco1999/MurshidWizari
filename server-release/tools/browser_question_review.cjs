@@ -5,7 +5,8 @@ const { chromium } = require(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES + '/
 
 async function main() {
   const directory = path.resolve(process.argv[2]);
-  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+  const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'],
+    executablePath: process.env.MURSHID_REVIEW_BROWSER || undefined });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await page.goto(pathToFileURL(path.join(directory, 'Question_Review.html')).href);
   await page.evaluate(() => document.fonts.ready);

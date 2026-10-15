@@ -3009,9 +3009,12 @@ class MainActivity : Activity() {
             cards.take(18).forEach { card ->
                 val label = card.optString("question").replace("\n", " ").take(95)
                 val subtitle = card.optString("subject").ifBlank { "سؤال تمت مراجعته" }
-                addUiCard(uiRow(label, subtitle, "book") {
+                val savedQuestion = uiCard()
+                ministerialBadge(savedQuestion)
+                savedQuestion.addView(uiRow(QuestionPresentation.prompt(label), subtitle, "book") {
                     coachQuestionScreen(card.optInt("id"))
                 })
+                addUiCard(savedQuestion)
             }
         }
 
@@ -3611,7 +3614,8 @@ class MainActivity : Activity() {
                     item.optString("question").ifBlank { item.optString("text") }
                 }
                 card.addView(uiText(chapter, 12f, true, blue))
-                card.addView(uiText(question, 17f, true),
+                ministerialBadge(card)
+                card.addView(uiText(QuestionPresentation.prompt(question), 17f, true),
                     LinearLayout.LayoutParams(-1,-2).apply { topMargin = dp(10) })
                 val score = item.optString("prediction_score").ifBlank { item.optString("probability") }
                 val confidence = item.optString("confidence")
@@ -5850,7 +5854,8 @@ class MainActivity : Activity() {
             val items = response.optJSONArray("mistakes") ?: JSONArray()
             for (i in 0 until items.length()) {
                 val item = items.optJSONObject(i) ?: continue
-                line(item.optString("question_text"))
+                ministerialBadge()
+                line(QuestionPresentation.prompt(item.optString("question_text")))
                 caption("الإجابة الصحيحة: " + item.optString("correct_answer"))
                 caption("التوضيح: " + item.optString("explanation"))
                 caption(item.optString("subject_name") + " • " + item.optString("chapter_name"))
