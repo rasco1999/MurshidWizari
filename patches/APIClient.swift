@@ -430,8 +430,14 @@ final class APIClient {
     }
 
     func verifyPending(kind: String, code: String) async throws -> JSON {
-        let value = normalizedDigits(code)
-        guard value.range(of: #"^[0-9]{6}$"#, options: .regularExpression) != nil else {
+        let digits: [Character: Character] = [
+            "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4",
+            "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9",
+            "۰": "0", "۱": "1", "۲": "2", "۳": "3", "۴": "4",
+            "۵": "5", "۶": "6", "۷": "7", "۸": "8", "۹": "9"
+        ]
+        let value = String(code.map { digits[$0] ?? $0 })
+        guard value.count == 6 && value.utf8.allSatisfy({ $0 >= 48 && $0 <= 57 }) else {
             throw APIError(message: "أدخل رمز تحقق صحيحاً مكوّناً من 6 أرقام.", status: 422, paymentRequired: false)
         }
         let result = try await pendingVerification(kind: kind, action: "verify", code: value)
