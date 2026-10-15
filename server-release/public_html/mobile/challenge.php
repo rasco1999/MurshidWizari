@@ -16,7 +16,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     if($result['ok']){$result['given_answer']=trim($value);$result['explanation']=(string)($q['explanation']??'');}
     json_response($result,$result['ok']?200:422);
 }
-$question=$q?['id'=>(int)$q['id'],'type'=>(string)$q['type'],'question_text'=>!empty($q['english_match'])?'صِل كل عنصر من القائمة A بما يناسبه من القائمة B.':(string)$q['question_text'],
+$question=$q?['id'=>(int)$q['id'],'type'=>(string)$q['type'],'question_text'=>(string)$q['question_text'],
  'subject_name'=>(string)$q['subject_name'],'options'=>$q['options'],'english_match'=>$q['english_match']??null]:null;
 $answerDetails=$prior?murshid_daily_v48_answer_details($pdo,(int)$prior['question_id'],(int)$u['grade_id']):null;
 json_response(['ok'=>true,'available'=>true,'done'=>$prior!==null,'score'=>(int)($prior['is_correct']??0),

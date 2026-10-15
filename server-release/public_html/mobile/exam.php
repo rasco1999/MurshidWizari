@@ -127,7 +127,7 @@ foreach($visible as $r){
         'id'=>$id,
         'type'=>(string)$r['type'],
         'answer_mode'=>(string)($r['_answer_mode']??(!empty($options)?'choice':'text')),
-        'text'=>$match?'صِل كل عنصر من القائمة A بما يناسبه من القائمة B.':public_question_display_text((string)$r['question_text']),
+        'text'=>public_question_display_text((string)$r['question_text']),
         'meaning_word'=>$r['meaning_word']??null,
         'correct_answer'=>(string)$r['correct_answer'],
         'explanation'=>public_question_explanation($r['explanation']??null,$r['correct_answer']??null),

@@ -8,7 +8,7 @@ $pdo = db();
 try { $S = coach_stats($pdo, (int)$u['id'], (int)$u['grade_id']); }
 catch (Throwable $e) { error_log('coach page: ' . $e->getMessage()); $S = ['due'=>0,'answered'=>0,'accuracy'=>0,'readiness'=>0,'mastered'=>0,'streak'=>0,'weak'=>[]]; }
 $aiOn = !empty(integration('ai', 'enabled')) && !empty(integration('ai', 'api_key'));
-$v = '20261007-coach';
+$v = '20261015-matching-v53';
 ?><!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>المدرب الذكي</title>
 <script src="<?=BASE_URL?>/assets/js/theme-init.js?v=20260928-v56"></script>
 <link rel="stylesheet" href="<?=BASE_URL?>/assets/css/platform.css?v=20260929-v584contrast">

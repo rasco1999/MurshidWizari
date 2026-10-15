@@ -702,7 +702,7 @@ struct V40CustomExamSessionView: View {
                             Text("سؤال \(current + 1)")
                                 .font(.caption.bold())
                                 .foregroundStyle(Color.murshidBlue)
-                            Text(questions[current].text)
+                            Text(questions[current].matching == nil ? questions[current].text : "صِل كل عنصر من القائمة A بما يناسبه من القائمة B.")
                                 .font(.title3.weight(.semibold))
                                 .lineSpacing(5)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -1469,7 +1469,7 @@ struct V40DailyChallengeView: View {
                         MurshidCard {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("سؤال اليوم").font(.caption.bold()).foregroundStyle(Color.murshidBlue)
-                                Text(murshidQuestionDisplayText(q.text)).font(.headline).fixedSize(horizontal: false, vertical: true)
+                                Text(q.matching == nil ? murshidQuestionDisplayText(q.text) : "صِل كل عنصر من القائمة A بما يناسبه من القائمة B.").font(.headline).fixedSize(horizontal: false, vertical: true)
                                 if let definition = q.matching {
                                     V53SerializedMatchInput(definition: definition, answer: Binding(
                                         get: { answers[q.id] ?? "" }, set: { answers[q.id] = $0 }

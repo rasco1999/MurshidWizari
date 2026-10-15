@@ -8,7 +8,7 @@ import student_fixture_qa as fixture
 
 MATCH={'left':{'1':'x-ray','2':'security','3':'conveyor','4':'crime','5':'metal','6':'Speeding'},'right':{'a':'camera','b':'belt','c':'machine','d':'detector','e':'ticket','f':'scene'}}
 ANSWER='1-c, 2-a, 3-b, 4-f, 5-d, 6-e'
-QUESTION={'id':2004,'type':'text','text':'صِل كل عنصر من القائمة A بما يناسبه من القائمة B.','english_match':MATCH,'correct_answer':ANSWER,'options':[],'explanation':'توصيل صحيح وفق مفتاح السؤال الأصلي.','submitted':False}
+QUESTION={'id':2004,'type':'text','text':'Match / صِل بين عناصر List A و List B:\n1 x-ray a camera\n2 security b belt\n3 conveyor c machine\n4 crime d detector\n5 metal e ticket\n6 Speeding f scene','english_match':MATCH,'correct_answer':ANSWER,'options':[],'explanation':'توصيل صحيح وفق مفتاح السؤال الأصلي.','submitted':False}
 STATE={'daily_posts':0,'practice_posts':0}
 class Handler(fixture.Handler):
  def respond(self):

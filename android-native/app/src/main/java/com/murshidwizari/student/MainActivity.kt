@@ -2687,7 +2687,7 @@ class MainActivity : Activity() {
         base(topic.name, true)
         val header = uiCard()
         header.addView(uiText("السؤال ${index + 1} من ${list.length()}", 13f, true, blue))
-        header.addView(uiText(question.optString("text"), 19f, true),
+        header.addView(uiText(if (question.optJSONObject("english_match") != null) "صِل كل عنصر من القائمة A بما يناسبه من القائمة B." else question.optString("text"), 19f, true),
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(13) })
         if (question.optString("meaning_word").isNotBlank())
             header.addView(uiText("المفردة: ${question.optString("meaning_word")}", 14f, tint = mutedText))
@@ -4312,7 +4312,7 @@ class MainActivity : Activity() {
                 LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(8) })
         }
         card.addView(eyebrow)
-        card.addView(uiText(question.optString("text"), 20f, true).apply {
+        card.addView(uiText(if (question.optJSONObject("english_match") != null) "صِل كل عنصر من القائمة A بما يناسبه من القائمة B." else question.optString("text"), 20f, true).apply {
             // Keep signed coordinates in mathematical order inside Arabic RTL.
             textDirection = View.TEXT_DIRECTION_FIRST_STRONG
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(11) })
@@ -6343,7 +6343,7 @@ class MainActivity : Activity() {
             practiceTicker = timer
             main.postDelayed(timer, 1000L)
         }
-        line(question.optString("text"), true)
+        line(if (question.optJSONObject("english_match") != null) "صِل كل عنصر من القائمة A بما يناسبه من القائمة B." else question.optString("text"), true)
         val details = listOf(question.optString("exam_year"), question.optString("exam_round"))
             .filter(String::isNotBlank)
         if (details.isNotEmpty()) caption(details.joinToString(" • "))
@@ -6957,7 +6957,7 @@ class MainActivity : Activity() {
             val questionCard = uiCard()
             questionCard.addView(uiText("سؤال ${index + 1} من ${dailyQuestions.size}", 12f, true, blue),
                 LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(9) })
-            questionCard.addView(uiText(question.text, 17f, true),
+            questionCard.addView(uiText(if (question.matching != null) "صِل كل عنصر من القائمة A بما يناسبه من القائمة B." else question.text, 17f, true),
                 LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
             val choices = question.choices()
             if (question.matching != null) {
