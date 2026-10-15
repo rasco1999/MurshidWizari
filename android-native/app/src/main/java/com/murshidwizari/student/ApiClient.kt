@@ -284,63 +284,40 @@ class ApiClient(context: Context) {
             .put("message", status.text.ifBlank { "تم طلب رمز WhatsApp جديد." })
     }
 
-    /** iOS registration/login verification uses these legacy same-origin HTML forms. */
+    /** Phone and email verification share the registration session and JSON transport. */
     fun verifyPending(kind: String, code: String): JSONObject {
         if (kind !in setOf("phone", "email") || !RecoveryRules.normalizedDigits(code).matches(Regex("[0-9]{6}")))
             return JSONObject().put("ok", false).put("message", "أدخل رمز تحقق صحيحاً مكوّناً من 6 أرقام.")
-        if (kind == "phone") return phoneVerification("verify", RecoveryRules.normalizedDigits(code))
-        val path = if (kind == "phone") "verify-phone.php" else "verify-email.php"
-        val csrf = RecoveryRules.csrf(htmlRequest(path).body)
-            ?: return JSONObject().put("ok", false).put("message", "تعذر تهيئة التحقق. أعد المحاولة.")
-        val result = readRecoveryRedirect(htmlRequest(path, mapOf(
-            "csrf" to csrf, "action" to "verify", "code" to RecoveryRules.normalizedDigits(code))))
-        val parsed = RecoveryRules.formMessage(result.body)
-        if (result.status !in 200..299 || parsed.isError)
-            return JSONObject().put("ok", false)
-                .put("message", parsed.text.ifBlank { "رمز التحقق غير صالح أو انتهت صلاحيته." })
-        val bootstrap = call("mobile/bootstrap.php")
-        if (!bootstrap.optBoolean("ok") && !bootstrap.has("message"))
-            bootstrap.put("message", "تحقق من الرمز ثم سجّل الدخول لإكمال تفعيل الحساب.")
-        return bootstrap
+        return pendingVerification(kind, "verify", RecoveryRules.normalizedDigits(code))
     }
 
     fun resendPending(kind: String): JSONObject {
         if (kind !in setOf("phone", "email"))
             return JSONObject().put("ok", false).put("message", "نوع التحقق غير صالح.")
-        if (kind == "phone") return phoneVerification("resend")
-        val path = if (kind == "phone") "verify-phone.php" else "verify-email.php"
-        val csrf = RecoveryRules.csrf(htmlRequest(path).body)
-            ?: return JSONObject().put("ok", false).put("message", "تعذر تهيئة إعادة إرسال الرمز.")
-        val result = readRecoveryRedirect(htmlRequest(path, mapOf("csrf" to csrf, "action" to "resend")))
-        val parsed = RecoveryRules.formMessage(result.body)
-        if (result.status !in 200..299 || parsed.isError)
-            return JSONObject().put("ok", false)
-                .put("message", parsed.text.ifBlank { "تعذر إعادة إرسال رمز التحقق." })
-        return JSONObject().put("ok", true)
-            .put("message", parsed.text.ifBlank { "تم طلب رمز تحقق جديد." })
+        return pendingVerification(kind, "resend")
     }
 
-    /** Keep pending phone verification on the same JSON transport as registration.
-     * A web-page redirect, WAF page or changed HTML must never stand in for an OTP receipt.
+    /** A web redirect, WAF page or changed HTML must never stand in for an OTP receipt.
      * Each user tap sends at most one POST; a lost receipt is never silently retried.
      */
-    private fun phoneVerification(action: String, code: String = ""): JSONObject {
-        val path = "api/verify-phone.php"
+    private fun pendingVerification(kind: String, action: String, code: String = ""): JSONObject {
+        val path = if (kind == "phone") "api/verify-phone.php" else "api/verify-email.php"
+        val contact = if (kind == "phone") "رقم الهاتف" else "البريد الإلكتروني"
         val pending = call(path)
         if (!pending.optBoolean("ok")) return pending
         val token = pending.optString("csrf")
         if (token.isBlank()) return JSONObject().put("ok", false)
-            .put("message", "تعذر تجهيز جلسة تأكيد الهاتف. ارجع لتسجيل الدخول بنفس الحساب ثم حاول مجدداً.")
+            .put("message", "تعذر تجهيز جلسة تأكيد $contact. ارجع لتسجيل الدخول بنفس الحساب ثم حاول مجدداً.")
         val payload = JSONObject().put("csrf", token).put("action", action)
         if (action == "verify") payload.put("code", code)
         val result = call(path, payload)
         if (!result.optBoolean("ok") || action == "resend") return result
         if (!result.optBoolean("verified")) return JSONObject().put("ok", false)
-            .put("message", "لم يؤكد الخادم صحة رمز الهاتف. أعد فتح تسجيل الدخول للتحقق من حالة الحساب.")
+            .put("message", "لم يؤكد الخادم صحة رمز التحقق. أعد فتح تسجيل الدخول للتحقق من حالة الحساب.")
         val bootstrap = call("mobile/bootstrap.php")
         if (!bootstrap.optBoolean("ok")) return JSONObject().put("ok", false)
-            .put("phone_verified", true).put("login_required", true)
-            .put("message", "تم تأكيد رقم الهاتف. ارجع لتسجيل الدخول بنفس بيانات الحساب لإكمال الدخول.")
+            .put("${kind}_verified", true).put("login_required", true)
+            .put("message", "تم تأكيد $contact. ارجع لتسجيل الدخول بنفس بيانات الحساب لإكمال الدخول.")
         return bootstrap
     }
 

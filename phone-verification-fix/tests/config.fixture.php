@@ -43,3 +43,26 @@ function single_session_claim(int $id): array {
 }
 function remember_login_issue(int $id): bool { $_SESSION['remember_issued']=true; return true; }
 function audit_log(string $action, string $entity, string $id): void {}
+
+function email_verification_pending_user(): ?array {
+    $user = phone_verification_pending_user();
+    if (!$user) return null;
+    unset($user['phone'], $user['phone_verified_at']);
+    $user['email'] = 'newstudent@example.test';
+    $user['email_verified_at'] = !empty($_SESSION['verified']) ? '2026-10-15 00:00:00' : null;
+    return $user;
+}
+function email_verification_clear_pending(): void { phone_verification_clear_pending(); }
+function email_verification_mask(string $email): string { return 'n***@example.test'; }
+function email_verification_status(int $id): array { return phone_verification_status($id); }
+function email_verification_verify_code(int $id, string $code): array {
+    return phone_verification_verify_code($id, $code);
+}
+function email_verification_send_code(int $id, string $email, bool $resend): array {
+    $result = phone_verification_send_code($id, $email, $resend);
+    if (!empty($result['ok'])) {
+        unset($_SESSION['target_phone']);
+        $_SESSION['target_email'] = $email;
+    }
+    return $result;
+}

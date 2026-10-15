@@ -18,6 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PhoneEndpointTest(unittest.TestCase):
+    KIND = "phone"
+    CONTACT_VALUE = "07701234567"
     @classmethod
     def setUpClass(cls):
         cls.temp = tempfile.TemporaryDirectory()
@@ -25,7 +27,8 @@ class PhoneEndpointTest(unittest.TestCase):
         (dest / 'api').mkdir()
         (dest / 'config').mkdir()
         (dest / '_test').mkdir()
-        shutil.copyfile(ROOT / 'public_html/api/verify-phone.php', dest / 'api/verify-phone.php')
+        for name in ['verify-phone.php', 'verify-email.php']:
+            shutil.copyfile(ROOT / ('public_html/api/' + name), dest / ('api/' + name))
         shutil.copyfile(ROOT / 'tests/config.fixture.php', dest / 'config/config.php')
         (dest / '_test/seed.php').write_text("<?php require __DIR__.'/../config/config.php'; "
             "$data=json_decode(file_get_contents('php://input'),true)?:[]; "
@@ -63,7 +66,8 @@ class PhoneEndpointTest(unittest.TestCase):
         _, seeded, _ = self.request('_test/seed.php', {'pending': True})
         self.first_session_id = seeded['session_id']
 
-    def request(self, path='api/verify-phone.php', data=None, method=None):
+    def request(self, path=None, data=None, method=None):
+        path = path or f'api/verify-{self.KIND}.php'
         raw = data if isinstance(data, bytes) else json.dumps(data).encode() if data is not None else None
         req = urllib.request.Request(self.base + path, data=raw, method=method,
                                      headers={'Content-Type': 'application/json'})
@@ -120,7 +124,7 @@ class PhoneEndpointTest(unittest.TestCase):
 
     def test_success_rotates_the_session_and_keeps_the_session_bound_user(self):
         self.seed(_pending_remember_me=1)
-        status, data, _ = self.post(user_id=999999, phone='07799999999')
+        status, data, _ = self.post(user_id=999999, phone='07799999999', email='other@example.test')
         self.assertEqual(status, 200)
         self.assertTrue(data['verified'])
         snapshot = self.state()
@@ -141,9 +145,9 @@ class PhoneEndpointTest(unittest.TestCase):
         self.assertEqual(headers['Retry-After'], '60')
         self.assertNotIn('sends', self.state()['state'])
         self.seed(cooldown=0)
-        self.assertEqual(self.post(action='resend', user_id=123, phone='07799999999')[0], 200)
+        self.assertEqual(self.post(action='resend', user_id=123, phone='07799999999', email='other@example.test')[0], 200)
         state = self.state()['state']
-        self.assertEqual(state['target_phone'], '07701234567')
+        self.assertEqual(state['target_' + self.KIND], self.CONTACT_VALUE)
         self.assertEqual(state['target_id'], 900001)
         self.assertEqual(state['sends'], 1)
         self.assertNotIn('user_id', state)
@@ -152,7 +156,7 @@ class PhoneEndpointTest(unittest.TestCase):
         self.seed(guard_busy=True)
         status, data, _ = self.post()
         self.assertEqual(status, 409)
-        self.assertTrue(data['phone_verified'])
+        self.assertTrue(data[self.KIND + '_verified'])
         self.assertTrue(data['account_in_use'])
         self.assertNotIn('user_id', self.state()['state'])
 
@@ -168,6 +172,11 @@ class PhoneEndpointTest(unittest.TestCase):
         self.assertEqual(self.request(data=b'{bad')[0], 400)
         self.assertEqual(self.post(action='delete')[0], 422)
         self.assertNotIn('attempts', self.state()['state'])
+
+
+class EmailEndpointTest(PhoneEndpointTest):
+    KIND = 'email'
+    CONTACT_VALUE = 'newstudent@example.test'
 
 
 if __name__ == '__main__':
