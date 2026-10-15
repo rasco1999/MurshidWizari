@@ -327,6 +327,7 @@ struct ReviewView: View {
                                     .foregroundStyle(Color.murshidBlue)
                                     .padding(.horizontal, 8).padding(.vertical, 4)
                                     .background(Color.murshidBlue.opacity(0.10), in: Capsule())
+                                MurshidMinisterialBadge()
                                 Text(murshidQuestionDisplayText(jString(item["question_text"]))).font(.body.weight(.semibold))
                                 Text("الإجابة الصحيحة: \(jString(item["correct_answer"]))")
                                     .font(.subheadline.weight(.semibold)).foregroundStyle(.green)
