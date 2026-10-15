@@ -26,17 +26,22 @@ def adb(*args: str) -> bytes:
     # APK while the virtual disk is being initialized. This is emulator-side
     # slowness, not an app launch failure.
     installation = bool(args) and args[0] == "install"
+    network_toggle = (len(args) == 4 and args[:2] == ("shell", "svc")
+                      and args[2] in ("wifi", "data") and args[3] in ("enable", "disable"))
     timeout = 150 if installation else 30
-    attempts = 2 if installation else 1
+    attempts = 2 if installation or network_toggle else 1
     for attempt in range(attempts):
         try:
             result = subprocess.run(["adb", *args], stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE, check=True, timeout=timeout)
             return result.stdout
-        except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError) as error:
+            if network_toggle and isinstance(error, subprocess.CalledProcessError) and error.returncode != 137:
+                raise
             if attempt + 1 == attempts:
                 raise
-            print("RETRY emulator APK install after device readiness check", flush=True)
+            print("RETRY emulator " + ("APK install" if installation else "network toggle")
+                  + " after device readiness check", flush=True)
             subprocess.run(["adb", "wait-for-device"], check=True, timeout=60)
             time.sleep(4)
     raise AssertionError("APK installation retry unexpectedly exhausted")

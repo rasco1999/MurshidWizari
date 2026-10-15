@@ -9,11 +9,12 @@ class OfflinePracticeRulesTest {
             OfflinePracticeRules.evaluate("text", "٨.٠", "8"))
         assertEquals(OfflinePracticeRules.Result.INCORRECT,
             OfflinePracticeRules.evaluate("mcq", "ستة", "خمسة", listOf("خمسة", "ستة")))
-        assertEquals(OfflinePracticeRules.Result.CORRECT,
+        assertEquals(OfflinePracticeRules.Result.NEEDS_SERVER,
             OfflinePracticeRules.evaluate("text", "عَلِيّ.", "علي"))
     }
     @Test fun neverGuessesTextOrUnsupportedAlgebra() {
-        for ((given, expected) in listOf("2+3" to "23", "10^2" to "102", "1,5" to "15")) {
+        for ((given, expected) in listOf("2+3" to "23", "10^2" to "102", "1,5" to "15",
+                "P" to "p", "عِلْم" to "عَلَم")) {
             assertEquals(OfflinePracticeRules.Result.NEEDS_SERVER,
                 OfflinePracticeRules.evaluate("text", given, expected))
         }
