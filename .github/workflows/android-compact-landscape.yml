@@ -11,6 +11,10 @@ jobs:
   landscape:
     runs-on: ubuntu-latest
     timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [landscape, small-320dp]
     steps:
       - uses: actions/checkout@v4
       - name: Confirm production source is identical to the tested release
@@ -35,9 +39,9 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: python3 android-native/scripts/compact_layout_qa.py --output "$RUNNER_TEMP/landscape-qa" --case landscape
+          script: python3 android-native/scripts/compact_layout_qa.py --output "$RUNNER_TEMP/landscape-qa" --case "${{ matrix.case }}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Android-Compact-Real-Landscape-Evidence
+          name: Android-Compact-Final-${{ matrix.case }}-Evidence
           path: ${{ runner.temp }}/landscape-qa/

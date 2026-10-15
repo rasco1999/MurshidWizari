@@ -13,7 +13,7 @@ def main():
     threading.Thread(target=server.serve_forever,daemon=True).start()
     ui.PACKAGE='com.murshidwizari.student.qa'
     ui.adb('reverse','tcp:8765','tcp:8765');ui.adb('install','-r','android-native/app/build/outputs/apk/qa/app-qa.apk')
-    cases=[('phone-360dp-density2',720,1600,320,1.0),('small-320dp',320,640,160,1.0)]
+    cases=[('phone-360dp-density2',720,1600,320,1.0),('small-320dp',640,1280,320,1.0)]
     if not a.smoke:cases += [('large-font',393,852,160,1.6),('tablet',800,1280,160,1.3),('landscape',800,360,160,1.0)]
     if a.case:
         cases=[c for c in cases if c[0]==a.case]
@@ -30,6 +30,9 @@ def main():
             if name=='landscape':ui.adb('shell','settings','put','system','user_rotation','1')
             time.sleep(2)
             ui.launch_native()
+            if name=='landscape':
+                ui.adb('shell','wm','user-rotation','lock','1')
+                time.sleep(2)
             png=ui.adb('exec-out','screencap','-p');actual=struct.unpack('>II',png[16:24]);assert actual==(w,h),(name,actual)
             (out/'display-dimensions.json').write_text(json.dumps({'expected':[w,h],'actual':actual}))
             if name=='landscape':
