@@ -54,7 +54,7 @@ def main():
   for left,right in [('2','a'),('3','b'),('4','f'),('5','d'),('6','e')]:tap('A'+left+':');tap('B'+right+':')
   capture(route+'-complete')
  try:
-  login();button('ادرس');button('الرياضيات');button('موضوع فحص افتراضي');ui.wait_for('صِل كل عنصر من القائمة A بما يناسبه من القائمة B.');capture('exam-columns');fill('exam');button('إرسال الإجابة')
+  login();button('الاختبارات');button('الرياضيات');button('موضوع فحص افتراضي');ui.wait_for('صِل كل عنصر من القائمة A بما يناسبه من القائمة B.');capture('exam-columns');fill('exam');button('إرسال الإجابة')
   for _ in range(15):
    if '2004' in fixture.STATE['answers']:break
    time.sleep(.4)

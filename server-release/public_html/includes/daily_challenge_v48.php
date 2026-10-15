@@ -12,10 +12,11 @@ function murshid_daily_v48_schema(PDO $pdo): void {
 }
 function murshid_daily_v48_question(PDO $pdo,int $gradeId): ?array {
     $today=(new DateTimeImmutable('now', new DateTimeZone('Asia/Baghdad')))->format('Y-m-d');
+    $live=topic_live_sql('q');
     $q=$pdo->prepare("SELECT q.id,q.chapter_id,q.question_text,q.correct_answer,q.explanation,q.type,s.name AS subject_name,
       c.name AS chapter_name
       FROM questions q JOIN chapters c ON c.id=q.chapter_id JOIN subjects s ON s.id=c.subject_id
-      WHERE s.grade_id=? AND q.status=1 AND c.status=1 AND s.status=1 AND q.type IN ('mcq','text','fill','meaning','true_false')
+      WHERE s.grade_id=? AND $live AND c.status=1 AND s.status=1 AND q.type IN ('mcq','text','fill','meaning','true_false')
         AND s.name NOT LIKE '%فرن%' AND LOWER(s.name) NOT LIKE '%french%'
         AND q.correct_answer IS NOT NULL AND q.correct_answer<>''
       ORDER BY (CHAR_LENGTH(q.question_text)>=110) DESC, CRC32(CONCAT(?,':',q.id)) DESC LIMIT 1500");

@@ -32,6 +32,7 @@ jobs:
           set -euo pipefail
           php server-release/tests/runtime.php | tee server-release/test-results.txt
           php server-release/tests/matching.php | tee -a server-release/test-results.txt
+          python3 server-release/tests/migration_test.py | tee -a server-release/test-results.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
