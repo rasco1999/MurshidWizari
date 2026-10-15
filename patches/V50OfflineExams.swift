@@ -217,6 +217,10 @@ final class V50OfflineExamBank: ObservableObject {
     @discardableResult
     func rememberTopic(userID: Int, chapterID: Int, name: String, source: [JSON]) -> Bool {
         guard allowed(userID), chapterID > 0, !name.isEmpty, source.count <= 250 else { return false }
+        let pinned = Set(pending(userID: userID).map(\.chapterID))
+        // Preserve the original prompt behind each draft, including when a
+        // newer topic is downloaded or the twelve-topic cache is full.
+        guard !pinned.contains(chapterID), pinned.count < 12 else { return false }
         var contents: [V50OfflineQuestion] = []
         for (position, raw) in source.enumerated() {
             let options = jArray(raw["options"]).map {
@@ -239,7 +243,10 @@ final class V50OfflineExamBank: ObservableObject {
         let previous = vault
         vault?.topics.removeAll { $0.id == chapterID }
         vault?.topics.insert(topic, at: 0)
-        vault?.topics = Array((vault?.topics ?? []).prefix(12))
+        let allTopics = vault?.topics ?? []
+        let protected = allTopics.filter { pinned.contains($0.id) }
+        vault?.topics = protected + Array(allTopics.filter { !pinned.contains($0.id) }
+            .prefix(max(0, 12 - protected.count)))
         if persist() { return true }
         vault = previous
         return false

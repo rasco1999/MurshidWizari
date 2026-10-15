@@ -200,6 +200,17 @@ final class V498FinalTests: XCTestCase {
         XCTAssertTrue(bank.queue(userID: 900121, chapterID: 31, questionID: 251, answer: "ستة", optionID: 12))
         XCTAssertEqual(bank.pending(userID: 900121).count, 1)
         XCTAssertEqual(bank.pending(userID: 900121).first?.text, "خمسة")
+        var edited = source
+        edited[0]["text"] = "نص تغيّر بعد الإجابة"
+        XCTAssertFalse(bank.rememberTopic(userID: 900121, chapterID: 31, name: "نسخة أحدث", source: edited))
+        XCTAssertEqual(bank.questions(userID: 900121, chapterID: 31).first?.text, "اختبار حفظ محلي")
+        for chapter in 900...912 {
+            var other = source
+            other[0]["id"] = 900000 + chapter
+            XCTAssertTrue(bank.rememberTopic(userID: 900121, chapterID: chapter, name: "موضوع آخر", source: other))
+        }
+        XCTAssertEqual(bank.topics(userID: 900121).count, 12)
+        XCTAssertEqual(bank.questions(userID: 900121, chapterID: 31).first?.text, "اختبار حفظ محلي")
         bank.bindAuthenticated(userID: 900121, subscribed: false, expiresUnix: 0)
         XCTAssertFalse(bank.allowed(900121))
         XCTAssertTrue(bank.topics(userID: 900121).isEmpty)
