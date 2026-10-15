@@ -27,6 +27,11 @@ def main():
         ui.wait_for('ما حاصل جمع اثنين وثلاثة؟')
 
     try:
+        qa_apk = Path(__file__).resolve().parents[1] / 'app/build/outputs/apk/qa/app-qa.apk'
+        ui.adb('install', '-r', str(qa_apk))
+        ui.adb('shell', 'wm', 'size', '393x852')
+        ui.adb('shell', 'wm', 'density', '160')
+        ui.adb('shell', 'settings', 'put', 'system', 'font_scale', '1.0')
         ui.adb('shell', 'svc', 'wifi', 'enable')
         ui.adb('shell', 'svc', 'data', 'enable')
         ui.adb('shell', 'am', 'force-stop', ui.PACKAGE)
