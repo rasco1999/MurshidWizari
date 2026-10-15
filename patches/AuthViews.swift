@@ -1,7 +1,30 @@
 import SwiftUI
 
+struct MurshidMinisterialBadge: View {
+    @Environment(\.colorScheme) private var colorScheme
+    private var ink: Color { colorScheme == .dark
+        ? Color(red: 125.0/255.0, green: 226.0/255.0, blue: 161.0/255.0)
+        : Color(red: 21.0/255.0, green: 115.0/255.0, blue: 59.0/255.0) }
+    private var fill: Color { colorScheme == .dark
+        ? Color(red: 23.0/255.0, green: 61.0/255.0, blue: 43.0/255.0)
+        : Color(red: 234.0/255.0, green: 247.0/255.0, blue: 238.0/255.0) }
+    var body: some View {
+        Text("وزاري").font(.caption.bold()).foregroundStyle(ink)
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(fill, in: Capsule())
+            .fixedSize().accessibilityLabel("وزاري")
+    }
+}
+
+func murshidPromptWithoutHints(_ raw: String) -> String {
+    raw.replacingOccurrences(of: "\r\n", with: "\n")
+        .replacingOccurrences(of: #"(?im)^[ \t]*(?:تلميح|تلميحات|hint|hints|clue|tip)[ \t]*[:：][^\n]*(?:\n|$)"#, with: "", options: .regularExpression)
+        .replacingOccurrences(of: #"(?i)[ \t]*[（(](?:تلميح|تلميحات|hint|hints|clue|tip)[ \t]*[:：][^）)\n]*[）)][ \t]*$"#, with: "", options: .regularExpression)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
 func murshidQuestionDisplayText(_ raw: String) -> String {
-    var text = raw
+    var text = murshidPromptWithoutHints(raw)
         .replacingOccurrences(of: "\r\n", with: "\n")
         .trimmingCharacters(in: .whitespacesAndNewlines)
     guard !text.isEmpty else { return "" }
@@ -3175,12 +3198,7 @@ struct V3ExamView: View {
                     Text("سؤال \(current + 1)")
                         .font(.caption.bold())
                         .foregroundStyle(Color.murshidBlue)
-                    Text("وزاري")
-                        .font(.caption.bold())
-                        .foregroundStyle(Color.murshidBlue)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.murshidBlue.opacity(0.10), in: Capsule())
+                    MurshidMinisterialBadge()
                     Spacer()
                 }
                 Text(V515MathBidi.display(murshidQuestionDisplayText(q.text)))
@@ -3188,7 +3206,9 @@ struct V3ExamView: View {
                     .lineSpacing(5)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
-                V515EquationSteps(question: q.text, subject: subject.name, topic: topic.name, kind: q.type)
+                if isAnswered(q) {
+                    V515EquationSteps(question: q.text, subject: subject.name, topic: topic.name, kind: q.type)
+                }
                 let meta = [q.examYear, q.examRound].filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
                 if !meta.isEmpty {
                     Label(meta.joined(separator: " • "), systemImage: "calendar")
@@ -3540,6 +3560,10 @@ struct V3ExamView: View {
             if filterState != "all" { query.append(URLQueryItem(name: "state", value: filterState)) }
             if filterShuffle { query.append(URLQueryItem(name: "shuffle", value: "1")) }
             let d = try await APIClient.shared.request("mobile/exam.php", query: query, fresh: true)
+            if let uid = app.user?.id {
+                _ = V50OfflineExamBank.shared.rememberTopic(userID: uid, chapterID: topic.id,
+                    name: topic.name, source: jArray(d["questions"]))
+            }
             var seenQuestions = Set<String>()
             let qs = jArray(d["questions"])
                 .map(Question.init)

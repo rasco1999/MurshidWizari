@@ -2,6 +2,15 @@ import XCTest
 @testable import MurshidWizari
 
 final class V498FinalTests: XCTestCase {
+    func testCachedPromptsRemoveOnlyExplicitHintBlocks() {
+        XCTAssertEqual(murshidPromptWithoutHints("احسب 2 + 3.\nتلميح: الناتج خمسة"), "احسب 2 + 3.")
+        XCTAssertEqual(murshidPromptWithoutHints("Find x: x² = 4.\nHint: x = 2"), "Find x: x² = 4.")
+        XCTAssertEqual(murshidPromptWithoutHints("احسب 2 + 3. (تلميح: استخدم الجمع)"), "احسب 2 + 3.")
+        for text in ["ما معنى كلمة تلميح؟", "P ≠ p؛ 10^2؛ 1,5؛ عِلْم", "قال تعالى: ﴿قُلْ هُوَ اللَّهُ أَحَدٌ﴾"] {
+            XCTAssertEqual(murshidPromptWithoutHints(text), text)
+        }
+    }
+
     private func row(_ id: Int, text: String = "إعلان جديد") -> JSON {
         ["id": id, "school": "مدرسة الأمل", "text": text]
     }
@@ -183,4 +192,51 @@ final class V498FinalTests: XCTestCase {
         XCTAssertTrue(store.ads.isEmpty)
         XCTAssertEqual(store.unreadCount, 0)
     }
+    @MainActor
+    func testOfflineExamVaultPersistsAndIsolatesAccounts() {
+        let bank = V50OfflineExamBank.shared
+        bank.clear()
+        defer { bank.clear() }
+        let expiry = Int(Date().timeIntervalSince1970) + 3600
+        bank.bindAuthenticated(userID: 900121, subscribed: true, expiresUnix: expiry)
+        XCTAssertTrue(bank.allowed(900121))
+        XCTAssertFalse(bank.allowed(900122))
+        let source: [JSON] = [["id": 251, "type": "mcq", "text": "اختبار حفظ محلي",
+            "correct_answer": "خمسة", "options": [["id": 11, "text": "خمسة"], ["id": 12, "text": "ستة"]]]]
+        XCTAssertTrue(bank.rememberTopic(userID: 900121, chapterID: 31, name: "موضوع اختباري", source: source))
+        XCTAssertEqual(bank.questions(userID: 900121, chapterID: 31).count, 1)
+        XCTAssertTrue(bank.queue(userID: 900121, chapterID: 31, questionID: 251, answer: "خمسة", optionID: 11))
+        XCTAssertTrue(bank.queue(userID: 900121, chapterID: 31, questionID: 251, answer: "ستة", optionID: 12))
+        XCTAssertEqual(bank.pending(userID: 900121).count, 1)
+        XCTAssertEqual(bank.pending(userID: 900121).first?.text, "خمسة")
+        var edited = source
+        edited[0]["text"] = "نص تغيّر بعد الإجابة"
+        XCTAssertFalse(bank.rememberTopic(userID: 900121, chapterID: 31, name: "نسخة أحدث", source: edited))
+        XCTAssertEqual(bank.questions(userID: 900121, chapterID: 31).first?.text, "اختبار حفظ محلي")
+        for chapter in 900...912 {
+            var other = source
+            other[0]["id"] = 900000 + chapter
+            XCTAssertTrue(bank.rememberTopic(userID: 900121, chapterID: chapter, name: "موضوع آخر", source: other))
+        }
+        XCTAssertEqual(bank.topics(userID: 900121).count, 12)
+        XCTAssertEqual(bank.questions(userID: 900121, chapterID: 31).first?.text, "اختبار حفظ محلي")
+        bank.bindAuthenticated(userID: 900121, subscribed: false, expiresUnix: 0)
+        XCTAssertFalse(bank.allowed(900121))
+        XCTAssertTrue(bank.topics(userID: 900121).isEmpty)
+        XCTAssertEqual(bank.pending(userID: 900121).count, 1)
+        bank.bindAuthenticated(userID: 900122, subscribed: true, expiresUnix: expiry)
+        XCTAssertTrue(bank.pending(userID: 900121).isEmpty)
+        XCTAssertTrue(bank.topics(userID: 900122).isEmpty)
+    }
+
+    func testOfflineAnswerRevisionAndConservativeFeedback() {
+        let a = V50OfflineQuestion(id: 251, type: "text", text: "احسب الناتج", meaningWord: "",
+            options: [], correctAnswer: "8", explanation: "", submitted: false, serverIndex: 1)
+        let b = V50OfflineQuestion(id: 251, type: "text", text: "سؤال جديد", meaningWord: "",
+            options: [], correctAnswer: "8", explanation: "", submitted: false, serverIndex: 1)
+        XCTAssertNotEqual(V50OfflineRules.revision(a), V50OfflineRules.revision(b))
+        XCTAssertEqual(V50OfflineRules.feedback(a, answer: "٨.٠"), .correct)
+        XCTAssertEqual(V50OfflineRules.feedback(a, answer: "ناتج تقريبي"), .needsServer)
+    }
+
 }

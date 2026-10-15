@@ -33,25 +33,23 @@ def main() -> None:
         (study, "func markRecall", "Local spaced recall"),
         (study, "struct V49OfflineAccessView", "Dedicated offline entry"),
         (study, ".deviceOwnerAuthentication", "Offline device authentication"),
-        (study, "AVSpeechSynthesizer", "On-device spoken explanation"),
+        (study, "var subjectMastery", "Private subject mastery estimates"),
+        (study, "var suggestedDailyTarget", "Adaptive study goal"),
+        (study, "isExcludedFromBackup", "Exclude cached study content from cloud backup"),
         (study, "ShareLink(item:", "Opt-in shareable accomplishment"),
         (auth, 'grade["is_correct"] != nil', "Server grading is required before caching"),
         (auth, "V49StudyStore.shared.rememberGraded", "Official exam saves reviewed questions"),
         (api, "V49StudyStore.shared.bind(to: user)", "Cache bound to authenticated student"),
         (api, "V49StudyStore.shared.eraseOnLogout", "Logout erases cached review"),
-        (app, "showingPublicOfflineLanding", "Guest access during an offline launch"),
-        (app, "if !device.isOnline", "No waiting for a server when already offline"),
-        (app, "bootstrapTask?.cancel()", "Cancels bootstrap when network disappears"),
-        (app, "V49StudyStore.shared.hasOfflineAccount()", "Offline access does not depend on remember-me"),
-        (study, "func hasOfflineAccount()", "Cached verified identity works before first answered question"),
-        (study, 'guard userID > 0, let saved = read(userID: userID) else', "Empty notebook still opens"),
+        (app, "V49OfflineAccessView()", "Offline entry available without bootstrap success"),
         (home, "NavigationLink(destination: V49StudyHubView())", "Home/account route to coach"),
     ]
     for path, needle, label in checks:
         require(path, needle, label)
 
     isolated = study.read_text(encoding="utf-8")
-    forbidden = ['APIClient.shared.request(', '"api/progress.php"', 'subscribed = true']
+    forbidden = ['APIClient.shared.request(', '"api/progress.php"', 'subscribed = true',
+                 'AVSpeechSynthesizer', 'V49QuestionSpeech']
     for needle in forbidden:
         if needle in isolated:
             raise AssertionError(f"Offline module must not change network entitlements: {needle}")

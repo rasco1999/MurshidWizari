@@ -1,9 +1,9 @@
-name: Build Murshid Student iPhone v4.9.13 Remove Voice and Hints
+name: Build Murshid Student iPhone v5.0.4 Remove Voice and Hints
 
 on:
   workflow_dispatch:
   push:
-    branches: [ ios-student-v498-final-fixes ]
+    branches: [ ios-student-v498-final-fixes, work/ios-complete-20261015 ]
     paths:
       - '.github/workflows/build-ios.yml'
       - 'patches/**'
@@ -18,7 +18,7 @@ permissions:
 jobs:
   build:
     if: ${{ true }}
-    name: Build v4.9.13 Build 512 unsigned student IPA
+    name: Build v5.0.4 Build 515 unsigned student IPA
     runs-on: macos-15
     timeout-minutes: 35
 
@@ -35,6 +35,9 @@ jobs:
         run: |
           python3 scripts/ios_v49_static_qa.py
           python3 scripts/ios_v498_static_qa.py
+
+      - name: Execute actual offline exam revision rules
+        run: python3 scripts/ios_offline_rules_test.py
 
       - name: Reconstruct exact Production v2 source
         shell: bash
@@ -84,8 +87,8 @@ jobs:
               if line == '        PRODUCT_NAME: MurshidWizari':
                   out.extend([
                       '        TARGETED_DEVICE_FAMILY: "1"',
-                      '        MARKETING_VERSION: "4.9.13"',
-                      '        CURRENT_PROJECT_VERSION: "512"',
+                      '        MARKETING_VERSION: "5.0.4"',
+                      '        CURRENT_PROJECT_VERSION: "515"',
                       '        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon',
                       '        CODE_SIGN_ENTITLEMENTS: MurshidWizari/MurshidWizari.entitlements',
                   ])
@@ -158,6 +161,7 @@ jobs:
           cp patches/V44StudentFeatures.swift source/MurshidWizari/V44StudentFeatures.swift
           cp patches/V45ContestWelcome.swift source/MurshidWizari/V45ContestWelcome.swift
           cp patches/V49StudyIntelligence.swift source/MurshidWizari/V49StudyIntelligence.swift
+          cp patches/V50OfflineExams.swift source/MurshidWizari/V50OfflineExams.swift
                     cp patches/V498LiveSchoolAds.swift source/MurshidWizari/
           cp patches/V498SocialLinks.swift source/MurshidWizari/
           cp patches/V513SchoolPush.swift source/MurshidWizari/
@@ -250,6 +254,7 @@ jobs:
           swiftc -parse source/MurshidWizari/V44StudentFeatures.swift
           swiftc -parse source/MurshidWizari/V45ContestWelcome.swift
           swiftc -parse source/MurshidWizari/V49StudyIntelligence.swift
+          swiftc -parse source/MurshidWizari/V50OfflineExams.swift
           swiftc -parse source/MurshidWizari/Theme.swift
           swiftc -parse source/MurshidWizari/MainViews.swift
           swiftc -parse source/MurshidWizari/ExamView.swift
@@ -344,8 +349,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \
-            MARKETING_VERSION='4.9.13' \
-            CURRENT_PROJECT_VERSION='512' \
+            MARKETING_VERSION='5.0.4' \
+            CURRENT_PROJECT_VERSION='515' \
             clean build
 
       - name: Compile Apple asset catalog
@@ -375,8 +380,8 @@ jobs:
           info.update(partial)
           info['CFBundleDisplayName'] = 'المرشد الوزاري'
           info['CFBundleName'] = 'منصة المرشد الوزاري'
-          info['CFBundleShortVersionString'] = '4.9.13'
-          info['CFBundleVersion'] = '512'
+          info['CFBundleShortVersionString'] = '5.0.4'
+          info['CFBundleVersion'] = '515'
           info['NSFaceIDUsageDescription'] = 'يستخدم المرشد الوزاري Face ID لحماية حسابك عند العودة إلى التطبيق.'
           info['UISupportedInterfaceOrientations'] = ['UIInterfaceOrientationPortrait']
           info['UILaunchScreen'] = {'UIColorName': 'LaunchBackground'}
@@ -414,7 +419,8 @@ jobs:
             -default-test-execution-time-allowance 90 \
             -maximum-test-execution-time-allowance 120 \
             SWIFT_ACTIVE_COMPILATION_CONDITIONS='DEBUG V498_QA' \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY=- \
+            CODE_SIGN_ENTITLEMENTS=qa-keychain.entitlements \
             2>&1 | tee qa-output/simulator-tests.log
 
       - name: Export simulator test evidence
@@ -431,7 +437,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: iPhone-Build512-Final-QA
+          name: iPhone-Build515-Final-QA
           path: |
             qa-output/simulator-tests.log
             qa-output/summary.json
@@ -455,15 +461,15 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid'
           /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string المرشد الوزاري' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleName منصة المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleName string منصة المرشد الوزاري' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 4.9.13' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 512' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 5.0.4' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 515' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Delete :UIDeviceFamily' "$APP/Info.plist" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily array' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily:0 integer 1' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" | grep -Fx 'المرشد الوزاري'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$APP/Info.plist" | grep -Fx 'منصة المرشد الوزاري'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.9.13'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '512'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '5.0.4'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '515'
           /usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist" | grep -Fx '1'
           test -f "$APP/Assets.car"
           test -f "$APP/PrivacyInfo.xcprivacy"
@@ -516,7 +522,7 @@ jobs:
           test "$(grep -c '^struct V40QuestionSearchView' MurshidWizari/V40Features.swift)" -eq 1
           grep -Fq 'ShareLink' MurshidWizari/AuthViews.swift
           grep -Fq 'murshidQuestionRequiresChoices' MurshidWizari/AuthViews.swift
-          grep -Fq 'URLCache(memoryCapacity:' MurshidWizari/APIClient.swift
+          grep -Fq 'config.urlCache = nil' MurshidWizari/APIClient.swift
           grep -Fq 'SecondaryButtonStyle' MurshidWizari/Theme.swift
           grep -Fq 'student_palette' MurshidWizari/Theme.swift
           grep -Fq 'StudentPalette.allCases' MurshidWizari/V31Features.swift
@@ -553,53 +559,25 @@ jobs:
             echo 'ERROR: Web wrapper marker found unexpectedly.' >&2
             exit 1
           fi
-          rm -rf Payload Murshid_Wizari_iOS_v4_9_13_BUILD512_unsigned.ipa
+          rm -rf Payload Murshid_Wizari_iOS_v5_0_4_BUILD515_unsigned.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Murshid_Wizari_iOS_v4_9_13_BUILD512_unsigned.ipa Payload
-          test -s Murshid_Wizari_iOS_v4_9_13_BUILD512_unsigned.ipa
-          shasum -a 256 Murshid_Wizari_iOS_v4_9_13_BUILD512_unsigned.ipa | tee Murshid_Wizari_iOS_v4_9_13_BUILD512_unsigned.sha256
-
-      - name: Publish iPhone IPA preview release
-        continue-on-error: true
-        if: github.ref == 'refs/heads/ios-student-v498-final-fixes'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          cd source
-          TAG="v4.9.13-build512-school-ad-apns-ios-preview"
-          TITLE="Murshid Wizari iPhone v4.9.13 Build 512 (Unsigned Preview)"
-          RELEASE_FLAGS=(--prerelease)
-          NOTES="Adds iPhone APNs registration for off-app school advertisements and tap-to-open ads tab. Requires the supplied server PHP/SQL/cron package and Apple Developer APNs key and Push-enabled signing profile. No speech or narration. Unsigned."
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" \
-              Murshid_Wizari_iOS_v4_9_13_BUILD512_unsigned.ipa \
-              Murshid_Wizari_iOS_v4_9_13_BUILD512_unsigned.sha256 \
-              --clobber
-          else
-            gh release create "$TAG" \
-              Murshid_Wizari_iOS_v4_9_13_BUILD512_unsigned.ipa \
-              Murshid_Wizari_iOS_v4_9_13_BUILD512_unsigned.sha256 \
-              --target "$GITHUB_SHA" \
-              "${RELEASE_FLAGS[@]}" \
-              --title "$TITLE" \
-              --notes "$NOTES"
-          fi
+          /usr/bin/zip -qry Murshid_Wizari_iOS_v5_0_4_BUILD515_unsigned.ipa Payload
+          test -s Murshid_Wizari_iOS_v5_0_4_BUILD515_unsigned.ipa
+          shasum -a 256 Murshid_Wizari_iOS_v5_0_4_BUILD515_unsigned.ipa | tee Murshid_Wizari_iOS_v5_0_4_BUILD515_unsigned.sha256
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Wizari-iPhone-v4.9.13-Build512-Unsigned
+          name: Murshid-Wizari-iPhone-v5.0.4-Build515-Unsigned
           path: |
-            source/Murshid_Wizari_iOS_v4_9_13_BUILD512_unsigned.ipa
-            source/Murshid_Wizari_iOS_v4_9_13_BUILD512_unsigned.sha256
+            source/Murshid_Wizari_iOS_v5_0_4_BUILD515_unsigned.ipa
+            source/Murshid_Wizari_iOS_v5_0_4_BUILD515_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
 
   admin_build:
-    if: ${{ true }}
+    if: github.ref == 'refs/heads/ios-student-v498-final-fixes'
     name: Build v4.9.8 Build 507 unsigned iPhone admin IPA
     runs-on: macos-15
     timeout-minutes: 30
@@ -700,6 +678,7 @@ jobs:
           retention-days: 14
 
   server_qa:
+    if: github.ref == 'refs/heads/ios-student-v498-final-fixes'
     name: Lint and verify free-month server deployment
     runs-on: ubuntu-latest
     steps:
@@ -738,8 +717,8 @@ jobs:
         run: |
           set -u
           mkdir -p .build-status
-          STATUS_FILE=".build-status/v4.9.13-build512-status.txt"
-          LOG_FILE=".build-status/v4.9.13-build512-failed.log"
+          STATUS_FILE=".build-status/v5.0.4-build515-status.txt"
+          LOG_FILE=".build-status/v5.0.4-build515-failed.log"
           {
             echo "run_id=$GITHUB_RUN_ID"
             echo "run_attempt=$GITHUB_RUN_ATTEMPT"
@@ -757,5 +736,3 @@ jobs:
           name: iPhone-v491-build-diagnostics
           path: .build-status/
           retention-days: 14
-
-

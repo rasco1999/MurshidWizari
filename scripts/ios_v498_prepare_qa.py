@@ -39,3 +39,13 @@ text += """
         TEST_TARGET_NAME: MurshidWizari
 """
 project.write_text(text)
+
+# Simulator-only code signature: no Apple distribution identity or device profile required.
+import plistlib
+entitlements = {
+    "application-identifier": "MURSHIDQA1.com.muriq.murshid",
+    "com.apple.developer.team-identifier": "MURSHIDQA1",
+    "keychain-access-groups": ["MURSHIDQA1.com.muriq.murshid"],
+    "get-task-allow": True,
+}
+Path("source/qa-keychain.entitlements").write_bytes(plistlib.dumps(entitlements))

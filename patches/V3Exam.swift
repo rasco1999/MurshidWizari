@@ -178,7 +178,8 @@ struct V3ExamView: View {
                         .font(.headline)
                         .foregroundStyle(Color.murshidGold)
                 }
-                Text(q.text)
+                MurshidMinisterialBadge()
+                Text(murshidQuestionDisplayText(q.text))
                     .font(.title3.weight(.semibold))
                     .lineSpacing(5)
                     .fixedSize(horizontal: false, vertical: true)

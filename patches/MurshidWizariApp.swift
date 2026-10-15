@@ -116,6 +116,8 @@ struct MurshidWizariApp: App {
                         app.bootstrapping = false
                         app.bootstrapNetworkFailed = true
                         bootstrapNeedsNetworkRetry = true
+                    } else if online, app.v3Authenticated, let user = app.user {
+                        await V50OfflineExamBank.shared.syncPending(userID: user.id, csrf: app.csrf)
                     } else if online, bootstrapNeedsNetworkRetry, !app.v3Authenticated,
                               !V49StudyStore.shared.hasOfflineAccount() {
                         // A student's offline coach must not be interrupted when
@@ -330,4 +332,3 @@ struct LockShieldView: View {
         }
     }
 }
-

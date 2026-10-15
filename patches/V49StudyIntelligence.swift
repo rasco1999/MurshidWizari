@@ -1,6 +1,7 @@
 import SwiftUI
-import AVFoundation
 import LocalAuthentication
+import CryptoKit
+import Security
 
 // v5.20: French content retired from the owner's 2026-10-14 SQL snapshot.
 // Never re-surface previously graded French questions from offline storage.
@@ -51,6 +52,8 @@ enum V49OfflineLaunchRules {
         networkUnavailable && !hasVerifiedArchive
     }
 }
+
+
 
 
 struct V49StudyRecord: Identifiable, Codable, Hashable {
@@ -130,22 +133,50 @@ final class V49StudyStore: ObservableObject {
         guard userID > 0,
               let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
         return base.appendingPathComponent("MurshidOfflineReview", isDirectory: true)
-            .appendingPathComponent("review-\(userID).json")
+            .appendingPathComponent("review-\(userID).enc")
+    }
+
+    private func secret() -> SymmetricKey? {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "com.muriq.murshid.review.encryption.v1",
+            kSecAttrAccount as String: "device-only", kSecReturnData as String: true]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecSuccess, let data = item as? Data, data.count == 32 {
+            return SymmetricKey(data: data)
+        }
+        guard status == errSecItemNotFound else { return nil }
+        let generated = SymmetricKey(size: .bits256)
+        var insert = query
+        insert.removeValue(forKey: kSecReturnData as String)
+        insert[kSecValueData as String] = generated.withUnsafeBytes { Data($0) }
+        insert[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let added = SecItemAdd(insert as CFDictionary, nil)
+        #if DEBUG
+        if added != errSecSuccess { NSLog("Offline Keychain status: %d", added) }
+        #endif
+        return added == errSecSuccess ? generated : nil
     }
 
     private func read(userID: Int) -> V49StudyArchive? {
-        guard let url = fileURL(for: userID),
-              let data = try? Data(contentsOf: url),
-              let decoded = try? JSONDecoder().decode(V49StudyArchive.self, from: data),
-              decoded.userID == userID else { return nil }
-        var sanitized = decoded
-        sanitized.records.removeAll(where: V520RetiredFrenchContent.isRetired)
-        if sanitized.records.count != decoded.records.count,
-           let encoded = try? JSONEncoder().encode(sanitized) {
-            // Erase retired French cards on disk, not just in the current UI.
-            try? encoded.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        guard let url = fileURL(for: userID), let secret = secret() else { return nil }
+        if let data = try? Data(contentsOf: url),
+           let box = try? AES.GCM.SealedBox(combined: data),
+           let decrypted = try? AES.GCM.open(box, using: secret),
+           let decoded = try? JSONDecoder().decode(V49StudyArchive.self, from: decrypted),
+           decoded.userID == userID {
+            var cleaned = decoded
+            cleaned.records.removeAll(where: V520RetiredFrenchContent.isRetired)
+            if cleaned.records.count != decoded.records.count { _ = write(cleaned) }
+            return cleaned
         }
-        return sanitized
+        // Migrate old protected JSON only after its encrypted replacement is durable.
+        let legacy = url.deletingPathExtension().appendingPathExtension("json")
+        guard let data = try? Data(contentsOf: legacy),
+              let decoded = try? JSONDecoder().decode(V49StudyArchive.self, from: data),
+              decoded.userID == userID, write(decoded) else { return nil }
+        try? FileManager.default.removeItem(at: legacy)
+        return decoded
     }
 
     func bind(to user: UserSummary) {
@@ -161,8 +192,6 @@ final class V49StudyStore: ObservableObject {
         save()
     }
 
-    // Identity comes from a successful online bootstrap, independently of
-    // the "remember me" setting. Zero saved questions must not block launch.
     func hasOfflineAccount() -> Bool {
         let userID = UserDefaults.standard.integer(forKey: recentUserKey)
         return userID > 0 && read(userID: userID) != nil
@@ -170,10 +199,11 @@ final class V49StudyStore: ObservableObject {
 
     func hasOfflineReview() -> Bool {
         let userID = UserDefaults.standard.integer(forKey: recentUserKey)
-        return userID > 0 && !(read(userID: userID)?.records.isEmpty ?? true)
+        return userID > 0 && (!(read(userID: userID)?.records.isEmpty ?? true) ||
+            !V50OfflineExamBank.shared.topics(userID: userID).isEmpty)
     }
 
-    // Called only after iOS device-owner authentication.
+    // Called only after device authentication on the disconnected launch screen.
     @discardableResult func openOfflineReview() -> Bool {
         let userID = UserDefaults.standard.integer(forKey: recentUserKey)
         guard userID > 0, let saved = read(userID: userID) else { return false }
@@ -182,28 +212,23 @@ final class V49StudyStore: ObservableObject {
     }
 
     func eraseOnLogout(userID: Int?) {
-        // A password reset can occur with no active server session. Explicit
-        // revocation must then still clear the last locally verified account.
         let storedID = UserDefaults.standard.integer(forKey: recentUserKey)
         let targetID = userID.flatMap { $0 > 0 ? $0 : nil } ?? storedID
         if targetID > 0, let url = fileURL(for: targetID) {
             try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(at: url.deletingPathExtension().appendingPathExtension("json"))
         }
-        if storedID == targetID {
-            UserDefaults.standard.removeObject(forKey: recentUserKey)
-        }
+        if storedID == targetID { UserDefaults.standard.removeObject(forKey: recentUserKey) }
         archive = nil
     }
 
     func rememberGraded(_ q: Question, subject: Subject, topic: Topic, answer: String,
                        correct: Bool, correctAnswer: String? = nil, explanation: String? = nil,
                        persistImmediately: Bool = true) {
+        guard !V520RetiredFrenchContent.isQuestion(q.id), !V520RetiredFrenchContent.isChapter(topic.id),
+              !MurshidSubjectCatalog.isFrenchSubject(subject.name) else { return }
         let verifiedAnswer = correctAnswer ?? q.correctAnswer
-        guard q.id > 0, !V520RetiredFrenchContent.isQuestion(q.id),
-              !V520RetiredFrenchContent.isChapter(topic.id),
-              ![33, 36, 40].contains(subject.id),
-              !MurshidSubjectCatalog.isFrenchSubject(subject.name),
-              !V49QuestionQuality.normalized(q.text + q.meaningWord).isEmpty,
+        guard q.id > 0, !V49QuestionQuality.normalized(q.text + q.meaningWord).isEmpty,
               !V49QuestionQuality.normalized(verifiedAnswer).isEmpty, var archive,
               !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let key = V49QuestionQuality.normalized(q.text + " " + q.meaningWord)
@@ -270,6 +295,35 @@ final class V49StudyStore: ObservableObject {
         save()
     }
 
+    struct SubjectMastery: Identifiable {
+        var id: String { subject }
+        let subject: String
+        let count: Int
+        let mastered: Int
+        let due: Int
+        var percent: Int { count == 0 ? 0 : (mastered * 100 / count) }
+    }
+
+    // An explainable ON-DEVICE heuristic, not an academic grade.
+    var subjectMastery: [SubjectMastery] {
+        let groups = Dictionary(grouping: records.filter { !$0.subjectName.isEmpty },
+                                by: { $0.subjectName })
+        return groups.map { subject, items in
+            SubjectMastery(subject: subject, count: items.count,
+                           mastered: items.filter { $0.successfulReviews >= 3 }.count,
+                           due: items.filter { $0.dueAt <= Date() }.count)
+        }.sorted {
+            $0.percent == $1.percent ? $0.due > $1.due : $0.percent < $1.percent
+        }
+    }
+
+    var suggestedDailyTarget: Int {
+        guard !records.isEmpty else { return 10 }
+        let weak = records.filter { !$0.wasCorrect || $0.successfulReviews < 2 }.count
+        let goal = min(30, max(10, due.count + min(10, weak / 3)))
+        return min(30, ((goal + 4) / 5) * 5)
+    }
+
     var records: [V49StudyRecord] { archive?.records ?? [] }
     var due: [V49StudyRecord] {
         records.filter { $0.dueAt <= Date() }
@@ -303,21 +357,27 @@ final class V49StudyStore: ObservableObject {
         return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
-    private func save() {
-        guard let archive, let url = fileURL(for: archive.userID),
-              let data = try? JSONEncoder().encode(archive) else { return }
+    private func write(_ archive: V49StudyArchive) -> Bool {
+        guard let url = fileURL(for: archive.userID), let secret = secret(),
+              let data = try? JSONEncoder().encode(archive),
+              let encrypted = try? AES.GCM.seal(data, using: secret).combined else { return false }
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-        } catch {
-            // Local review is optional; a storage failure must not block paid exams.
-            NSLog("Offline review cache unavailable: %@", String(describing: error))
-        }
+            try encrypted.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            var values = URLResourceValues()
+            values.isExcludedFromBackup = true
+            var protectedURL = url
+            try protectedURL.setResourceValues(values)
+            return true
+        } catch { return false }
     }
-}
 
-// AVSpeechSynthesizer and the shared audio-session lifecycle live in
-// V498QuestionSpeech.swift. Both online explanations and offline recall use it.
+    @discardableResult private func save() -> Bool {
+        guard let archive else { return false }
+        return write(archive)
+    }
+
+}
 
 // MARK: - Smart review home (does not claim server rankings or academic grades)
 
@@ -343,23 +403,57 @@ struct V49StudyHubView: View {
                 .padding(18)
                 .background(LinearGradient(colors: [.murshidNavy, .murshidBlue], startPoint: .topTrailing, endPoint: .bottomLeading), in: RoundedRectangle(cornerRadius: 22))
 
+                if let uid = store.archive?.userID,
+                   !V50OfflineExamBank.shared.topics(userID: uid).isEmpty {
+                    NavigationLink(destination: V50OfflineExamListView()) {
+                        Label("اختباراتي المحفوظة دون إنترنت", systemImage: "square.and.pencil")
+                            .font(.headline).frame(maxWidth: .infinity).padding(12)
+                    }.buttonStyle(.borderedProminent).tint(.murshidBlue)
+                }
+
                 LazyVGrid(columns: columns, spacing: 12) {
                     V3MetricCard(title: "محفوظ للمراجعة", value: "\(store.records.count)", icon: "books.vertical")
                     V3MetricCard(title: "حان وقتها", value: "\(store.due.count)", icon: "alarm.fill")
                     V3MetricCard(title: "أيام المواظبة", value: "\(store.streak)", icon: "flame.fill")
-                    V3MetricCard(title: "تدريب اليوم", value: "\(store.todayReviews)/10", icon: "target")
+                    V3MetricCard(title: "تدريب اليوم", value: "\(store.todayReviews)/\(store.suggestedDailyTarget)", icon: "target")
                 }
 
                 MurshidCard {
                     VStack(alignment: .leading, spacing: 10) {
-                        Label("تحدي 10 مراجعات اليوم", systemImage: "sparkles")
+                        Label("هدف المراجعة المقترح: \(store.suggestedDailyTarget)", systemImage: "sparkles")
                             .font(.headline)
-                        ProgressView(value: Double(min(store.todayReviews, 10)), total: 10).tint(.murshidBlue)
-                        Text(store.todayReviews >= 10 ? "أتممت تحدي اليوم! 🎉" : "تبقّى \(10 - min(store.todayReviews, 10)) أسئلة للوصول إلى هدفك اليومي.")
+                        ProgressView(value: Double(min(store.todayReviews, store.suggestedDailyTarget)),
+                                     total: Double(store.suggestedDailyTarget)).tint(.murshidBlue)
+                        Text(store.todayReviews >= store.suggestedDailyTarget
+                             ? "أتممت هدف المراجعة اليوم! 🎉"
+                             : "تبقّى \(max(0, store.suggestedDailyTarget - store.todayReviews)) سؤالًا لهدف المراجعة المقترح.")
                             .font(.subheadline).foregroundStyle(.secondary)
-                        if store.todayReviews >= 10 {
-                            ShareLink(item: "أكملت تحدي 10 مراجعات اليوم في منصة المرشد الوزاري 📚🔥") {
+                        if store.todayReviews >= store.suggestedDailyTarget {
+                            ShareLink(item: "أكملت هدف المراجعة اليوم في منصة المرشد الوزاري 📚🔥") {
                                 Label("شارك إنجازك", systemImage: "square.and.arrow.up")
+                            }
+                        }
+                    }
+                }
+
+                if !store.subjectMastery.isEmpty {
+                    MurshidCard {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("إتقان المواد", systemImage: "chart.bar.fill").font(.headline)
+                            Text("مؤشر تقديري من تكرار المراجعة الناجحة، وليس درجة وزارية.")
+                                .font(.caption).foregroundStyle(.secondary)
+                            ForEach(Array(store.subjectMastery.prefix(6))) { item in
+                                VStack(alignment: .leading, spacing: 5) {
+                                    HStack {
+                                        Text(item.subject).font(.subheadline.bold())
+                                        Spacer()
+                                        Text("\(item.percent)%").font(.caption.monospacedDigit())
+                                    }
+                                    ProgressView(value: Double(item.percent), total: 100).tint(.murshidBlue)
+                                        .accessibilityLabel("إتقان \(item.subject): \(item.percent) بالمئة")
+                                    Text("\(item.mastered) متقنة من \(item.count) · \(item.due) للمراجعة")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }
@@ -449,7 +543,8 @@ struct V49RecallView: View {
                     MurshidCard {
                         VStack(alignment: .leading, spacing: 15) {
                             Text(q.topicName).font(.caption.bold()).foregroundStyle(Color.murshidBlue)
-                            Text(q.question).font(.title3.bold()).lineSpacing(5).textSelection(.enabled)
+                            MurshidMinisterialBadge()
+                            Text(murshidPromptWithoutHints(q.question)).font(.title3.bold()).lineSpacing(5).textSelection(.enabled)
                             if reveal {
                                 Divider()
                                 Text("الإجابة النموذجية").font(.caption.bold()).foregroundStyle(.secondary)
@@ -529,7 +624,7 @@ struct V49OfflineAccessView: View {
                     Image(systemName: "books.vertical.circle.fill")
                         .font(.system(size: 50)).foregroundStyle(Color.murshidBlue)
                     Text("مراجعاتك محفوظة على الآيفون").font(.title3.bold())
-                    Text("افتح مدربي الذكي ومراجعاتك على هذا الجهاز بعد التحقق ببصمة الوجه أو رمز قفل الجهاز. لا يشترط تفعيل «تذكّرني».")
+                    Text("افتح الأسئلة التي سبق تصحيحها بعد التحقق ببصمة الوجه أو رمز قفل الجهاز.")
                         .font(.subheadline).multilineTextAlignment(.center).foregroundStyle(.secondary)
                     Button { authenticate() } label: {
                         HStack {
@@ -564,4 +659,3 @@ struct V49OfflineAccessView: View {
         }
     }
 }
-

@@ -239,7 +239,8 @@ struct V44PredictionsView: View {
                                         Text("\(jInt(prediction["prediction_score"]))/100")
                                             .font(.caption.bold()).foregroundStyle(Color.murshidBlue)
                                     }
-                                    Text("س\(index + 1): \(jString(prediction["question_text"]))")
+                                    MurshidMinisterialBadge()
+                                    Text("س\(index + 1): \(murshidQuestionDisplayText(jString(prediction["question_text"])))")
                                         .font(.headline).foregroundStyle(.primary)
                                         .multilineTextAlignment(.leading)
                                         .fixedSize(horizontal: false, vertical: true)
