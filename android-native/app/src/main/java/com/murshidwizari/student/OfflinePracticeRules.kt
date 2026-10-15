@@ -15,8 +15,10 @@ internal object OfflinePracticeRules {
                 when {
                     index >= 0 -> append(('0'.code + index % 10).toChar())
                     c in '\u064b'..'\u0652' || c == '\u0670' || c == '\u0640' -> Unit
-                    c.isLetterOrDigit() || c == '.' || c == '-' || c == '/' -> append(c.lowercaseChar())
                     c.isWhitespace() -> append(' ')
+                    // Operators and punctuation carry meaning. Removing '+'
+                    // would falsely make "2+3" equal to the number "23".
+                    else -> append(c.lowercaseChar())
                 }
             }
         }.trim().replace(Regex("\\s+"), " ").trimEnd('.', ' ')
