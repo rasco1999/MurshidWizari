@@ -8,7 +8,7 @@ on:
       - '.github/workflows/build-ios.yml'
       - 'patches/**'
   push:
-    branches: [ main, ios-study-v49 ]
+    branches: [ main, ios-study-v49, work/ios-complete-20261015 ]
     paths:
       - '.github/workflows/build-ios.yml'
       - 'patches/**'
@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   build:
-    name: Build v4.9 Build 499 unsigned iPhone IPA
+    name: Build v4.9 Build 503 unsigned iPhone IPA
     runs-on: macos-15
     timeout-minutes: 35
 
@@ -33,6 +33,9 @@ jobs:
 
       - name: Check iPhone offline review security invariants
         run: python3 scripts/ios_v49_static_qa.py
+
+      - name: Execute real iOS offline revision and grading rules
+        run: python3 scripts/ios_offline_rules_test.py
 
       - name: Reconstruct exact Production v2 source
         shell: bash
@@ -82,8 +85,8 @@ jobs:
               if line == '        PRODUCT_NAME: MurshidWizari':
                   out.extend([
                       '        TARGETED_DEVICE_FAMILY: "1"',
-                      '        MARKETING_VERSION: "4.9.0"',
-                      '        CURRENT_PROJECT_VERSION: "499"',
+                      '        MARKETING_VERSION: "5.0.3"',
+                      '        CURRENT_PROJECT_VERSION: "503"',
                       '        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon',
                       '        CODE_SIGN_ENTITLEMENTS: MurshidWizari/MurshidWizari.entitlements',
                   ])
@@ -155,6 +158,7 @@ jobs:
           cp patches/V44StudentFeatures.swift source/MurshidWizari/V44StudentFeatures.swift
           cp patches/V45ContestWelcome.swift source/MurshidWizari/V45ContestWelcome.swift
           cp patches/V49StudyIntelligence.swift source/MurshidWizari/V49StudyIntelligence.swift
+          cp patches/V50OfflineExams.swift source/MurshidWizari/V50OfflineExams.swift
           cp patches/ServicesV32.swift source/MurshidWizari/Services.swift
           cp patches/ThemeV34.swift source/MurshidWizari/Theme.swift
           cp patches/MainViewsV33.swift source/MurshidWizari/MainViews.swift
@@ -240,6 +244,7 @@ jobs:
           swiftc -parse source/MurshidWizari/V44StudentFeatures.swift
           swiftc -parse source/MurshidWizari/V45ContestWelcome.swift
           swiftc -parse source/MurshidWizari/V49StudyIntelligence.swift
+          swiftc -parse source/MurshidWizari/V50OfflineExams.swift
           swiftc -parse source/MurshidWizari/Theme.swift
           swiftc -parse source/MurshidWizari/MainViews.swift
           swiftc -parse source/MurshidWizari/ExamView.swift
@@ -285,24 +290,6 @@ jobs:
           SWIFT
           swift /tmp/namecheck.swift
 
-      - name: Probe live registration name validation without creating account
-        shell: bash
-        run: |
-          set -euo pipefail
-          RESP="$(curl -sS --max-redirs 0 --max-time 20 'https://www.mur-iq.com/api/register.php'             -H 'Content-Type: application/json; charset=utf-8'             -H 'Accept: application/json'             --data '{"full_name":"يونس محمد عباس","grade_id":0,"gender":"male","contact_type":"email","identifier":"name-probe-do-not-create@example.invalid","password":"12345678","password_confirmation":"12345678","company_website":""}')"
-          echo "$RESP"
-          python3 - "$RESP" <<'PY'
-          import json, sys
-          data=json.loads(sys.argv[1])
-          msg=str(data.get("message",""))
-          # Correct outcome: the live server accepted the name and advanced to grade validation.
-          if "الاسم الثلاثي" in msg:
-              raise SystemExit("LIVE SERVER STILL REJECTS THE ARABIC NAME")
-          if "اختر الصف الدراسي" not in msg:
-              raise SystemExit("Unexpected live registration probe response: "+msg)
-          print("Live server accepted Arabic name; probe stopped safely at grade validation.")
-          PY
-
       - name: Install XcodeGen
         run: |
           brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
@@ -331,8 +318,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \
-            MARKETING_VERSION='4.9.0' \
-            CURRENT_PROJECT_VERSION='499' \
+            MARKETING_VERSION='5.0.3' \
+            CURRENT_PROJECT_VERSION='503' \
             clean build
 
       - name: Compile Apple asset catalog
@@ -362,8 +349,8 @@ jobs:
           info.update(partial)
           info['CFBundleDisplayName'] = 'المرشد الوزاري'
           info['CFBundleName'] = 'منصة المرشد الوزاري'
-          info['CFBundleShortVersionString'] = '4.9.0'
-          info['CFBundleVersion'] = '499'
+          info['CFBundleShortVersionString'] = '5.0.3'
+          info['CFBundleVersion'] = '503'
           info['NSFaceIDUsageDescription'] = 'يستخدم المرشد الوزاري Face ID لحماية حسابك عند العودة إلى التطبيق.'
           info['UISupportedInterfaceOrientations'] = ['UIInterfaceOrientationPortrait']
           info['UILaunchScreen'] = {'UIColorName': 'LaunchBackground'}
@@ -388,15 +375,15 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid'
           /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string المرشد الوزاري' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleName منصة المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleName string منصة المرشد الوزاري' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 4.9.0' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 5.0.3' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 499' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Delete :UIDeviceFamily' "$APP/Info.plist" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily array' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily:0 integer 1' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" | grep -Fx 'المرشد الوزاري'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$APP/Info.plist" | grep -Fx 'منصة المرشد الوزاري'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '4.9.0'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '499'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '5.0.3'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '503'
           /usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist" | grep -Fx '1'
           test -f "$APP/Assets.car"
           test -f "$APP/PrivacyInfo.xcprivacy"
@@ -444,7 +431,10 @@ jobs:
           test "$(grep -c '^struct V40QuestionSearchView' MurshidWizari/V40Features.swift)" -eq 1
           grep -Fq 'ShareLink' MurshidWizari/AuthViews.swift
           grep -Fq 'murshidQuestionRequiresChoices' MurshidWizari/AuthViews.swift
-          grep -Fq 'URLCache(memoryCapacity:' MurshidWizari/APIClient.swift
+          grep -Fq 'config.urlCache = nil' MurshidWizari/APIClient.swift
+          grep -Fq 'V50OfflineExamBank.shared.bindAuthenticated' MurshidWizari/APIClient.swift
+          grep -Fq 'V50OfflineExamBank.shared.rememberTopic' MurshidWizari/AuthViews.swift
+          grep -Fq 'V50OfflineExamListView' MurshidWizari/V49StudyIntelligence.swift
           grep -Fq 'SecondaryButtonStyle' MurshidWizari/Theme.swift
           grep -Fq 'submitCurrent(answerOverride:' MurshidWizari/AuthViews.swift
           grep -Fq '.disabled(!isAnswered(questions[current]) || submitting)' MurshidWizari/AuthViews.swift
@@ -474,52 +464,20 @@ jobs:
             echo 'ERROR: Web wrapper marker found unexpectedly.' >&2
             exit 1
           fi
-          rm -rf Payload Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.ipa
+          rm -rf Payload Murshid_Wizari_iOS_v5_0_3_BUILD503_unsigned.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.ipa Payload
-          test -s Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.ipa
-          shasum -a 256 Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.ipa | tee Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.sha256
-
-      - name: Publish iPhone IPA preview release
-        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ios-study-v49')
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          cd source
-          TAG="v4.9-build499"
-          TITLE="Murshid Wizari iPhone v4.9 Build 499"
-          RELEASE_FLAGS=()
-          if [ "$GITHUB_REF_NAME" = "ios-study-v49" ]; then
-            TAG="v4.9-build499-ios-preview"
-            TITLE="$TITLE (Unsigned Preview)"
-            RELEASE_FLAGS+=(--prerelease)
-          fi
-          NOTES="Unsigned iPhone IPA with private offline recall of previously graded questions, spaced review, daily streaks and spoken explanations. Paid exams and entitlements always remain server-controlled."
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" \
-              Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.ipa \
-              Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.sha256 \
-              --clobber
-          else
-            gh release create "$TAG" \
-              Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.ipa \
-              Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.sha256 \
-              --target "$GITHUB_SHA" \
-              "${RELEASE_FLAGS[@]}" \
-              --title "$TITLE" \
-              --notes "$NOTES"
-          fi
+          /usr/bin/zip -qry Murshid_Wizari_iOS_v5_0_3_BUILD503_unsigned.ipa Payload
+          test -s Murshid_Wizari_iOS_v5_0_3_BUILD503_unsigned.ipa
+          shasum -a 256 Murshid_Wizari_iOS_v5_0_3_BUILD503_unsigned.ipa | tee Murshid_Wizari_iOS_v5_0_3_BUILD503_unsigned.sha256
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Wizari-iPhone-v4.9-Build499-Unsigned
+          name: Murshid-Wizari-iPhone-v5.0.3-Build503-Unsigned
           path: |
-            source/Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.ipa
-            source/Murshid_Wizari_iOS_v4_9_BUILD499_unsigned.sha256
+            source/Murshid_Wizari_iOS_v5_0_3_BUILD503_unsigned.ipa
+            source/Murshid_Wizari_iOS_v5_0_3_BUILD503_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
 

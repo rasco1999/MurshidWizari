@@ -1,5 +1,7 @@
 import SwiftUI
 import LocalAuthentication
+import CryptoKit
+import Security
 
 // MARK: - iPhone-only v4.9: previously graded questions, never an offline paid exam
 
@@ -80,14 +82,40 @@ final class V49StudyStore: ObservableObject {
         guard userID > 0,
               let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
         return base.appendingPathComponent("MurshidOfflineReview", isDirectory: true)
-            .appendingPathComponent("review-\(userID).json")
+            .appendingPathComponent("review-\(userID).enc")
+    }
+
+    private func secret() -> SymmetricKey? {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "com.muriq.murshid.review.encryption.v1",
+            kSecAttrAccount as String: "device-only", kSecReturnData as String: true]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecSuccess, let data = item as? Data, data.count == 32 {
+            return SymmetricKey(data: data)
+        }
+        guard status == errSecItemNotFound else { return nil }
+        let generated = SymmetricKey(size: .bits256)
+        var insert = query
+        insert.removeValue(forKey: kSecReturnData as String)
+        insert[kSecValueData as String] = generated.withUnsafeBytes { Data($0) }
+        insert[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        return SecItemAdd(insert as CFDictionary, nil) == errSecSuccess ? generated : nil
     }
 
     private func read(userID: Int) -> V49StudyArchive? {
-        guard let url = fileURL(for: userID),
-              let data = try? Data(contentsOf: url),
+        guard let url = fileURL(for: userID), let secret() else { return nil }
+        if let data = try? Data(contentsOf: url),
+           let box = try? AES.GCM.SealedBox(combined: data),
+           let decrypted = try? AES.GCM.open(box, using: secret),
+           let decoded = try? JSONDecoder().decode(V49StudyArchive.self, from: decrypted),
+           decoded.userID == userID { return decoded }
+        // Migrate old protected JSON only after its encrypted replacement is durable.
+        let legacy = url.deletingPathExtension().appendingPathExtension("json")
+        guard let data = try? Data(contentsOf: legacy),
               let decoded = try? JSONDecoder().decode(V49StudyArchive.self, from: data),
-              decoded.userID == userID else { return nil }
+              decoded.userID == userID, write(decoded) else { return nil }
+        try? FileManager.default.removeItem(at: legacy)
         return decoded
     }
 
@@ -106,20 +134,26 @@ final class V49StudyStore: ObservableObject {
 
     func hasOfflineReview() -> Bool {
         let userID = UserDefaults.standard.integer(forKey: recentUserKey)
-        return userID > 0 && !(read(userID: userID)?.records.isEmpty ?? true)
+        return userID > 0 && (!(read(userID: userID)?.records.isEmpty ?? true) ||
+            !V50OfflineExamBank.shared.topics(userID: userID).isEmpty)
     }
 
     // Called only after device authentication on the disconnected launch screen.
     @discardableResult func openOfflineReview() -> Bool {
         let userID = UserDefaults.standard.integer(forKey: recentUserKey)
-        guard userID > 0, let saved = read(userID: userID), !saved.records.isEmpty else { return false }
+        guard userID > 0, let saved = read(userID: userID),
+              !saved.records.isEmpty || !V50OfflineExamBank.shared.topics(userID: userID).isEmpty
+        else { return false }
         archive = saved
         return true
     }
 
     func eraseOnLogout(userID: Int?) {
         guard let userID, userID > 0 else { archive = nil; return }
-        if let url = fileURL(for: userID) { try? FileManager.default.removeItem(at: url) }
+        if let url = fileURL(for: userID) {
+            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(at: url.deletingPathExtension().appendingPathExtension("json"))
+        }
         if UserDefaults.standard.integer(forKey: recentUserKey) == userID {
             UserDefaults.standard.removeObject(forKey: recentUserKey)
         }
@@ -259,22 +293,26 @@ final class V49StudyStore: ObservableObject {
         return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
-    private func save() {
-        guard let archive, let url = fileURL(for: archive.userID),
-              let data = try? JSONEncoder().encode(archive) else { return }
+    private func write(_ archive: V49StudyArchive) -> Bool {
+        guard let url = fileURL(for: archive.userID), let secret(),
+              let data = try? JSONEncoder().encode(archive),
+              let encrypted = try? AES.GCM.seal(data, using: secret).combined else { return false }
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-            // Cached exam-review content is private and must not be copied into cloud backups.
+            try encrypted.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             var values = URLResourceValues()
             values.isExcludedFromBackup = true
             var protectedURL = url
             try protectedURL.setResourceValues(values)
-        } catch {
-            // Local review is optional; a storage failure must not block paid exams.
-            NSLog("Offline review cache unavailable: %@", String(describing: error))
-        }
+            return true
+        } catch { return false }
     }
+
+    @discardableResult private func save() -> Bool {
+        guard let archive else { return false }
+        return write(archive)
+    }
+
 }
 
 // MARK: - Smart review home (does not claim server rankings or academic grades)
@@ -300,6 +338,14 @@ struct V49StudyHubView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(18)
                 .background(LinearGradient(colors: [.murshidNavy, .murshidBlue], startPoint: .topTrailing, endPoint: .bottomLeading), in: RoundedRectangle(cornerRadius: 22))
+
+                if let uid = store.archive?.userID,
+                   !V50OfflineExamBank.shared.topics(userID: uid).isEmpty {
+                    NavigationLink(destination: V50OfflineExamListView()) {
+                        Label("اختباراتي المحفوظة دون إنترنت", systemImage: "square.and.pencil")
+                            .font(.headline).frame(maxWidth: .infinity).padding(12)
+                    }.buttonStyle(.borderedProminent).tint(.murshidBlue)
+                }
 
                 LazyVGrid(columns: columns, spacing: 12) {
                     V3MetricCard(title: "محفوظ للمراجعة", value: "\(store.records.count)", icon: "books.vertical")

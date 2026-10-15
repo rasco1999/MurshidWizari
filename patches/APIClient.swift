@@ -84,6 +84,9 @@ final class AppSession: ObservableObject {
     func reset(expired: Bool = false) {
         // Review cards are tied to the last authenticated student and must not
         // survive an explicit logout or a server-confirmed expired session.
+        ResponseCache.shared.clearForCurrentUser()
+        URLCache.shared.removeAllCachedResponses()
+        if !expired { V50OfflineExamBank.shared.clear() }
         V49StudyStore.shared.eraseOnLogout(userID: user?.id)
         authenticated = false
         v3Authenticated = false
@@ -114,6 +117,10 @@ final class AppSession: ObservableObject {
         subjects = MurshidSubjectCatalog.visibleSubjects(jArray(json["subjects"]).map(Subject.init))
         plans = jArray(json["plans"]).map(SubscriptionPlan.init)
         subscribed = jBool(json["subscribed"])
+        if let user {
+            V50OfflineExamBank.shared.bindAuthenticated(userID: user.id, subscribed: subscribed,
+                expiresUnix: jInt(json["subscription_expires_at_unix"]))
+        }
         subscriptionDaysRemaining = subscribed ? jInt(json["subscription_days_remaining"]) : nil
         freeLimit = jInt(json["free_limit"], default: 15)
         freeUsed = jInt(json["free_used"])
@@ -126,6 +133,10 @@ final class AppSession: ObservableObject {
         v3Authenticated = true
         sessionExpired = false
         lastSync = Date()
+        if let user, !csrf.isEmpty {
+            let uid = user.id, token = csrf
+            Task { await V50OfflineExamBank.shared.syncPending(userID: uid, csrf: token) }
+        }
     }
 
     func applyAppConfig(_ json: JSON) {
@@ -165,8 +176,13 @@ final class APIClient {
         // Bound stalled DNS/connectivity requests; two safe read attempts remain enabled.
         config.timeoutIntervalForRequest = 18
         config.timeoutIntervalForResource = 38
-        config.requestCachePolicy = .useProtocolCachePolicy
-        config.urlCache = URLCache(memoryCapacity: 24 * 1024 * 1024, diskCapacity: 96 * 1024 * 1024, diskPath: "MurshidHTTP")
+        // All authorization and sync reads must reach the server. Optional cached
+        // screens use the protected, account-scoped ResponseCache explicitly.
+        URLCache.shared.removeAllCachedResponses()
+        let legacy = URLCache(memoryCapacity: 0, diskCapacity: 96 * 1024 * 1024, diskPath: "MurshidHTTP")
+        legacy.removeAllCachedResponses()
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.urlCache = nil
         config.httpAdditionalHeaders = [
             "Accept": "application/json",
             "X-Murshid-App": "ios-native-4.1",

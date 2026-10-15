@@ -3487,6 +3487,10 @@ struct V3ExamView: View {
             if filterState != "all" { query.append(URLQueryItem(name: "state", value: filterState)) }
             if filterShuffle { query.append(URLQueryItem(name: "shuffle", value: "1")) }
             let d = try await APIClient.shared.request("mobile/exam.php", query: query)
+            if let uid = app.user?.id {
+                _ = V50OfflineExamBank.shared.rememberTopic(userID: uid, chapterID: topic.id,
+                    name: topic.name, source: jArray(d["questions"]))
+            }
             var seenQuestions = Set<String>()
             let qs = jArray(d["questions"])
                 .map(Question.init)

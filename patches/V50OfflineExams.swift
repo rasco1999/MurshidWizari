@@ -16,7 +16,7 @@ struct V50OfflineQuestion: Codable, Identifiable {
     let options: [Option]
     let correctAnswer: String
     let explanation: String
-    let submitted: Bool
+    var submitted: Bool
     let serverIndex: Int
 }
 
@@ -24,7 +24,7 @@ struct V50OfflineTopic: Codable, Identifiable {
     let id: Int
     let name: String
     let savedAt: Date
-    let questions: [V50OfflineQuestion]
+    var questions: [V50OfflineQuestion]
 }
 
 struct V50OfflineAnswer: Codable, Identifiable {
@@ -35,6 +35,7 @@ struct V50OfflineAnswer: Codable, Identifiable {
     let text: String
     let optionID: Int
     let createdAt: Date
+    var revision: String? = nil
 }
 
 struct V50OfflineVault: Codable {
@@ -46,6 +47,7 @@ struct V50OfflineVault: Codable {
 }
 
 enum V50OfflineRules {
+    enum Feedback: String { case correct, incorrect, needsServer }
     static func supports(_ type: String, optionCount: Int) -> Bool {
         switch type {
         case "mcq": return optionCount >= 2
@@ -53,13 +55,54 @@ enum V50OfflineRules {
         default: return false
         }
     }
+    static func revision(_ question: V50OfflineQuestion) -> String {
+        var fields = [String(question.id), question.type, question.text,
+                      question.meaningWord, question.correctAnswer, String(question.options.count)]
+        for option in question.options { fields += [String(option.id), option.text] }
+        return SHA256.hash(data: Data(fields.joined(separator: "\u{001f}").utf8))
+            .map { String(format: "%02x", $0) }.joined()
+    }
+    static func normalized(_ value: String) -> String {
+        let digits = Array("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹".unicodeScalars)
+        var text = ""
+        for scalar in value.precomposedStringWithCanonicalMapping.unicodeScalars {
+            if let index = digits.firstIndex(of: scalar) { text += String(index % 10) }
+            else if (0x064b...0x0652).contains(scalar.value) || scalar.value == 0x0670 || scalar.value == 0x0640 { continue }
+            else if CharacterSet.alphanumerics.contains(scalar) || ".-/".unicodeScalars.contains(scalar) {
+                text += String(scalar).lowercased()
+            } else if CharacterSet.whitespacesAndNewlines.contains(scalar) { text += " " }
+        }
+        var result = text.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        while result.last == "." || result.last == " " { result.removeLast() }
+        return result
+    }
+    static func feedback(_ question: V50OfflineQuestion, answer: String) -> Feedback {
+        let given = normalized(answer), correct = normalized(question.correctAnswer)
+        guard !given.isEmpty, !correct.isEmpty else { return .needsServer }
+        if given == correct { return .correct }
+        let choices = question.options.isEmpty && question.type == "true_false"
+            ? ["صح", "خطأ"] : question.options.map(\.text)
+        let labels = choices.map(normalized)
+        if ["mcq", "true_false"].contains(question.type), labels.contains(given), labels.contains(correct) {
+            return .incorrect
+        }
+        let pattern = #"^[-+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)$"#
+        if given.range(of: pattern, options: .regularExpression) != nil,
+           correct.range(of: pattern, options: .regularExpression) != nil,
+           let a = Decimal(string: given, locale: Locale(identifier: "en_US_POSIX")),
+           let b = Decimal(string: correct, locale: Locale(identifier: "en_US_POSIX")) {
+            return a == b ? .correct : .incorrect
+        }
+        return .needsServer
+    }
 }
 
 @MainActor
 final class V50OfflineExamBank: ObservableObject {
     static let shared = V50OfflineExamBank()
     @Published private(set) var vault: V50OfflineVault?
-    private var syncing = false
+    @Published private(set) var syncing = false
+    @Published private(set) var syncMessage = ""
     private let maxAge: TimeInterval = 7 * 86_400
     private let service = "com.muriq.murshid.offline.exam.secret.v1"
     private let account = "device-only"
@@ -152,7 +195,10 @@ final class V50OfflineExamBank: ObservableObject {
 
     func topics(userID: Int) -> [V50OfflineTopic] {
         guard allowed(userID) else { return [] }
-        return vault?.topics.filter { Date().timeIntervalSince($0.savedAt) < maxAge } ?? []
+        return vault?.topics.filter {
+            let age = Date().timeIntervalSince($0.savedAt)
+            return age >= -300 && age < maxAge
+        } ?? []
     }
 
     func questions(userID: Int, chapterID: Int) -> [V50OfflineQuestion] {
@@ -185,10 +231,13 @@ final class V50OfflineExamBank: ObservableObject {
         guard !contents.isEmpty else { return false }
         let topic = V50OfflineTopic(id: chapterID, name: String(name.prefix(180)),
                                    savedAt: Date(), questions: contents)
+        let previous = vault
         vault?.topics.removeAll { $0.id == chapterID }
         vault?.topics.insert(topic, at: 0)
         vault?.topics = Array((vault?.topics ?? []).prefix(12))
-        return persist()
+        if persist() { return true }
+        vault = previous
+        return false
     }
 
     @discardableResult
@@ -200,10 +249,13 @@ final class V50OfflineExamBank: ObservableObject {
         else { return false }
         if pending(userID: userID).contains(where: { $0.questionID == questionID }) { return true }
         guard (vault?.pending.count ?? 0) < 300 else { return false }
+        let previous = vault
         vault?.pending.append(V50OfflineAnswer(chapterID: chapterID, questionID: questionID,
             serverIndex: question.serverIndex, text: answer, optionID: optionID,
-            createdAt: Date()))
-        return persist()
+            createdAt: Date(), revision: V50OfflineRules.revision(question)))
+        if persist() { return true }
+        vault = previous
+        return false
     }
 
     func clear() {
@@ -211,38 +263,79 @@ final class V50OfflineExamBank: ObservableObject {
         if let url { try? FileManager.default.removeItem(at: url) }
     }
 
-    /// Idempotence: fetch server submission state before every deferred POST.
-    /// Ambiguous outcomes remain in the encrypted queue until next reconciliation.
+    @discardableResult
+    func discard(userID: Int, questionID: Int) -> Bool {
+        guard vault?.userID == userID else { return false }
+        let previous = vault
+        vault?.pending.removeAll { $0.questionID == questionID }
+        if persist() { return true }
+        vault = previous
+        return false
+    }
+
+    private func acknowledge(_ entry: V50OfflineAnswer, userID: Int) -> Bool {
+        guard vault?.userID == userID else { return false }
+        let previous = vault
+        if let topic = vault?.topics.firstIndex(where: { $0.id == entry.chapterID }),
+           let question = vault?.topics[topic].questions.firstIndex(where: { $0.id == entry.questionID }) {
+            vault?.topics[topic].questions[question].submitted = true
+        }
+        vault?.pending.removeAll { $0.questionID == entry.questionID }
+        if persist() { return true }
+        vault = previous
+        return false
+    }
+
+    /// Reconcile with a fresh server read before every POST; never replay an edited question.
     func syncPending(userID: Int, csrf: String) async {
-        guard !syncing, !csrf.isEmpty, vault?.userID == userID else { return }
+        guard !syncing, allowed(userID), !csrf.isEmpty,
+              AppSession.shared.user?.id == userID else { return }
         syncing = true
         defer { syncing = false }
+        var confirmed = 0, revised = 0
         for entry in pending(userID: userID) {
             guard vault?.userID == userID, AppSession.shared.user?.id == userID else { break }
             do {
                 let response = try await APIClient.shared.request("mobile/exam.php",
                     query: [URLQueryItem(name: "chapter_id", value: String(entry.chapterID))])
-                guard let server = jArray(response["questions"]).first(where: {
-                    jInt($0["id"]) == entry.questionID
-                }) else { break }
+                guard vault?.userID == userID, AppSession.shared.user?.id == userID else { break }
+                let live = jArray(response["questions"])
+                guard let position = live.firstIndex(where: { jInt($0["id"]) == entry.questionID }) else {
+                    revised += 1; continue
+                }
+                let server = live[position]
                 if !jBool(server["submitted"]) {
+                    let options = jArray(server["options"]).map {
+                        V50OfflineQuestion.Option(id: jInt($0["id"]), text: jString($0["text"]))
+                    }
+                    let current = V50OfflineQuestion(id: entry.questionID, type: jString(server["type"]),
+                        text: jString(server["text"]), meaningWord: jString(server["meaning_word"]),
+                        options: options, correctAnswer: jString(server["correct_answer"]),
+                        explanation: jString(server["explanation"]), submitted: false, serverIndex: position + 1)
+                    let original = questions(userID: userID, chapterID: entry.chapterID)
+                        .first(where: { $0.id == entry.questionID })
+                    let expected = entry.revision ?? original.map(V50OfflineRules.revision) ?? ""
+                    guard !expected.isEmpty, expected == V50OfflineRules.revision(current) else {
+                        revised += 1; continue
+                    }
                     var answer: JSON = ["text": entry.text, "selected_text": entry.text, "submitted": true]
                     if entry.optionID > 0 { answer["selected"] = entry.optionID }
-                    let body: JSON = [
-                        "csrf": csrf, "chapter_id": entry.chapterID,
-                        "question_index": entry.serverIndex,
-                        "completed": false, "answers": [String(entry.questionID): answer]
-                    ]
-                    let grade = try await APIClient.shared.request("api/progress.php",
-                        method: "POST", body: body)
-                    guard let grades = grade["grades"] as? JSON,
+                    let body: JSON = ["csrf": csrf, "chapter_id": entry.chapterID,
+                        "question_index": position + 1, "completed": false,
+                        "answers": [String(entry.questionID): answer]]
+                    let grade = try await APIClient.shared.request("api/progress.php", method: "POST", body: body)
+                    guard vault?.userID == userID, AppSession.shared.user?.id == userID,
+                          let grades = grade["grades"] as? JSON,
                           grades[String(entry.questionID)] != nil else { break }
                 }
-                vault?.pending.removeAll { $0.questionID == entry.questionID }
-                guard persist() else { break }
+                guard acknowledge(entry, userID: userID) else { break }
+                confirmed += 1
             } catch { break }
         }
+        syncMessage = "تم تأكيد \(confirmed) إجابة · المتبقي \(pending(userID: userID).count)"
+        if revised > 0 { syncMessage += " · تغيّر \(revised) سؤال؛ احتفظنا بإجاباتك للمراجعة" }
     }
+
 }
 
 struct V50OfflineExamListView: View {
@@ -256,6 +349,9 @@ struct V50OfflineExamListView: View {
                 Text("اختباراتي المحفوظة").font(.title2.bold())
                 Text("يمكنك الإجابة عن الأسئلة المحفوظة، ثم تُصحَّح رسمياً عند مزامنتها مع الخادم. لا توجد نقاط أو درجات محلية.")
                     .font(.subheadline).foregroundStyle(.secondary)
+                if !bank.syncMessage.isEmpty {
+                    Text(bank.syncMessage).font(.caption).foregroundStyle(.secondary)
+                }
                 Text("إجابات مؤجلة: \(bank.pending(userID: userID).count)")
                     .font(.subheadline.bold()).foregroundStyle(Color.murshidBlue)
                 ForEach(topics) { topic in
@@ -280,7 +376,7 @@ struct V50OfflineExamListView: View {
                     !bank.pending(userID: userID).isEmpty {
                     Button("مزامنة الإجابات الآن") {
                         Task { await bank.syncPending(userID: userID, csrf: AppSession.shared.csrf) }
-                    }.buttonStyle(.borderedProminent).tint(.murshidBlue)
+                    }.buttonStyle(.borderedProminent).tint(.murshidBlue).disabled(bank.syncing)
                 }
             }.padding(16)
         }
@@ -295,6 +391,7 @@ struct V50OfflineQuestionView: View {
     @State private var index = 0
     @State private var answer = ""
     @State private var optionID = 0
+    @State private var confirmDiscard = false
     private var userID: Int { store.archive?.userID ?? AppSession.shared.user?.id ?? 0 }
     private var questions: [V50OfflineQuestion] { bank.questions(userID: userID, chapterID: topicID) }
 
@@ -313,7 +410,20 @@ struct V50OfflineQuestionView: View {
                             VStack(alignment: .leading, spacing: 9) {
                                 Text(pending == nil ? "الإجابة مسجلة سابقاً" : "الإجابة محفوظة محلياً")
                                     .font(.headline)
-                                if let pending { Text("إجابتك: \(pending.text)") }
+                                if let pending {
+                                    Text("إجابتك: \(pending.text)")
+                                    let feedback = V50OfflineRules.feedback(question, answer: pending.text)
+                                    Text(feedback == .correct ? "نتيجة تدريبية: إجابة صحيحة ✓" :
+                                         feedback == .incorrect ? "نتيجة تدريبية: راجع الإجابة النموذجية" :
+                                         "تحتاج هذه الصيغة إلى تصحيح الخادم بعد الاتصال")
+                                        .font(.subheadline.bold()).foregroundStyle(Color.murshidBlue)
+                                    Button("حذف الإجابة المؤجلة", role: .destructive) { confirmDiscard = true }
+                                        .confirmationDialog("حذف إجابة لم تُرسَل بعد؟", isPresented: $confirmDiscard) {
+                                            Button("حذف الإجابة", role: .destructive) {
+                                                _ = bank.discard(userID: userID, questionID: question.id)
+                                            }
+                                        } message: { Text("إذا تغيّر السؤال، يمكنك حذف المسودة ثم تنزيل نسخته الجديدة أثناء الاتصال.") }
+                                }
                                 if !question.correctAnswer.isEmpty {
                                     Text("الإجابة النموذجية: \(question.correctAnswer)")
                                     Text(question.explanation).font(.subheadline).foregroundStyle(.secondary)

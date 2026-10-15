@@ -85,8 +85,11 @@ struct MurshidWizariApp: App {
                 }
             }
             .onChange(of: device.isOnline) { online in
-                guard online, bootstrapNeedsNetworkRetry else { return }
-                Task { @MainActor in beginBootstrap() }
+                guard online else { return }
+                if bootstrapNeedsNetworkRetry { Task { @MainActor in beginBootstrap() } }
+                else if let user = app.user, !app.csrf.isEmpty {
+                    Task { await V50OfflineExamBank.shared.syncPending(userID: user.id, csrf: app.csrf) }
+                }
             }
             .onChange(of: device.isLocked) { locked in
                 guard !locked, pendingWelcomeAfterUnlock, scenePhase == .active else { return }
@@ -121,6 +124,12 @@ struct MurshidWizariApp: App {
     @MainActor
     private func beginBootstrap() {
         guard !app.bootstrapping || bootstrapTask == nil else { return }
+        if !device.isOnline && V49StudyStore.shared.hasOfflineReview() {
+            app.bootstrapping = false
+            app.bootstrapNetworkFailed = true
+            bootstrapNeedsNetworkRetry = true
+            return
+        }
         bootstrapAttempt += 1
         let attempt = bootstrapAttempt
         bootstrapTask?.cancel()
