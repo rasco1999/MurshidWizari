@@ -531,8 +531,10 @@ def main():
  button('تفعيل الاشتراك');time.sleep(.6)
  assert STATE['redeem_requests']==0,'Malformed code must not contact the redemption endpoint'
  hide_keyboard_if_visible()
- # Android 15 clips off-screen accessibility nodes. Reveal the inbox row
- # before asserting the unread count; never assume it shares the code viewport.
+ # Hiding the IME can retain a scroll offset below the inbox row. Start at
+ # the account top before searching downward for the unread count.
+ for _ in range(4):
+  ui.adb('shell','input','swipe','196','230','196','770','330');time.sleep(.15)
  ui.reveal('لديك 2 غير مقروء',393,852)
  screenshot(args.output,'student-account-unread-count')
  # Account ends at the red logout card per the user's final iPhone reference.
