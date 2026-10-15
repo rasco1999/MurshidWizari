@@ -413,18 +413,40 @@ final class APIClient {
         return parsed.text.isEmpty ? "تم طلب رمز جديد إلى WhatsApp." : parsed.text
     }
 
+    private func pendingVerification(kind: String, action: String, code: String = "") async throws -> JSON {
+        guard ["phone", "email"].contains(kind) else {
+            throw APIError(message: "نوع التحقق غير صالح.", status: 422, paymentRequired: false)
+        }
+        let path = kind == "phone" ? "api/verify-phone.php" : "api/verify-email.php"
+        let pending = try await request(path, fresh: true)
+        let token = jString(pending["csrf"])
+        guard !token.isEmpty else {
+            throw APIError(message: "تعذر تجهيز جلسة التأكيد. ارجع لتسجيل الدخول بنفس الحساب ثم حاول مجدداً.", status: 419, paymentRequired: false)
+        }
+        var payload: JSON = ["csrf": token, "action": action]
+        if action == "verify" { payload["code"] = code }
+        // JSON request uses the registration cookie jar. Never replay an OTP POST.
+        return try await request(path, method: "POST", body: payload)
+    }
+
     func verifyPending(kind: String, code: String) async throws -> JSON {
-        let path = kind == "phone" ? "verify-phone.php" : "verify-email.php"
-        let csrf = try await htmlCSRF(path)
-        _ = try await formRequest(path, fields: ["csrf": csrf, "action": "verify", "code": code])
-        return try await bootstrap()
+        let value = normalizedDigits(code)
+        guard value.range(of: #"^[0-9]{6}$"#, options: .regularExpression) != nil else {
+            throw APIError(message: "أدخل رمز تحقق صحيحاً مكوّناً من 6 أرقام.", status: 422, paymentRequired: false)
+        }
+        let result = try await pendingVerification(kind: kind, action: "verify", code: value)
+        guard jBool(result["verified"]) else {
+            throw APIError(message: "لم يؤكد الخادم صحة رمز التحقق. ارجع لتسجيل الدخول للتحقق من حالة الحساب.", status: 503, paymentRequired: false)
+        }
+        do { return try await bootstrap() }
+        catch {
+            throw APIError(message: "تم التأكيد. ارجع لتسجيل الدخول بنفس بيانات الحساب لإكمال الدخول.", status: 503, paymentRequired: false)
+        }
     }
 
     func resendPending(kind: String) async throws -> String {
-        let path = kind == "phone" ? "verify-phone.php" : "verify-email.php"
-        let csrf = try await htmlCSRF(path)
-        _ = try await formRequest(path, fields: ["csrf": csrf, "action": "resend"])
-        return "تم طلب رمز تحقق جديد."
+        let result = try await pendingVerification(kind: kind, action: "resend")
+        return jString(result["message"], default: "تم طلب رمز تحقق جديد.")
     }
 
     func bootstrap() async throws -> JSON { try await request("mobile/bootstrap.php") }

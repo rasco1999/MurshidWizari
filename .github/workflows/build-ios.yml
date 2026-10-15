@@ -1,9 +1,9 @@
-name: Build Murshid Student iPhone v5.0.3 Remove Voice and Hints
+name: Build Murshid Student iPhone v5.0.5 Remove Voice and Hints
 
 on:
   workflow_dispatch:
   push:
-    branches: [ ios-student-v498-final-fixes, work/ios-complete-20261015 ]
+    branches: [ ios-student-v498-final-fixes, work/ios-complete-20261015, work/ios-verification-fix-20261015 ]
     paths:
       - '.github/workflows/build-ios.yml'
       - 'patches/**'
@@ -18,7 +18,7 @@ permissions:
 jobs:
   build:
     if: ${{ true }}
-    name: Build v5.0.3 Build 514 unsigned student IPA
+    name: Build v5.0.5 Build 516 unsigned student IPA
     runs-on: macos-15
     timeout-minutes: 35
 
@@ -87,8 +87,8 @@ jobs:
               if line == '        PRODUCT_NAME: MurshidWizari':
                   out.extend([
                       '        TARGETED_DEVICE_FAMILY: "1"',
-                      '        MARKETING_VERSION: "5.0.3"',
-                      '        CURRENT_PROJECT_VERSION: "514"',
+                      '        MARKETING_VERSION: "5.0.5"',
+                      '        CURRENT_PROJECT_VERSION: "516"',
                       '        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon',
                       '        CODE_SIGN_ENTITLEMENTS: MurshidWizari/MurshidWizari.entitlements',
                   ])
@@ -349,8 +349,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY='' \
-            MARKETING_VERSION='5.0.3' \
-            CURRENT_PROJECT_VERSION='514' \
+            MARKETING_VERSION='5.0.5' \
+            CURRENT_PROJECT_VERSION='516' \
             clean build
 
       - name: Compile Apple asset catalog
@@ -380,8 +380,8 @@ jobs:
           info.update(partial)
           info['CFBundleDisplayName'] = 'المرشد الوزاري'
           info['CFBundleName'] = 'منصة المرشد الوزاري'
-          info['CFBundleShortVersionString'] = '5.0.3'
-          info['CFBundleVersion'] = '514'
+          info['CFBundleShortVersionString'] = '5.0.5'
+          info['CFBundleVersion'] = '516'
           info['NSFaceIDUsageDescription'] = 'يستخدم المرشد الوزاري Face ID لحماية حسابك عند العودة إلى التطبيق.'
           info['UISupportedInterfaceOrientations'] = ['UIInterfaceOrientationPortrait']
           info['UILaunchScreen'] = {'UIColorName': 'LaunchBackground'}
@@ -437,7 +437,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: iPhone-Build514-Final-QA
+          name: iPhone-Build516-Final-QA
           path: |
             qa-output/simulator-tests.log
             qa-output/summary.json
@@ -461,15 +461,15 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid'
           /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string المرشد الوزاري' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleName منصة المرشد الوزاري' "$APP/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Add :CFBundleName string منصة المرشد الوزاري' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 5.0.3' "$APP/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 514' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString 5.0.5' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion 516' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Delete :UIDeviceFamily' "$APP/Info.plist" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily array' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :UIDeviceFamily:0 integer 1' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$APP/Info.plist" | grep -Fx 'المرشد الوزاري'
           /usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$APP/Info.plist" | grep -Fx 'منصة المرشد الوزاري'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '5.0.3'
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '514'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '5.0.5'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '516'
           /usr/libexec/PlistBuddy -c 'Print :UIDeviceFamily:0' "$APP/Info.plist" | grep -Fx '1'
           test -f "$APP/Assets.car"
           test -f "$APP/PrivacyInfo.xcprivacy"
@@ -559,20 +559,20 @@ jobs:
             echo 'ERROR: Web wrapper marker found unexpectedly.' >&2
             exit 1
           fi
-          rm -rf Payload Murshid_Wizari_iOS_v5_0_3_BUILD514_unsigned.ipa
+          rm -rf Payload Murshid_Wizari_iOS_v5_0_5_BUILD516_unsigned.ipa
           mkdir -p Payload
           cp -R "$APP" Payload/
-          /usr/bin/zip -qry Murshid_Wizari_iOS_v5_0_3_BUILD514_unsigned.ipa Payload
-          test -s Murshid_Wizari_iOS_v5_0_3_BUILD514_unsigned.ipa
-          shasum -a 256 Murshid_Wizari_iOS_v5_0_3_BUILD514_unsigned.ipa | tee Murshid_Wizari_iOS_v5_0_3_BUILD514_unsigned.sha256
+          /usr/bin/zip -qry Murshid_Wizari_iOS_v5_0_5_BUILD516_unsigned.ipa Payload
+          test -s Murshid_Wizari_iOS_v5_0_5_BUILD516_unsigned.ipa
+          shasum -a 256 Murshid_Wizari_iOS_v5_0_5_BUILD516_unsigned.ipa | tee Murshid_Wizari_iOS_v5_0_5_BUILD516_unsigned.sha256
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Murshid-Wizari-iPhone-v5.0.3-Build514-Unsigned
+          name: Murshid-Wizari-iPhone-v5.0.5-Build516-Unsigned
           path: |
-            source/Murshid_Wizari_iOS_v5_0_3_BUILD514_unsigned.ipa
-            source/Murshid_Wizari_iOS_v5_0_3_BUILD514_unsigned.sha256
+            source/Murshid_Wizari_iOS_v5_0_5_BUILD516_unsigned.ipa
+            source/Murshid_Wizari_iOS_v5_0_5_BUILD516_unsigned.sha256
           if-no-files-found: error
           retention-days: 14
 
@@ -717,8 +717,8 @@ jobs:
         run: |
           set -u
           mkdir -p .build-status
-          STATUS_FILE=".build-status/v5.0.3-build514-status.txt"
-          LOG_FILE=".build-status/v5.0.3-build514-failed.log"
+          STATUS_FILE=".build-status/v5.0.5-build516-status.txt"
+          LOG_FILE=".build-status/v5.0.5-build516-failed.log"
           {
             echo "run_id=$GITHUB_RUN_ID"
             echo "run_attempt=$GITHUB_RUN_ATTEMPT"

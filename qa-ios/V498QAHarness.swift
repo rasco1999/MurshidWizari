@@ -6,6 +6,75 @@ import Foundation
 final class V498QAURLProtocol: URLProtocol, @unchecked Sendable {
     private static let lock = NSLock()
     nonisolated(unsafe) private static var fixtureAds: [JSON] = []
+    struct VerificationState: Sendable {
+        var kind: String? = nil
+        var mode = "normal"
+        var calls: [String] = []
+        var posts = 0
+        var bootstraps = 0
+    }
+    nonisolated(unsafe) private static var verification = VerificationState()
+    static func configureVerification(kind: String?, mode: String = "normal") {
+        lock.lock(); defer { lock.unlock() }
+        verification = VerificationState(kind: kind, mode: mode)
+    }
+    static func verificationSnapshot() -> VerificationState {
+        lock.lock(); defer { lock.unlock() }
+        return verification
+    }
+    private static func requestBody(_ request: URLRequest) -> JSON {
+        var data = request.httpBody ?? Data()
+        if data.isEmpty, let stream = request.httpBodyStream {
+            stream.open(); defer { stream.close() }
+            var buffer = [UInt8](repeating: 0, count: 1024)
+            while data.count < 65536 {
+                let count = stream.read(&buffer, maxLength: buffer.count)
+                if count <= 0 { break }
+                data.append(contentsOf: buffer.prefix(count))
+            }
+        }
+        return (try? JSONSerialization.jsonObject(with: data)) as? JSON ?? [:]
+    }
+    private static func verificationReply(_ request: URLRequest) -> (JSON, Int)? {
+        lock.lock(); defer { lock.unlock() }
+        guard let kind = verification.kind else { return nil }
+        let path = request.url?.path ?? ""
+        let method = request.httpMethod ?? "GET"
+        if path == "/verify-email.php" || path == "/verify-phone.php" {
+            verification.calls.append(method + " " + path)
+            return (["ok": false, "message": "Legacy HTML intentionally unavailable"], 403)
+        }
+        if path == "/mobile/bootstrap.php" {
+            verification.bootstraps += 1
+            if verification.mode == "bootstrap_unavailable" {
+                return (["ok": false, "message": "Fixture bootstrap unavailable"], 503)
+            }
+            return nil
+        }
+        guard path == "/api/verify-\(kind).php" else { return nil }
+        verification.calls.append(method + " " + path)
+        if method == "GET" {
+            if verification.mode == "expired_session" {
+                return (["ok": false, "message": "انتهت جلسة التأكيد. سجّل الدخول بنفس الحساب."], 409)
+            }
+            return (["ok": true, "pending": true, "csrf": "fixture-\(kind)-csrf"], 200)
+        }
+        verification.posts += 1
+        let body = requestBody(request)
+        if body["csrf"] as? String != "fixture-\(kind)-csrf" || verification.mode == "csrf_expired" {
+            return (["ok": false, "message": "انتهت صلاحية الطلب."], 419)
+        }
+        if body["action"] as? String == "resend" {
+            if verification.mode == "cooldown" {
+                return (["ok": false, "retry_after": 60, "message": "يمكنك إعادة إرسال الرمز بعد 60 ثانية."], 429)
+            }
+            return (["ok": true, "message": "أرسلنا رمز تحقق جديدًا."], 200)
+        }
+        if body["code"] as? String != "123456" {
+            return (["ok": false, "message": "رمز التحقق غير صحيح."], 422)
+        }
+        return (verification.mode == "missing_receipt" ? ["ok": true] : ["ok": true, "verified": true], 200)
+    }
     static func publishFixture() {
         lock.lock(); defer { lock.unlock() }
         let id = 98000 + fixtureAds.count
@@ -25,8 +94,10 @@ final class V498QAURLProtocol: URLProtocol, @unchecked Sendable {
                         "subjects": [], "plans": [], "ads": ads, "subscribed": false,
                         "free_limit": 15, "free_used": 0, "free_remaining": 15, "stats": [:]]
         }
+        let injected = Self.verificationReply(request)
+        if let injected { response = injected.0 }
         let data = try! JSONSerialization.data(withJSONObject: response)
-        let http = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1",
+        let http = HTTPURLResponse(url: request.url!, statusCode: injected?.1 ?? 200, httpVersion: "HTTP/1.1",
                                    headerFields: ["Content-Type": "application/json", "Cache-Control": "no-store"])!
         client?.urlProtocol(self, didReceive: http, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data)
@@ -37,6 +108,9 @@ final class V498QAURLProtocol: URLProtocol, @unchecked Sendable {
 
 struct V498QATools: ViewModifier {
     @State private var showSocial = false
+    @State private var verification: VerificationSheet?
+    @ObservedObject private var qaSession = AppSession.shared
+    private struct VerificationSheet: Identifiable { let kind: String; var id: String { kind } }
     func body(content: Content) -> some View {
         content
             .safeAreaInset(edge: .top) {
@@ -45,6 +119,14 @@ struct V498QATools: ViewModifier {
                         .accessibilityIdentifier("V498_QA_PUBLISH_FIXTURE")
                     Button("QA روابط") { showSocial = true }
                         .accessibilityIdentifier("V498_QA_SOCIAL")
+                    Button("QA بريد") {
+                        V498QAURLProtocol.configureVerification(kind: "email")
+                        verification = VerificationSheet(kind: "email")
+                    }.accessibilityIdentifier("V498_QA_VERIFY_EMAIL")
+                    Button("QA هاتف") {
+                        V498QAURLProtocol.configureVerification(kind: "phone")
+                        verification = VerificationSheet(kind: "phone")
+                    }.accessibilityIdentifier("V498_QA_VERIFY_PHONE")
                 }.font(.caption).padding(5).background(.thinMaterial)
             }
             .sheet(isPresented: $showSocial) {
@@ -53,6 +135,12 @@ struct V498QATools: ViewModifier {
                         V498SocialLinksFooter()
                         Spacer()
                     }.padding(20).navigationTitle("التواصل الاجتماعي")
+                }.environment(\.layoutDirection, .rightToLeft)
+            }
+            .sheet(item: $verification, onDismiss: { V498QAURLProtocol.configureVerification(kind: nil) }) { item in
+                NavigationStack {
+                    VerificationView(kind: item.kind, destination: "اختبار محلي", initialMessage: "رمز تأكيد اصطناعي للاختبار فقط.", onCancel: { verification = nil })
+                        .onChange(of: qaSession.lastSync) { _ in verification = nil }
                 }.environment(\.layoutDirection, .rightToLeft)
             }
 

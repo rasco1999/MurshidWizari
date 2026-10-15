@@ -2,6 +2,57 @@ import XCTest
 @testable import MurshidWizari
 
 final class V498FinalTests: XCTestCase {
+    @MainActor
+    private func assertVerificationFailure(kind: String, mode: String, code: String = "123456", status: Int, posts: Int) async {
+        V498QAURLProtocol.configureVerification(kind: kind, mode: mode)
+        do {
+            _ = try await APIClient.shared.verifyPending(kind: kind, code: code)
+            XCTFail("Rejected verification must not open an account")
+        } catch let error as APIError {
+            XCTAssertEqual(error.status, status)
+        } catch { XCTFail("Unexpected error: \(error)") }
+        let state = V498QAURLProtocol.verificationSnapshot()
+        XCTAssertEqual(state.posts, posts, "An OTP POST must never silently repeat")
+        XCTAssertFalse(state.calls.contains { $0.contains(" /verify-") }, "Verification must not depend on a web form")
+    }
+
+    @MainActor
+    private func checkPendingVerification(_ kind: String) async throws {
+        defer { V498QAURLProtocol.configureVerification(kind: nil) }
+        await assertVerificationFailure(kind: kind, mode: "expired_session", status: 409, posts: 0)
+        await assertVerificationFailure(kind: kind, mode: "normal", code: "000000", status: 422, posts: 1)
+        await assertVerificationFailure(kind: kind, mode: "csrf_expired", status: 419, posts: 1)
+        await assertVerificationFailure(kind: kind, mode: "missing_receipt", status: 503, posts: 1)
+        XCTAssertEqual(V498QAURLProtocol.verificationSnapshot().bootstraps, 0)
+        await assertVerificationFailure(kind: kind, mode: "bootstrap_unavailable", status: 503, posts: 1)
+        XCTAssertEqual(V498QAURLProtocol.verificationSnapshot().bootstraps, 1)
+
+        V498QAURLProtocol.configureVerification(kind: kind, mode: "cooldown")
+        do { _ = try await APIClient.shared.resendPending(kind: kind); XCTFail("Cooldown must remain enforced") }
+        catch let error as APIError { XCTAssertEqual(error.status, 429) }
+        XCTAssertEqual(V498QAURLProtocol.verificationSnapshot().posts, 1)
+
+        V498QAURLProtocol.configureVerification(kind: kind)
+        let message = try await APIClient.shared.resendPending(kind: kind)
+        XCTAssertEqual(message, "أرسلنا رمز تحقق جديدًا.")
+        XCTAssertEqual(V498QAURLProtocol.verificationSnapshot().posts, 1)
+
+        V498QAURLProtocol.configureVerification(kind: kind)
+        let result = try await APIClient.shared.verifyPending(kind: kind, code: "١٢٣٤٥٦")
+        XCTAssertEqual(jInt((result["user"] as? JSON)?["id"]), 987654)
+        let state = V498QAURLProtocol.verificationSnapshot()
+        XCTAssertEqual(state.posts, 1)
+        XCTAssertEqual(state.bootstraps, 1)
+        XCTAssertEqual(state.calls, ["GET /api/verify-\(kind).php", "POST /api/verify-\(kind).php"])
+    }
+
+    @MainActor func testPendingEmailJSONConfirmationAndResend() async throws { try await checkPendingVerification("email") }
+    @MainActor func testPendingPhoneJSONConfirmationAndResend() async throws { try await checkPendingVerification("phone") }
+    @MainActor func testMalformedVerificationNeverReachesTheNetwork() async {
+        defer { V498QAURLProtocol.configureVerification(kind: nil) }
+        await assertVerificationFailure(kind: "email", mode: "normal", code: "12345", status: 422, posts: 0)
+        await assertVerificationFailure(kind: "invalid", mode: "normal", status: 422, posts: 0)
+    }
     private func row(_ id: Int, text: String = "إعلان جديد") -> JSON {
         ["id": id, "school": "مدرسة الأمل", "text": text]
     }

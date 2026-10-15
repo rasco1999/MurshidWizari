@@ -1,6 +1,35 @@
 import XCTest
 
 final class V498FinalUITests: XCTestCase {
+    @MainActor func testEmailConfirmationRejectsWrongCodeAndAcceptsCorrectCode() { checkVerification("EMAIL") }
+    @MainActor func testPhoneConfirmationRejectsWrongCodeAndAcceptsCorrectCode() { checkVerification("PHONE") }
+
+    @MainActor private func checkVerification(_ kind: String) {
+        let app = XCUIApplication()
+        app.launch()
+        let control = app.buttons["V498_QA_VERIFY_\(kind)"]
+        XCTAssertTrue(control.waitForExistence(timeout: 25))
+        control.tap()
+        let field = app.textFields["000000"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap()
+        field.typeText("000000")
+        app.swipeUp()
+        app.buttons["تأكيد الحساب"].tap()
+        XCTAssertTrue(app.staticTexts["رمز التحقق غير صحيح."].waitForExistence(timeout: 10))
+        screenshot("verification-\(kind)-wrong-code")
+        app.buttons["إعادة إرسال الرمز"].tap()
+        XCTAssertTrue(app.staticTexts["أرسلنا رمز تحقق جديدًا."].waitForExistence(timeout: 10))
+        field.tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 6) + "123456")
+        app.swipeUp()
+        app.buttons["تأكيد الحساب"].tap()
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: field)
+        waitForExpectations(timeout: 15)
+        XCTAssertTrue(app.buttons["student-tab-0"].waitForExistence(timeout: 15))
+        XCTAssertFalse(field.exists, "Successful verification must finish the confirmation screen")
+        screenshot("verification-\(kind)-accepted")
+    }
     @MainActor
     func testForegroundAdAppearsAndClearsAfterOpeningAds() {
         let app = XCUIApplication()
