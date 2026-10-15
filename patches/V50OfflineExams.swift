@@ -143,7 +143,7 @@ final class V50OfflineExamBank: ObservableObject {
 
     private func read() -> V50OfflineVault? {
         guard let url, let encrypted = try? Data(contentsOf: url),
-              let secret(), let sealed = try? AES.GCM.SealedBox(combined: encrypted),
+              let secret = secret(), let sealed = try? AES.GCM.SealedBox(combined: encrypted),
               let decoded = try? AES.GCM.open(sealed, using: secret),
               let vault = try? JSONDecoder().decode(V50OfflineVault.self, from: decoded)
         else { return nil }
@@ -151,7 +151,7 @@ final class V50OfflineExamBank: ObservableObject {
     }
 
     private func persist() -> Bool {
-        guard let vault, let url, let secret(),
+        guard let vault, let url, let secret = secret(),
               let data = try? JSONEncoder().encode(vault),
               let encrypted = try? AES.GCM.seal(data, using: secret).combined else { return false }
         do {

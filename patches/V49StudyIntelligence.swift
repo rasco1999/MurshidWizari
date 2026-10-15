@@ -104,7 +104,7 @@ final class V49StudyStore: ObservableObject {
     }
 
     private func read(userID: Int) -> V49StudyArchive? {
-        guard let url = fileURL(for: userID), let secret() else { return nil }
+        guard let url = fileURL(for: userID), let secret = secret() else { return nil }
         if let data = try? Data(contentsOf: url),
            let box = try? AES.GCM.SealedBox(combined: data),
            let decrypted = try? AES.GCM.open(box, using: secret),
@@ -294,7 +294,7 @@ final class V49StudyStore: ObservableObject {
     }
 
     private func write(_ archive: V49StudyArchive) -> Bool {
-        guard let url = fileURL(for: archive.userID), let secret(),
+        guard let url = fileURL(for: archive.userID), let secret = secret(),
               let data = try? JSONEncoder().encode(archive),
               let encrypted = try? AES.GCM.seal(data, using: secret).combined else { return false }
         do {
