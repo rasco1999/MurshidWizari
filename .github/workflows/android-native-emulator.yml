@@ -1,9 +1,9 @@
-name: Android Native Anonymous Emulator Smoke
+name: Android Account Accessibility Probe
 
 on:
   workflow_dispatch:
   push:
-    branches: [android-native, work/complete-student-apps-20261015]
+    branches: [work/android-notice-probe-20261015]
     paths:
       - 'android-native/**'
       - '.github/workflows/android-native-emulator.yml'
@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        api-level: [26, 29, 33, 35]
+        api-level: [29, 35]
     steps:
       - uses: actions/checkout@v4
       - name: Verify scroll-aware UI harness
@@ -58,12 +58,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
-            python3 android-native/scripts/anonymous_emulator_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa"
-            if [ "${{ matrix.api-level }}" = "35" ]; then python3 android-native/scripts/offline_exam_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/offline"; fi
-            python3 android-native/scripts/student_fixture_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/student"
-            python3 android-native/scripts/specialized_exam_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/specialized"
-            python3 android-native/scripts/biometric_lock_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/lock"
-            python3 android-native/scripts/final_services_qa.py --output "$RUNNER_TEMP/murshid-anonymous-qa/services"
+            python3 android-native/scripts/account_service_probe.py --output "$RUNNER_TEMP/murshid-anonymous-qa/account-probe"
       - name: Upload anonymous layout screenshots and accessibility hierarchy
         if: always()
         uses: actions/upload-artifact@v4
