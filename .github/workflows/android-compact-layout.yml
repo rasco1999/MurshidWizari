@@ -2,7 +2,7 @@ name: Android compact responsive layout QA
 on:
   push:
     branches: [work/android-compact-layout-20261015]
-    paths: ['android-native/**', '.github/workflows/android-compact-layout.yml']
+    paths: ['android-native/app/**']
   workflow_dispatch:
 permissions:
   contents: read

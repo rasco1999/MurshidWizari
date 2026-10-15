@@ -1,5 +1,5 @@
 """Real Android controls at representative dp/density/font/IME sizes. Synthetic API only."""
-import argparse,json,threading,time
+import argparse,json,threading,time,struct
 from pathlib import Path
 from http.server import ThreadingHTTPServer
 import anonymous_emulator_qa as ui
@@ -23,8 +23,22 @@ def main():
         for name,w,h,density,scale in cases:
             out=a.output/name;out.mkdir(exist_ok=True)
             ui.adb('shell','am','force-stop',ui.PACKAGE);ui.adb('shell','pm','clear',ui.PACKAGE)
-            ui.adb('shell','wm','size',f'{w}x{h}');ui.adb('shell','wm','density',str(density));ui.adb('shell','settings','put','system','font_scale',str(scale))
-            ui.launch_native();ui.enter_login(w,h)
+            ui.adb('shell','settings','put','system','accelerometer_rotation','0')
+            ui.adb('shell','settings','put','system','user_rotation','0')
+            ui.adb('shell','wm','size',f'{min(w,h)}x{max(w,h)}' if name=='landscape' else f'{w}x{h}')
+            ui.adb('shell','wm','density',str(density));ui.adb('shell','settings','put','system','font_scale',str(scale))
+            if name=='landscape':ui.adb('shell','settings','put','system','user_rotation','1')
+            time.sleep(2)
+            png=ui.adb('exec-out','screencap','-p');actual=struct.unpack('>II',png[16:24]);assert actual==(w,h),(name,actual)
+            (out/'display-dimensions.json').write_text(json.dumps({'expected':[w,h],'actual':actual}))
+            ui.launch_native()
+            if name=='landscape':
+                (out/'00-guest.png').write_bytes(ui.adb('exec-out','screencap','-p'))
+                (out/'00-guest.xml').write_bytes(ui.ui_tree()[1])
+            ui.enter_login(w,h)
+            if name=='landscape':
+                (out/'00-login.png').write_bytes(ui.adb('exec-out','screencap','-p'))
+                (out/'00-login.xml').write_bytes(ui.ui_tree()[1])
             def button(text):ui.tap_visible(text,w,h)
             def capture(tag,marker):ui.capture(out,tag,marker)
             button('إنشاء حساب طالب جديد');ui.wait_for('بيانات الطالب');ui.wait_for('السادس العلمي')
@@ -56,6 +70,10 @@ def main():
             results.append({'case':name,'width_px':w,'height_px':h,'density':density,'font_scale':scale,'initial_next_visible':next_initial,'registration_draft_retained':True,'keyboard_input_passed':True,'student_tabs_exam_passed':True})
             (a.output/'results.json').write_text(json.dumps(results,ensure_ascii=False,indent=2));print('PASS '+name,flush=True)
     finally:
-        server.shutdown();ui.adb('shell','wm','size','reset');ui.adb('shell','wm','density','reset');ui.adb('shell','settings','put','system','font_scale','1.0')
+        (a.output/'android-runtime.log').write_bytes(ui.adb('logcat','-d','-v','threadtime','AndroidRuntime:E','*:S'))
+        (a.output/'last-screen.png').write_bytes(ui.adb('exec-out','screencap','-p'))
+        (a.output/'last-screen.xml').write_bytes(ui.ui_tree()[1])
+        (a.output/'window-state.txt').write_bytes(ui.adb('shell','dumpsys','window','windows'))
+        server.shutdown();ui.adb('shell','settings','put','system','user_rotation','0');ui.adb('shell','wm','size','reset');ui.adb('shell','wm','density','reset');ui.adb('shell','settings','put','system','font_scale','1.0')
 
 if __name__=='__main__':main()

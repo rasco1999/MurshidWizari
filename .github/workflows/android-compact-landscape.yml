@@ -1,0 +1,43 @@
+name: Android compact real landscape QA
+on:
+  push:
+    branches: [work/android-compact-layout-20261015]
+    paths: ['android-native/scripts/compact_layout_qa.py', '.github/workflows/android-compact-landscape.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  landscape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirm production source is identical to the tested release
+        run: git fetch --depth=1 origin 67d13cca596e63b3bbedd2e6549f25b89fcba717 && git diff --exit-code 67d13cca596e63b3bbedd2e6549f25b89fcba717 -- android-native/app/
+      - uses: actions/download-artifact@v4
+        with:
+          name: Android-Compact-QA-APK
+          run-id: 38708846713
+          github-token: ${{ github.token }}
+          path: android-native/app/build/outputs/apk/qa/
+      - name: Enable virtualization
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Test actual display rotation and record any native crash
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: python3 android-native/scripts/compact_layout_qa.py --output "$RUNNER_TEMP/landscape-qa" --case landscape
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Android-Compact-Real-Landscape-Evidence
+          path: ${{ runner.temp }}/landscape-qa/
