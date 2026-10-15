@@ -138,7 +138,11 @@ final class V50OfflineExamBank: ObservableObject {
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
             kSecValueData as String: data
         ]
-        return SecItemAdd(insert as CFDictionary, nil) == errSecSuccess ? generated : nil
+        let added = SecItemAdd(insert as CFDictionary, nil)
+        #if DEBUG
+        if added != errSecSuccess { NSLog("Offline Keychain status: %d", added) }
+        #endif
+        return added == errSecSuccess ? generated : nil
     }
 
     private func read() -> V50OfflineVault? {

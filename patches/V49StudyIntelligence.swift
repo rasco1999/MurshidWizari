@@ -151,7 +151,11 @@ final class V49StudyStore: ObservableObject {
         insert.removeValue(forKey: kSecReturnData as String)
         insert[kSecValueData as String] = generated.withUnsafeBytes { Data($0) }
         insert[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        return SecItemAdd(insert as CFDictionary, nil) == errSecSuccess ? generated : nil
+        let added = SecItemAdd(insert as CFDictionary, nil)
+        #if DEBUG
+        if added != errSecSuccess { NSLog("Offline Keychain status: %d", added) }
+        #endif
+        return added == errSecSuccess ? generated : nil
     }
 
     private func read(userID: Int) -> V49StudyArchive? {
