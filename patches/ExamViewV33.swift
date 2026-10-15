@@ -72,11 +72,7 @@ struct ExamView: View {
         MurshidCard {
             VStack(alignment: .leading, spacing: 11) {
                 HStack {
-                    Text("وزاري")
-                        .font(.caption.bold())
-                        .foregroundStyle(Color.murshidBlue)
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(Color.murshidBlue.opacity(0.10), in: Capsule())
+                    MurshidMinisterialBadge()
                     Spacer()
                 }
                 Text(murshidQuestionDisplayText(q.text)).font(.title3.weight(.semibold)).fixedSize(horizontal: false, vertical: true)

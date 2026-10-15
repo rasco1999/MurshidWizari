@@ -404,11 +404,7 @@ struct FavoritesView: View {
             else {
                 List(Array(items.enumerated()), id: \.offset) { _, q in
                     VStack(alignment: .leading, spacing: 7) {
-                        Text("وزاري")
-                            .font(.caption.bold())
-                            .foregroundStyle(Color.murshidBlue)
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(Color.murshidBlue.opacity(0.10), in: Capsule())
+                        MurshidMinisterialBadge()
                         Text(murshidQuestionDisplayText(jString(q["question_text"]))).font(.headline)
                         Text("الإجابة: \(jString(q["correct_answer"]))").foregroundStyle(.green)
                         if !jString(q["explanation"]).isEmpty { Text(jString(q["explanation"])).font(.footnote).foregroundStyle(.secondary) }

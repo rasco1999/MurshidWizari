@@ -543,7 +543,8 @@ struct V49RecallView: View {
                     MurshidCard {
                         VStack(alignment: .leading, spacing: 15) {
                             Text(q.topicName).font(.caption.bold()).foregroundStyle(Color.murshidBlue)
-                            Text(q.question).font(.title3.bold()).lineSpacing(5).textSelection(.enabled)
+                            MurshidMinisterialBadge()
+                            Text(murshidPromptWithoutHints(q.question)).font(.title3.bold()).lineSpacing(5).textSelection(.enabled)
                             if reveal {
                                 Divider()
                                 Text("الإجابة النموذجية").font(.caption.bold()).foregroundStyle(.secondary)

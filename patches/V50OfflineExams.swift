@@ -414,7 +414,13 @@ struct V50OfflineQuestionView: View {
                     Text("السؤال \(index + 1) من \(questions.count)")
                         .font(.subheadline.bold()).foregroundStyle(Color.murshidBlue)
                     ProgressView(value: Double(index + 1), total: Double(max(1, questions.count)))
-                    MurshidCard { Text(question.text).font(.title3.bold()) }
+                    MurshidCard {
+                        VStack(alignment: .leading, spacing: 12) {
+                            MurshidMinisterialBadge()
+                            Text(murshidPromptWithoutHints(question.text)).font(.title3.bold())
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                     if pending != nil || question.submitted {
                         MurshidCard {
                             VStack(alignment: .leading, spacing: 9) {

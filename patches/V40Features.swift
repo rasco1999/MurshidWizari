@@ -700,7 +700,8 @@ struct V40CustomExamSessionView: View {
                             Text("سؤال \(current + 1)")
                                 .font(.caption.bold())
                                 .foregroundStyle(Color.murshidBlue)
-                            Text(questions[current].text)
+                            MurshidMinisterialBadge()
+                            Text(murshidQuestionDisplayText(questions[current].text))
                                 .font(.title3.weight(.semibold))
                                 .lineSpacing(5)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -900,7 +901,8 @@ struct V40CustomExamSessionView: View {
                     if !jBool(row["is_correct"]) {
                         MurshidCard {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text(jString(row["question_text"])).font(.headline)
+                                MurshidMinisterialBadge()
+                                Text(murshidQuestionDisplayText(jString(row["question_text"]))).font(.headline)
                                 Text("إجابتك: " + jString(row["submitted_answer"], default: "—"))
                                     .foregroundStyle(.secondary)
                                 Text("الصحيح: " + jString(row["correct_answer"]))
@@ -1459,6 +1461,7 @@ struct V40DailyChallengeView: View {
                         MurshidCard {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("سؤال اليوم").font(.caption.bold()).foregroundStyle(Color.murshidBlue)
+                                MurshidMinisterialBadge()
                                 Text(murshidQuestionDisplayText(q.text)).font(.headline).fixedSize(horizontal: false, vertical: true)
                                 if q.type == "true_false" && q.options.isEmpty {
                                     choices(q, ["صح", "خطأ"])

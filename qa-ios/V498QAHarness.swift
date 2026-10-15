@@ -37,6 +37,7 @@ final class V498QAURLProtocol: URLProtocol, @unchecked Sendable {
 
 struct V498QATools: ViewModifier {
     @State private var showSocial = false
+    @State private var showQuestions = false
     func body(content: Content) -> some View {
         content
             .safeAreaInset(edge: .top) {
@@ -45,6 +46,8 @@ struct V498QATools: ViewModifier {
                         .accessibilityIdentifier("V498_QA_PUBLISH_FIXTURE")
                     Button("QA روابط") { showSocial = true }
                         .accessibilityIdentifier("V498_QA_SOCIAL")
+                    Button("QA أسئلة") { showQuestions = true }
+                        .accessibilityIdentifier("V498_QA_QUESTIONS")
                 }.font(.caption).padding(5).background(.thinMaterial)
             }
             .sheet(isPresented: $showSocial) {
@@ -54,6 +57,9 @@ struct V498QATools: ViewModifier {
                         Spacer()
                     }.padding(20).navigationTitle("التواصل الاجتماعي")
                 }.environment(\.layoutDirection, .rightToLeft)
+            }
+            .sheet(isPresented: $showQuestions) {
+                V498QuestionPresentationPreview()
             }
 
     }
@@ -65,6 +71,32 @@ struct V498QATools: ViewModifier {
                           "explanation": "في الآية حث للإنسان على تدبر القرآن وفهم معانيه والعمل به."])
         V49StudyStore.shared.rememberGraded(q, subject: Subject(["id": 1, "name": "التربية الإسلامية"]),
                                            topic: Topic(["id": 1, "name": "الفهم والشرح"]), answer: "إجابة اختبار محلية", correct: true)
+    }
+}
+
+private struct V498QuestionPresentationPreview: View {
+    @State private var dark = false
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Button("تبديل المظهر") { dark.toggle() }
+                        .accessibilityIdentifier("V498_QA_QUESTION_THEME")
+                    ForEach(["احسب 2 + 3.\nتلميح: إجابة اختبار لا ينبغي عرضها",
+                             "ما معنى كلمة تلميح؟", "Find x: x² = 4.\nHint: hidden QA answer",
+                             "H₂ + O₂ → H₂O؛ P ≠ p؛ عِلْم"], id: \.self) { raw in
+                        MurshidCard {
+                            VStack(alignment: .leading, spacing: 12) {
+                                MurshidMinisterialBadge()
+                                Text(murshidPromptWithoutHints(raw)).font(.title3)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                }.padding(18)
+            }.background(Color(uiColor: .systemGroupedBackground))
+        }.environment(\.layoutDirection, .rightToLeft)
+            .preferredColorScheme(dark ? .dark : .light)
     }
 }
 #endif

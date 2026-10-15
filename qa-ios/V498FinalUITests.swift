@@ -2,6 +2,22 @@ import XCTest
 
 final class V498FinalUITests: XCTestCase {
     @MainActor
+    func testQuestionBadgeAndCachedHintsInLightAndDark() {
+        let app = XCUIApplication()
+        app.launch()
+        let open = app.buttons["V498_QA_QUESTIONS"]
+        XCTAssertTrue(open.waitForExistence(timeout: 20))
+        open.tap()
+        XCTAssertTrue(app.staticTexts["وزاري"].firstMatch.waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["ما معنى كلمة تلميح؟"].exists)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "إجابة اختبار لا ينبغي عرضها")).firstMatch.exists)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "hidden QA answer")).firstMatch.exists)
+        screenshot("07-question-green-badge-light")
+        app.buttons["V498_QA_QUESTION_THEME"].tap()
+        screenshot("08-question-green-badge-dark")
+    }
+
+    @MainActor
     func testForegroundAdAppearsAndClearsAfterOpeningAds() {
         let app = XCUIApplication()
         app.launch()

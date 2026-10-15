@@ -2,6 +2,15 @@ import XCTest
 @testable import MurshidWizari
 
 final class V498FinalTests: XCTestCase {
+    func testCachedPromptsRemoveOnlyExplicitHintBlocks() {
+        XCTAssertEqual(murshidPromptWithoutHints("احسب 2 + 3.\nتلميح: الناتج خمسة"), "احسب 2 + 3.")
+        XCTAssertEqual(murshidPromptWithoutHints("Find x: x² = 4.\nHint: x = 2"), "Find x: x² = 4.")
+        XCTAssertEqual(murshidPromptWithoutHints("احسب 2 + 3. (تلميح: استخدم الجمع)"), "احسب 2 + 3.")
+        for text in ["ما معنى كلمة تلميح؟", "P ≠ p؛ 10^2؛ 1,5؛ عِلْم", "قال تعالى: ﴿قُلْ هُوَ اللَّهُ أَحَدٌ﴾"] {
+            XCTAssertEqual(murshidPromptWithoutHints(text), text)
+        }
+    }
+
     private func row(_ id: Int, text: String = "إعلان جديد") -> JSON {
         ["id": id, "school": "مدرسة الأمل", "text": text]
     }
