@@ -8,17 +8,21 @@ permissions:
   contents: read
 jobs:
   integration:
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [mysql:8.0, mariadb:10.11]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
       mysql:
-        image: mysql:8.0
+        image: ${{ matrix.database }}
         env:
           MYSQL_ROOT_PASSWORD: synthetic-ci-only
           MYSQL_DATABASE: murshid_release_test
         ports: ['3306:3306']
         options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -psynthetic-ci-only"
+          --health-cmd="(mysqladmin ping -h 127.0.0.1 -psynthetic-ci-only || mariadb-admin ping -h 127.0.0.1 -psynthetic-ci-only)"
           --health-interval=5s --health-timeout=5s --health-retries=15
     steps:
       - uses: actions/checkout@v4
@@ -32,7 +36,9 @@ jobs:
           set -euo pipefail
           php server-release/tests/runtime.php | tee server-release/test-results.txt
           php server-release/tests/matching.php | tee -a server-release/test-results.txt
-          python3 server-release/tests/migration_test.py | tee -a server-release/test-results.txt
+          for collation in utf8mb4_general_ci utf8mb4_unicode_ci utf8mb4_bin; do
+            MIGRATION_TEST_COLLATION="$collation" python3 server-release/tests/migration_test.py | tee -a server-release/test-results.txt
+          done
       - uses: actions/upload-artifact@v4
         if: always()
         with:

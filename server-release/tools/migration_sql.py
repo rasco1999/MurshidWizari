@@ -12,7 +12,7 @@ def digest(q):
     return hashlib.sha256('\x1f'.join(map(str,fields)).encode()).hexdigest()
 def source_digest(q):return hashlib.sha256((q['question_text']+'\x1f'+q['correct_answer']).encode()).hexdigest()
 def expr(alias):
-    return f"SHA2(CONCAT_WS(CHAR(31),{alias}.type,COALESCE(CAST({alias}.chapter_id AS CHAR),'<NULL>'),{alias}.question_text,{alias}.correct_answer,COALESCE({alias}.explanation,'<NULL>'),CAST({alias}.status AS CHAR),CAST({alias}.question_version AS CHAR)),256)"
+    return f"CAST(SHA2(CONCAT_WS(CHAR(31),{alias}.type,COALESCE(CAST({alias}.chapter_id AS CHAR),'<NULL>'),{alias}.question_text,{alias}.correct_answer,COALESCE({alias}.explanation,'<NULL>'),CAST({alias}.status AS CHAR),CAST({alias}.question_version AS CHAR)),256) AS BINARY)"
 
 def apply_sql(changes,by_id):
     rows=[]
@@ -54,20 +54,20 @@ INSERT INTO {BACKUP}(migration_code,question_id,before_hash,applied_hash,before_
 SELECT '{CODE}',q.id,c.before_hash,c.applied_hash,q.question_text,q.explanation,q.status,q.question_version,q.content_updated_at,
  COALESCE(c.new_text,q.question_text),IF(c.change_explanation=1,c.new_explanation,q.explanation),c.new_status,q.question_version+1
 FROM questions q JOIN _murshid_v53_candidates c ON c.id=q.id
-LEFT JOIN {BACKUP} b ON b.question_id=q.id AND b.migration_code='{CODE}'
-WHERE b.question_id IS NULL AND {expr('q')}=c.before_hash
+LEFT JOIN {BACKUP} b ON b.question_id=q.id AND CAST(b.migration_code AS BINARY)=_binary'{CODE}'
+WHERE b.question_id IS NULL AND {expr('q')}=CAST(c.before_hash AS BINARY)
  AND (c.retained_source_hash IS NULL OR EXISTS(
  SELECT 1 FROM questions original WHERE original.chapter_id=q.chapter_id AND original.status=1
- AND SHA2(CONCAT_WS(CHAR(31),original.question_text,original.correct_answer),256)=c.retained_source_hash));
-UPDATE questions q JOIN {BACKUP} b ON b.question_id=q.id AND b.migration_code='{CODE}'
+ AND CAST(SHA2(CONCAT_WS(CHAR(31),original.question_text,original.correct_answer),256) AS BINARY)=CAST(c.retained_source_hash AS BINARY)));
+UPDATE questions q JOIN {BACKUP} b ON b.question_id=q.id AND CAST(b.migration_code AS BINARY)=_binary'{CODE}'
 SET q.question_text=b.applied_text,q.explanation=b.applied_explanation,q.status=b.applied_status,
  q.question_version=b.applied_version,q.content_updated_at=NOW()
-WHERE {expr('q')}=b.before_hash;
+WHERE {expr('q')}=CAST(b.before_hash AS BINARY);
 SELECT ROW_COUNT() AS updated_questions_this_run;
 COMMIT;
 SELECT (SELECT COUNT(*) FROM _murshid_v53_candidates) AS proposed_questions,
  COUNT(*) AS matching_applied_questions FROM {BACKUP} b JOIN questions q ON q.id=b.question_id
- WHERE b.migration_code='{CODE}' AND {expr('q')}=b.applied_hash;
+ WHERE CAST(b.migration_code AS BINARY)=_binary'{CODE}' AND {expr('q')}=CAST(b.applied_hash AS BINARY);
 DROP TEMPORARY TABLE _murshid_v53_candidates;
 '''
 
@@ -75,10 +75,10 @@ def rollback_sql():
     return f'''-- Restores only rows still identical to this update; later edits are preserved.
 SET NAMES utf8mb4;
 START TRANSACTION;
-UPDATE questions q JOIN {BACKUP} b ON b.question_id=q.id AND b.migration_code='{CODE}'
+UPDATE questions q JOIN {BACKUP} b ON b.question_id=q.id AND CAST(b.migration_code AS BINARY)=_binary'{CODE}'
 SET q.question_text=b.before_text,q.explanation=b.before_explanation,q.status=b.before_status,
  q.question_version=q.question_version+1,q.content_updated_at=NOW()
-WHERE {expr('q')}=b.applied_hash;
+WHERE {expr('q')}=CAST(b.applied_hash AS BINARY);
 SELECT ROW_COUNT() AS restored_questions_this_run;
 COMMIT;
 '''

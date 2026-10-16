@@ -1,10 +1,12 @@
 """Exercise the actual SQL generator against an isolated, synthetic MySQL database."""
-import copy,json,subprocess,sys
+import copy,json,subprocess,sys,os
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
 from migration_sql import apply_sql,rollback_sql,lit
 
 DB='murshid_matching_migration_test'
+COLLATION=os.environ.get('MIGRATION_TEST_COLLATION','utf8mb4_general_ci')
+assert COLLATION in ['utf8mb4_general_ci','utf8mb4_unicode_ci','utf8mb4_bin']
 CMD=['mysql','--host=127.0.0.1','--user=root','--password=synthetic-ci-only','--default-character-set=utf8mb4','--batch','--raw','--skip-column-names']
 def run(sql):
     return subprocess.run(CMD,input=sql.encode(),stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True).stdout.decode()
@@ -24,7 +26,7 @@ for q in before:
     else:after['status']=0
     changes.append({'id':q['id'],'before':q,'after':after,'retained_question_id':10 if q['id']==1 else 99 if q['id']==7 else None})
 allrows={q['id']:q for q in before+[original,row(99,'أصل غائب')]}  # 99 deliberately never inserted.
-setup=f'''DROP DATABASE IF EXISTS {DB}; CREATE DATABASE {DB} CHARACTER SET utf8mb4; USE {DB};
+setup=f'''DROP DATABASE IF EXISTS {DB}; CREATE DATABASE {DB} CHARACTER SET utf8mb4 COLLATE {COLLATION}; USE {DB};
 CREATE TABLE questions(id INT PRIMARY KEY,chapter_id INT NULL,type VARCHAR(30),question_text MEDIUMTEXT,correct_answer MEDIUMTEXT,explanation MEDIUMTEXT NULL,status TINYINT,question_version INT,content_updated_at DATETIME NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 '''
 for q in before+[original]:
@@ -34,6 +36,10 @@ for q in before+[original]:
     setup+='INSERT INTO questions VALUES('+','.join([str(live['id']),'1',lit(live['type']),lit(live['question_text']),lit(live['correct_answer']),lit(live['explanation']),str(live['status']),str(live['question_version']),'NULL'])+');\n'
 run(setup)
 sql=apply_sql(changes,allrows)
+# Simulate the previous import stopping after its DDL and staging inserts.
+# Its persistent backup table must be reusable, without deleting recovery data.
+run('USE '+DB+';'+sql.split('START TRANSACTION;',1)[0])
+assert query('SELECT COUNT(*) FROM murshid_question_review_v53_backup;')=='0'
 run('USE '+DB+';'+sql)
 def state():return {q['id']:q for q in json.loads(query("SELECT JSON_ARRAYAGG(JSON_OBJECT('id',id,'text',question_text,'explanation',explanation,'status',status,'version',question_version,'answer',correct_answer)) FROM questions;"))}
 s=state();assert s[1]['status']==0;assert s[2]['text']=='أين المدرسة؟';assert s[2]['version']==2
@@ -49,4 +55,4 @@ assert restored[5]['explanation']=='الى المدرسة' and restored[5]['vers
 assert restored[8]['text']==before[-1]['question_text'] and restored[8]['version']==3
 run('USE '+DB+';'+rollback_sql());assert state()==restored
 run('USE '+DB+';'+sql);assert state()==restored
-print('PASS 17 real MySQL migration assertions: guards, deleted/edited rows, source presence, UTF-8, idempotency and rollback')
+print('PASS 18 real SQL migration assertions ('+COLLATION+'): stopped-import recovery, guards, UTF-8, idempotency, newer edits and rollback')
