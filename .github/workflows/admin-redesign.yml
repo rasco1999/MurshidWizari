@@ -18,6 +18,7 @@ jobs:
           import base64,pathlib
           pathlib.Path('admin_ios/App/Assets.xcassets/AppIcon.appiconset/AppIcon.png').write_bytes(base64.b64decode(pathlib.Path('patches/admin-restored-icon.png.b64').read_text()))
           PY
+          sips -z 1024 1024 admin_ios/App/Assets.xcassets/AppIcon.appiconset/AppIcon.png >/dev/null
       - name: Generate isolated admin project
         working-directory: admin_ios
         run: |
