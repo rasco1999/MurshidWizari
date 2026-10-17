@@ -17,7 +17,7 @@ final class AdminUITests:XCTestCase {
         XCTAssertTrue(app.staticTexts["اشتراك 3 أشهر"].waitForExistence(timeout:5))
         XCTAssertFalse(app.staticTexts["اشتراك شهر واحد"].exists)
         app.buttons["الكل"].tap()
-        XCTAssertTrue(app.staticTexts["اشتراك شهر واحد"].firstMatch.waitForExistence(timeout:5))
+        XCTAssertTrue(app.staticTexts.matching(identifier:"اشتراك شهر واحد").firstMatch.waitForExistence(timeout:5))
         app.tabBars.buttons["الإعلانات"].tap()
         XCTAssertTrue(app.staticTexts["مدرسة تجريبية"].waitForExistence(timeout:5))
         app.tabBars.buttons["الطلاب"].tap()
