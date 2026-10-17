@@ -687,7 +687,7 @@ private struct CodesScreen:View {
     var body:some View {
         NavigationStack {
             content
-                .adminBG()
+                .adminBG().toolbar(.hidden,for:.navigationBar)
                 .refreshable{await state.refresh("codes")}
                 .task{await state.refreshIfStale("codes")}
                 .sheet(isPresented:$showCreate,onDismiss:{if !issued.isEmpty {showIssued=true}}) {
@@ -885,7 +885,7 @@ private struct AdsScreen:View {
                         }
                     }
                 }.padding(16)
-            }.adminBG().refreshable{await state.refresh("ads")}.task{await state.refreshIfStale("ads")}
+            }.adminBG().toolbar(.hidden,for:.navigationBar).refreshable{await state.refresh("ads")}.task{await state.refreshIfStale("ads")}
             .sheet(isPresented:$showNew){AdEditor(state:state,row:nil)}
             .sheet(item:$editing){row in AdEditor(state:state,row:row)}
             .confirmationDialog("حذف الإعلان نهائياً؟",isPresented:Binding(get:{deleting != nil},set:{if !$0{deleting=nil}}),titleVisibility:.visible){
@@ -973,7 +973,7 @@ private struct StudentsScreen:View {
                         }
                     }
                 }.padding(16)
-            }.adminBG().refreshable{await state.refresh("students",search:search)}
+            }.adminBG().toolbar(.hidden,for:.navigationBar).refreshable{await state.refresh("students",search:search)}
             .task{await state.refreshIfStale("students")}
             .confirmationDialog("تعديل حالة حساب الطالب؟",isPresented:Binding(get:{confirm != nil},set:{if !$0{confirm=nil}}),titleVisibility:.visible){
                 Button("تأكيد تغيير الحالة"){if let row=confirm{Task{_ = await state.mutation("toggle_student",["id":num(row,"id")],refresh:"students")}};confirm=nil}
