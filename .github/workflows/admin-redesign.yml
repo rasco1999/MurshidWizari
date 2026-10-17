@@ -1,0 +1,93 @@
+name: Admin iPhone 5.1 redesign and visual QA
+on:
+  push:
+    branches: [work/admin-redesign-20261017]
+    paths: ['admin_ios/**', '.github/workflows/admin-redesign.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  admin:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore existing administrator icon
+        run: |
+          python3 - <<'PY'
+          import base64,pathlib
+          pathlib.Path('admin_ios/App/Assets.xcassets/AppIcon.appiconset/AppIcon.png').write_bytes(base64.b64decode(pathlib.Path('patches/admin-restored-icon.png.b64').read_text()))
+          PY
+          sips -z 1024 1024 admin_ios/App/Assets.xcassets/AppIcon.appiconset/AppIcon.png >/dev/null
+      - name: Generate isolated admin project
+        working-directory: admin_ios
+        run: |
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+          xcodegen generate
+      - name: Build production administration app
+        working-directory: admin_ios
+        run: |
+          set -o pipefail
+          xcodebuild -project MurshidAdmin.xcodeproj -scheme MurshidAdmin -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' build 2>&1 | tee release-build.log
+      - name: Package verified unsigned IPA
+        working-directory: admin_ios
+        run: |
+          set -euo pipefail
+          APP=build/Build/Products/Release-iphoneos/MurshidAdmin.app
+          test -f "$APP/Assets.car"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | grep -Fx 'com.muriq.murshid.admin'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" | grep -Fx '5.1.0'
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" | grep -Fx '530'
+          if strings "$APP/MurshidAdmin" | grep -F -- '--admin-preview'; then exit 1; fi
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry Murshid_Admin_iOS_v5_1_0_BUILD530_unsigned.ipa Payload
+          shasum -a 256 Murshid_Admin_iOS_v5_1_0_BUILD530_unsigned.ipa > Murshid_Admin_iOS_v5_1_0_BUILD530_unsigned.sha256
+      - name: Run UI interactions on iPhone
+        working-directory: admin_ios
+        run: |
+          set -o pipefail
+          mkdir -p qa
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c 'import sys,json; ds=[d for k,v in json.load(sys.stdin)["devices"].items() if "iOS" in k for d in v if d.get("isAvailable") and "iPhone" in d["name"]]; print(next((d for d in ds if d["name"]=="iPhone 16 Pro"),ds[0])["udid"])')
+          echo "$DEVICE" > qa/device.txt
+          xcrun simctl boot "$DEVICE" || true
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcodebuild test -project MurshidAdmin.xcodeproj -scheme MurshidAdmin -configuration Debug -sdk iphonesimulator -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath sim-build -resultBundlePath qa/Admin.xcresult -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY=- 2>&1 | tee qa/ui-tests.log
+      - name: Capture real simulator screens
+        if: always()
+        working-directory: admin_ios
+        run: |
+          set -euo pipefail
+          test -f qa/device.txt || exit 0
+          DEVICE=$(cat qa/device.txt)
+          APP=sim-build/Build/Products/Debug-iphonesimulator/MurshidAdmin.app
+          test -d "$APP" || exit 0
+          mkdir -p qa/screenshots
+          xcrun simctl install "$DEVICE" "$APP"
+          xcrun simctl status_bar "$DEVICE" override --time '9:41' --dataNetwork wifi --wifiMode active --wifiBars 3 --batteryState charged --batteryLevel 100
+          for TAB in 0 1 2 3 4; do
+            xcrun simctl terminate "$DEVICE" com.muriq.murshid.admin || true
+            SIMCTL_CHILD_ADMIN_PREVIEW_TAB="$TAB" xcrun simctl launch "$DEVICE" com.muriq.murshid.admin --admin-preview
+            sleep 2
+            xcrun simctl io "$DEVICE" screenshot "qa/screenshots/tab-$TAB.png"
+          done
+          xcrun simctl terminate "$DEVICE" com.muriq.murshid.admin || true
+          xcrun simctl launch "$DEVICE" com.muriq.murshid.admin --admin-login-preview
+          sleep 2
+          xcrun simctl io "$DEVICE" screenshot qa/screenshots/login.png
+          if test -d qa/Admin.xcresult; then
+            xcrun xcresulttool get test-results summary --path qa/Admin.xcresult > qa/summary.json || true
+          fi
+      - name: Upload IPA and QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Murshid-Admin-5.1.0-Build530
+          path: |
+            admin_ios/*.ipa
+            admin_ios/*.sha256
+            admin_ios/release-build.log
+            admin_ios/qa/screenshots/
+            admin_ios/qa/summary.json
+            admin_ios/qa/ui-tests.log
+          retention-days: 14
