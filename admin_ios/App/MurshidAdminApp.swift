@@ -12,42 +12,42 @@ private enum AdminPalette: String, CaseIterable, Identifiable {
     }
     var name: String {
         switch self {
-        case .aurora: return "أورورا"
+        case .aurora: return "محيط"
         case .orchid: return "بنفسجي"
         case .royal: return "ملكي"
         }
     }
     var caption: String {
         switch self {
-        case .aurora: return "فيروزي × أزرق"
+        case .aurora: return "كحلي وفيروزي"
         case .orchid: return "بنفسجي × وردي"
         case .royal: return "كحلي × ذهبي"
         }
     }
     var background: Color {
         switch self {
-        case .aurora: return Color(red: 0.024, green: 0.060, blue: 0.105)
+        case .aurora: return Color(red: 0.035, green: 0.055, blue: 0.090)
         case .orchid: return Color(red: 0.065, green: 0.042, blue: 0.125)
         case .royal: return Color(red: 0.025, green: 0.074, blue: 0.145)
         }
     }
     var surface: Color {
         switch self {
-        case .aurora: return Color(red: 0.060, green: 0.127, blue: 0.171)
+        case .aurora: return Color(red: 0.075, green: 0.100, blue: 0.145)
         case .orchid: return Color(red: 0.132, green: 0.092, blue: 0.219)
         case .royal: return Color(red: 0.075, green: 0.148, blue: 0.250)
         }
     }
     var edge: Color {
         switch self {
-        case .aurora: return Color(red: 0.155, green: 0.297, blue: 0.330)
+        case .aurora: return Color(red: 0.145, green: 0.185, blue: 0.240)
         case .orchid: return Color(red: 0.251, green: 0.180, blue: 0.365)
         case .royal: return Color(red: 0.115, green: 0.205, blue: 0.310)
         }
     }
     var accent: Color {
         switch self {
-        case .aurora: return Color(red: 0.335, green: 0.925, blue: 0.776)
+        case .aurora: return Color(red: 0.310, green: 0.880, blue: 0.775)
         case .orchid: return Color(red: 0.842, green: 0.682, blue: 1.000)
         case .royal: return Color(red: 0.972, green: 0.801, blue: 0.456)
         }
@@ -61,7 +61,7 @@ private enum AdminPalette: String, CaseIterable, Identifiable {
     }
     var muted: Color {
         switch self {
-        case .aurora: return Color(red: 0.715, green: 0.832, blue: 0.852)
+        case .aurora: return Color(red: 0.650, green: 0.715, blue: 0.795)
         case .orchid: return Color(red: 0.801, green: 0.754, blue: 0.876)
         case .royal: return Color(red: 0.710, green: 0.785, blue: 0.870)
         }
@@ -105,6 +105,23 @@ enum LoginStage {case loading, signin, otp, ready}
     @Published var predictionSubjects:[J] = []
     @Published var predictionRows:[J] = []
     @Published var predictionMode = "automatic"
+    #if DEBUG
+    private var previewMode:Bool {ProcessInfo.processInfo.arguments.contains("--admin-preview") || ProcessInfo.processInfo.arguments.contains("--admin-login-preview")}
+    init() {
+        if ProcessInfo.processInfo.arguments.contains("--admin-preview") {
+            name="مدير المنصة";stage = .ready
+            dashboard=["stats":["students":1248,"subscriptions":386,"questions":18420,"codes":72,"ads":4,"teachers":18]]
+            codes=[
+                ["id":101,"months":1,"status":"available","batch_label":"دفعة أكتوبر","valid_until":"2026-12-31"],
+                ["id":102,"months":3,"status":"redeemed","batch_label":"اشتراك الفصل الأول"],
+                ["id":103,"months":1,"status":"revoked","batch_label":"دفعة سابقة"]]
+            ads=[["id":1,"school_name":"مدرسة تجريبية","ad_text":"مساحة لإعلان المدرسة ومتابعة وقت العرض.","start_date":"2026-10-17","end_date":"2026-10-18","total_price":5000,"is_enabled":1]]
+            students=[
+                ["id":1,"full_name":"طالب تجريبي أول","grade_name":"السادس العلمي","phone":"07700000000","status":"active"],
+                ["id":2,"full_name":"طالب تجريبي ثانٍ","grade_name":"الثالث المتوسط","phone":"07700000001","status":"inactive"]]
+        } else if ProcessInfo.processInfo.arguments.contains("--admin-login-preview") {stage = .signin}
+    }
+    #endif
     private var appIsActive=false
     private var keepAliveTask:Task<Void,Never>?
     private let session:URLSession = {
@@ -147,6 +164,19 @@ enum LoginStage {case loading, signin, otp, ready}
         throw URLError(.unknown)
     }
     func call(_ action:String, params:J?=nil, query:String?=nil, extras:[URLQueryItem]=[]) async throws -> J {
+        #if DEBUG
+        if previewMode {
+            guard params == nil else{throw ServiceError(message:"المعاينة تستخدم بيانات تجريبية فقط.")}
+            switch action {
+            case "dashboard": return dashboard
+            case "codes": return ["items":codes]
+            case "students": return ["items": query?.isEmpty == false ? students.filter{s($0,"full_name").contains(query!)} : students]
+            case "ads": return ["items":ads]
+            case "status": return ["ok":true,"name":name,"csrf":"preview"]
+            default: return ["items":[J](),"ok":true]
+            }
+        }
+        #endif
         var components=URLComponents(url:endpoint,resolvingAgainstBaseURL:false)!
         var qs=[URLQueryItem(name:"action",value:action)]
         if let query, !query.isEmpty {qs.append(URLQueryItem(name:"q",value:query))}
@@ -200,6 +230,9 @@ enum LoginStage {case loading, signin, otp, ready}
     // A foreground admin session stays refreshed while the app is in use.
     // The server continues to enforce admin status, authorization and 2FA.
     func setAppActive(_ active:Bool) {
+        #if DEBUG
+        if previewMode {return}
+        #endif
         appIsActive=active
         UIApplication.shared.isIdleTimerDisabled=active
         if active {startKeepAlive()} else {stopKeepAlive()}
@@ -261,12 +294,29 @@ enum LoginStage {case loading, signin, otp, ready}
         stopKeepAlive()
         _=try? await call("logout",params:[:])
         csrf="";name="الإدارة";stage = .signin
+        dashboard=[:];campaign=[:];codes=[];ads=[];students=[];subscriptions=[];questions=[]
+        curriculum=[:];predictionSubjects=[];predictionRows=[];updatedAt=[:]
+        for key in Array(readVersions.keys){readVersions[key,default:0]+=1}
+    }
+    @Published private(set) var updatedAt:[String:Date]=[:]
+    private var readVersions:[String:Int]=[:]
+    private var activeReads:Set<String>=[]
+    private var writeCount=0
+    private func updateBusy(){busy = !activeReads.isEmpty || writeCount>0}
+    func refreshIfStale(_ area:String) async {
+        guard activeReads.contains(where:{$0.hasPrefix(area+"#")}) == false else{return}
+        if let date=updatedAt[area],Date().timeIntervalSince(date)<30{return}
+        await refresh(area)
     }
     func refresh(_ area:String,search:String?=nil) async {
-        busy=true;error=""
-        defer{busy=false}
+        let version=(readVersions[area] ?? 0)+1
+        readVersions[area]=version
+        let token="\(area)#\(version)"
+        activeReads.insert(token);updateBusy();error=""
+        defer{activeReads.remove(token);updateBusy()}
         do {
             let result=try await call(area,query:search)
+            guard readVersions[area]==version else{return}
             switch area {
             case "dashboard": dashboard=result
             case "promo_status": campaign=result["campaign"] as? J ?? [:]
@@ -279,7 +329,11 @@ enum LoginStage {case loading, signin, otp, ready}
             case "predictions_subjects": predictionSubjects=list(result)
             default: break
             }
-        } catch { self.error=error.localizedDescription }
+            if search == nil || search == "" {updatedAt[area]=Date()}
+            else {updatedAt.removeValue(forKey:area)}
+        } catch {
+            if readVersions[area]==version && !Task.isCancelled {self.error=error.localizedDescription}
+        }
     }
     func refreshPredictions(subjectID:Int) async {
         guard subjectID>0 else {predictionRows=[];return}
@@ -292,12 +346,13 @@ enum LoginStage {case loading, signin, otp, ready}
         } catch {self.error=error.localizedDescription}
     }
     func mutation(_ action:String,_ payload:J,refresh area:String) async -> J? {
-        busy=true;error="";notice=""
-        defer{busy=false}
+        writeCount+=1;updateBusy();error="";notice=""
+        defer{writeCount-=1;updateBusy()}
         do {
             let response=try await call(action,params:payload)
             notice=s(response,"message","تم حفظ العملية بنجاح.")
-            if !area.isEmpty {await refresh(area)}
+            if !area.isEmpty {updatedAt.removeValue(forKey:area);await refresh(area)}
+            updatedAt.removeValue(forKey:"dashboard")
             return response
         }catch {self.error=error.localizedDescription;return nil}
     }
@@ -329,18 +384,44 @@ enum LoginStage {case loading, signin, otp, ready}
 }
 private struct AdminBackground:ViewModifier {
     func body(content:Content)->some View {
-        content.background {
-            ZStack {
-                LinearGradient(colors:[Ink.navy,Ink.blue.opacity(0.85),Ink.navy],startPoint:.topLeading,endPoint:.bottomTrailing)
-                Circle().fill(Ink.gold.opacity(0.12)).frame(width:310,height:310)
-                    .blur(radius:90).offset(x:190,y:-300)
-                Circle().fill(Ink.secondary.opacity(0.10)).frame(width:300,height:300)
-                    .blur(radius:105).offset(x:-190,y:290)
-            }.ignoresSafeArea()
-        }
+        content.background(Ink.navy.ignoresSafeArea())
+            .scrollDismissesKeyboard(.interactively)
+            .toolbarBackground(Ink.navy,for:.navigationBar)
+            .toolbarBackground(.visible,for:.navigationBar)
+            .toolbarColorScheme(.dark,for:.navigationBar)
     }
 }
 private extension View {func adminBG()->some View {modifier(AdminBackground())}}
+private struct AdminPressStyle:ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func makeBody(configuration:Configuration)->some View {
+        configuration.label.opacity(configuration.isPressed ? 0.75 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.98 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration:0.14),value:configuration.isPressed)
+    }
+}
+private struct AdminEmpty:View {
+    let title:String
+    let detail:String
+    var body:some View {
+        VStack(spacing:12) {
+            Image(systemName:"tray").font(.system(size:30)).foregroundStyle(Ink.gold)
+            Text(title).font(.headline)
+            Text(detail).font(.footnote).foregroundStyle(Ink.faded).multilineTextAlignment(.center)
+        }.padding(28).frame(maxWidth:.infinity).background(Ink.blue,in:RoundedRectangle(cornerRadius:18))
+    }
+}
+private struct AdminSection:View {
+    let title:String
+    var detail:String=""
+    var body:some View {
+        HStack(alignment:.firstTextBaseline) {
+            Text(title).font(.system(.headline,design:.rounded))
+            Spacer(minLength:8)
+            if !detail.isEmpty {Text(detail).font(.caption).foregroundStyle(Ink.faded)}
+        }.padding(.top,4)
+    }
+}
 private struct Splash:View {
     var body:some View {
         VStack(spacing:18) {
@@ -356,11 +437,9 @@ private struct GlassBox<Content:View>:View {
     let content:Content
     init(@ViewBuilder _ content:()->Content){self.content=content()}
     var body:some View {
-        content.padding(17).frame(maxWidth:.infinity,alignment:.leading)
-            .background(LinearGradient(colors:[Ink.blue.opacity(0.96),Ink.blue.opacity(0.72)],startPoint:.topLeading,endPoint:.bottomTrailing),in:RoundedRectangle(cornerRadius:23,style:.continuous))
-            .overlay(RoundedRectangle(cornerRadius:23,style:.continuous)
-                .stroke(LinearGradient(colors:[Ink.gold.opacity(0.18),Ink.blue2.opacity(0.9),Ink.secondary.opacity(0.13)],startPoint:.topLeading,endPoint:.bottomTrailing),lineWidth:1))
-            .shadow(color:Ink.navy.opacity(0.35),radius:16,x:0,y:8)
+        content.padding(16).frame(maxWidth:.infinity,alignment:.leading)
+            .background(Ink.blue,in:RoundedRectangle(cornerRadius:18,style:.continuous))
+            .overlay(RoundedRectangle(cornerRadius:18,style:.continuous).stroke(Ink.blue2.opacity(0.65),lineWidth:0.7))
     }
 }
 private struct Primary:View {
@@ -377,51 +456,68 @@ private struct Primary:View {
             }
             .frame(maxWidth:.infinity).padding(14)
             .foregroundStyle(Ink.navy)
-            .background(LinearGradient(colors:[Ink.gold,Ink.secondary],startPoint:.leading,endPoint:.trailing),in:RoundedRectangle(cornerRadius:15,style:.continuous))
-            .shadow(color:Ink.gold.opacity(0.17),radius:11,y:5)
-        }.buttonStyle(.plain).disabled(busy)
+            .background(Ink.gold,in:RoundedRectangle(cornerRadius:13,style:.continuous))
+        }.buttonStyle(AdminPressStyle()).disabled(busy)
     }
 }
 private struct LoginScreen:View {
     @ObservedObject var state:AdminState
     @State private var identifier=""
     @State private var password=""
+    @State private var showPassword=false
+    @FocusState private var focus:Field?
+    private enum Field {case identifier,password}
     var body:some View {
         ScrollView {
-            VStack(spacing:22) {
-                ZStack {
-                    Circle().fill(Ink.gold.opacity(0.12)).frame(width:155,height:155)
-                    Circle().stroke(Ink.gold.opacity(0.35),lineWidth:1).frame(width:137,height:137)
-                    Image(systemName:"building.columns.circle.fill").font(.system(size:85))
-                        .foregroundStyle(LinearGradient(colors:[Ink.gold,Ink.secondary],startPoint:.topLeading,endPoint:.bottomTrailing))
-                }.padding(.top,45)
-                VStack(spacing:6) {
-                    Text("مرحباً بك في الإدارة").font(.system(size:31,weight:.heavy,design:.rounded))
-                    Text("لوحة قيادة المرشد الوزاري").foregroundStyle(Ink.faded).multilineTextAlignment(.center)
-                }
-                Label("بوابة الإدارة الآمنة",systemImage:"lock.shield.fill")
-                    .font(.caption.bold()).foregroundStyle(Ink.gold)
-                    .padding(.horizontal,16).padding(.vertical,8)
-                    .background(Ink.gold.opacity(0.11),in:Capsule())
+            VStack(alignment:.leading,spacing:26) {
+                HStack {
+                    Label("المرشد الوزاري",systemImage:"building.columns.fill").font(.headline)
+                    Spacer()
+                    Text("الإدارة").font(.caption.bold()).padding(.horizontal,12).padding(.vertical,7)
+                        .background(Ink.gold.opacity(0.12),in:Capsule()).foregroundStyle(Ink.gold)
+                }.padding(.top,20)
+                VStack(alignment:.leading,spacing:12) {
+                    Image(systemName:"square.stack.3d.up.fill").font(.system(size:40)).foregroundStyle(Ink.gold).padding(.bottom,10)
+                    Text("إدارة أوضح.\nإنجاز أسرع.").font(.system(size:38,weight:.bold,design:.rounded)).fixedSize(horizontal:false,vertical:true)
+                    Text("أهلاً بك في مساحة إدارة المنصة").font(.subheadline).foregroundStyle(Ink.faded)
+                }.padding(.vertical,14)
                 GlassBox {
-                    VStack(alignment:.leading,spacing:16) {
-                        Label("حساب المدير",systemImage:"person.crop.circle.fill").foregroundStyle(Ink.gold)
-                        TextField("البريد الإلكتروني أو رقم الهاتف",text:$identifier)
-                            .textContentType(.username).keyboardType(.emailAddress).textInputAutocapitalization(.never)
-                            .padding(13).background(Ink.navy,in:RoundedRectangle(cornerRadius:12))
-                        SecureField("كلمة المرور",text:$password)
-                            .textContentType(.password)
-                            .padding(13).background(Ink.navy,in:RoundedRectangle(cornerRadius:12))
-                        Primary(title:"دخول الإدارة",symbol:"arrow.left.circle.fill",busy:state.busy) {
-                            Task {await state.login(identifier,password)}
+                    VStack(alignment:.leading,spacing:18) {
+                        Text("تسجيل الدخول").font(.title3.bold())
+                        VStack(alignment:.leading,spacing:8) {
+                            Text("البريد الإلكتروني أو الهاتف").font(.caption).foregroundStyle(Ink.faded)
+                            TextField("حساب المدير",text:$identifier).textContentType(.username)
+                                .keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+                                .focused($focus,equals:.identifier).submitLabel(.next).onSubmit{focus = .password}
+                                .padding(14).background(Ink.navy,in:RoundedRectangle(cornerRadius:12))
                         }
+                        VStack(alignment:.leading,spacing:8) {
+                            Text("كلمة المرور").font(.caption).foregroundStyle(Ink.faded)
+                            HStack {
+                                Group {
+                                    if showPassword {TextField("كلمة المرور",text:$password)}
+                                    else {SecureField("كلمة المرور",text:$password)}
+                                }.textContentType(.password).focused($focus,equals:.password).submitLabel(.go)
+                                    .onSubmit{signIn()}
+                                Button {showPassword.toggle()} label:{Image(systemName:showPassword ? "eye.slash":"eye")}
+                                    .foregroundStyle(Ink.faded).frame(width:36,height:32)
+                                    .accessibilityLabel(showPassword ? "إخفاء كلمة المرور":"إظهار كلمة المرور")
+                            }.padding(10).background(Ink.navy,in:RoundedRectangle(cornerRadius:12))
+                        }
+                        Note(state:state)
+                        Primary(title:"دخول الإدارة",symbol:"arrow.left",busy:state.busy){signIn()}
+                            .disabled(safe(identifier).isEmpty || password.isEmpty)
                     }
                 }
-                if !state.error.isEmpty {Text(state.error).foregroundStyle(.orange).font(.footnote)}
-                Label("المدير فقط • اتصال مشفر • صلاحيات محمية من الخادم",systemImage:"lock.shield")
-                    .font(.footnote).foregroundStyle(Ink.faded).multilineTextAlignment(.center)
-            }.padding(20)
+                Label("اتصال مشفّر • حسابات المديرين فقط",systemImage:"lock.shield")
+                    .font(.caption).foregroundStyle(Ink.faded).frame(maxWidth:.infinity)
+            }.padding(22).frame(maxWidth:560).frame(maxWidth:.infinity)
         }.adminBG()
+    }
+    private func signIn() {
+        guard !state.busy,!safe(identifier).isEmpty,!password.isEmpty else{return}
+        focus=nil
+        Task{await state.login(safe(identifier),password)}
     }
 }
 private struct OTPScreen:View {
@@ -457,29 +553,33 @@ private struct MainAdmin:View {
             MoreScreen(state:state).tabItem{Label(AdminTab.more.title,systemImage:AdminTab.more.icon)}.tag(AdminTab.more)
         }
         .tint(Ink.gold)
-        .toolbarBackground(Ink.navy,for:.tabBar)
-        .toolbarBackground(.visible,for:.tabBar)
-        .toolbarColorScheme(.dark,for:.tabBar)
-        .adminBG()
+        .toolbarBackground(Ink.blue,for:.tabBar).toolbarBackground(.visible,for:.tabBar)
+        .toolbarColorScheme(.dark,for:.tabBar).adminBG()
+        .onChange(of:tab){_ in UISelectionFeedbackGenerator().selectionChanged()}
+        .onAppear {
+            #if DEBUG
+            if let value=ProcessInfo.processInfo.environment["ADMIN_PREVIEW_TAB"],let number=Int(value),let selected=AdminTab(rawValue:number){tab=selected}
+            #endif
+        }
     }
 }
 private struct ScreenTitle:View {
     let text:String;let detail:String
     var body:some View {
-        VStack(alignment:.leading,spacing:8){
-            HStack(spacing:7) {
-                Capsule().fill(LinearGradient(colors:[Ink.gold,Ink.secondary],startPoint:.leading,endPoint:.trailing)).frame(width:21,height:4)
-                Text("MURSHID  /  ADMIN").tracking(1.6).font(.system(size:9,weight:.bold,design:.rounded)).foregroundStyle(Ink.gold)
+        VStack(alignment:.leading,spacing:10) {
+            HStack(spacing:8) {
+                RoundedRectangle(cornerRadius:2).fill(Ink.gold).frame(width:4,height:26)
+                Text(text).font(.system(size:27,weight:.bold,design:.rounded))
             }
-            Text(text).font(.system(size:28,weight:.heavy,design:.rounded))
-            Text(detail).font(.subheadline).foregroundStyle(Ink.faded)
-        }.frame(maxWidth:.infinity,alignment:.leading).padding(.top,9)
+            Text(detail).font(.caption).foregroundStyle(Ink.faded).fixedSize(horizontal:false,vertical:true)
+        }.frame(maxWidth:.infinity,alignment:.leading).padding(.vertical,10)
     }
 }
 private struct Note:View {
     @ObservedObject var state:AdminState
     var body:some View {
         Group {
+            if state.busy {HStack(spacing:9){ProgressView().tint(Ink.gold);Text("جارٍ تحميل البيانات…").font(.caption).foregroundStyle(Ink.faded)}.padding(.vertical,6)}
             if !state.error.isEmpty {Label(state.error,systemImage:"exclamationmark.triangle").foregroundStyle(.orange).font(.footnote).padding(10).frame(maxWidth:.infinity).background(Ink.blue,in:RoundedRectangle(cornerRadius:12))}
             if !state.notice.isEmpty {Label(state.notice,systemImage:"checkmark.circle.fill").foregroundStyle(.green).font(.footnote).padding(10).frame(maxWidth:.infinity).background(Ink.blue,in:RoundedRectangle(cornerRadius:12))}
         }
@@ -489,18 +589,11 @@ private struct MetricTile:View {
     let name:String;let count:String;let icon:String
     var body:some View {
         GlassBox {
-            VStack(alignment:.leading,spacing:13){
-                HStack {
-                    Image(systemName:icon).font(.system(size:20,weight:.semibold))
-                        .foregroundStyle(Ink.gold)
-                        .frame(width:43,height:43)
-                        .background(Ink.gold.opacity(0.11),in:RoundedRectangle(cornerRadius:14))
-                    Spacer(minLength:0)
-                    Image(systemName:"arrow.up.left").font(.caption2.bold()).foregroundStyle(Ink.faded.opacity(0.65))
-                }
-                Text(count).font(.system(size:32,weight:.heavy,design:.rounded)).minimumScaleFactor(0.7).lineLimit(1)
-                Text(name).foregroundStyle(Ink.faded).font(.system(size:12,weight:.medium))
-            }
+            VStack(alignment:.leading,spacing:10) {
+                Image(systemName:icon).font(.system(size:17,weight:.semibold)).foregroundStyle(Ink.gold)
+                Text(count).font(.system(size:29,weight:.bold,design:.rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.65)
+                Text(name).font(.caption).foregroundStyle(Ink.faded).fixedSize(horizontal:false,vertical:true)
+            }.frame(maxWidth:.infinity,alignment:.leading)
         }
     }
 }
@@ -511,77 +604,79 @@ private struct HomeScreen:View {
     var body:some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment:.leading,spacing:18){
-                    HStack {
-                        VStack(alignment:.leading,spacing:5){
-                            Text("أهلاً بك ✨").font(.caption.bold()).foregroundStyle(Ink.gold)
-                            Text("مركز التحكم").font(.system(size:32,weight:.heavy,design:.rounded))
-                            Text("أهلًا، \(state.name)").foregroundStyle(Ink.faded)
+                VStack(alignment:.leading,spacing:18) {
+                    HStack(alignment:.top) {
+                        VStack(alignment:.leading,spacing:7) {
+                            Text("أهلاً، \(state.name)").font(.subheadline).foregroundStyle(Ink.faded)
+                            Text("نبض المنصة").font(.system(size:32,weight:.bold,design:.rounded))
                         }
-                        Spacer()
-                        Image(systemName:"square.grid.2x2.fill").font(.title2).foregroundStyle(Ink.gold)
-                            .frame(width:52,height:52)
-                            .background(Ink.gold.opacity(0.12),in:RoundedRectangle(cornerRadius:16))
+                        Spacer(minLength:8)
+                        Image(systemName:"building.columns.fill").font(.title2).foregroundStyle(Ink.gold)
+                            .frame(width:50,height:50).background(Ink.gold.opacity(0.10),in:RoundedRectangle(cornerRadius:16))
                     }.padding(.top,12)
-                    ZStack(alignment:.leading) {
-                        RoundedRectangle(cornerRadius:26,style:.continuous)
-                            .fill(LinearGradient(colors:[Ink.gold.opacity(0.88),Ink.secondary.opacity(0.88)],startPoint:.topLeading,endPoint:.bottomTrailing))
-                        Circle().stroke(Ink.navy.opacity(0.12),lineWidth:23).frame(width:185,height:185).offset(x:-15,y:65)
-                        Circle().fill(.white.opacity(0.13)).frame(width:110,height:110).offset(x:240,y:-48)
-                        VStack(alignment:.leading,spacing:11) {
-                            Label("المرشد الوزاري",systemImage:"building.columns.fill")
-                                .font(.caption.bold()).foregroundStyle(Ink.navy.opacity(0.78))
-                            Text("مساحتك لإدارة\nكل التفاصيل").font(.system(size:25,weight:.heavy,design:.rounded))
-                                .foregroundStyle(Ink.navy).fixedSize(horizontal:false,vertical:true)
-                            Label("إحصائيات متصلة ببيانات المنصة",systemImage:"checkmark.shield.fill")
-                                .font(.system(size:11,weight:.medium)).foregroundStyle(Ink.navy.opacity(0.78))
-                        }.padding(22).frame(maxWidth:.infinity,alignment:.leading)
-                    }.frame(minHeight:166).clipShape(RoundedRectangle(cornerRadius:26,style:.continuous))
-                    Note(state:state)
-                    HStack {
-                        Text("نظرة عامة").font(.title3.bold())
+                    HStack(spacing:8) {
+                        Image(systemName:state.busy ? "arrow.triangle.2.circlepath":"clock").foregroundStyle(Ink.gold)
+                        Text(state.busy ? "جارٍ تحديث البيانات…" : updateLabel).font(.caption).foregroundStyle(Ink.faded)
                         Spacer()
-                        Text("إحصائيات المنصة").font(.caption).foregroundStyle(Ink.faded)
+                        Button{Task{await state.refresh("dashboard")}}label:{Image(systemName:"arrow.clockwise").frame(width:36,height:36)}
+                            .disabled(state.busy).accessibilityLabel("تحديث الإحصائيات")
                     }
-                    LazyVGrid(columns:grids,spacing:12) {
-                        MetricTile(name:"الطلاب",count:fmt("students"),icon:"person.3.fill")
+                    Note(state:state)
+                    AdminSection(title:"نظرة عامة",detail:"بيانات المنصة")
+                    LazyVGrid(columns:grids,spacing:10) {
+                        MetricTile(name:"الطلاب",count:fmt("students"),icon:"person.2.fill")
                         MetricTile(name:"الاشتراكات الفعالة",count:fmt("subscriptions"),icon:"crown.fill")
-                        MetricTile(name:"الأسئلة المنشورة",count:fmt("questions"),icon:"checklist")
+                        MetricTile(name:"الأسئلة المنشورة",count:fmt("questions"),icon:"text.book.closed.fill")
                         MetricTile(name:"أكواد متاحة",count:fmt("codes"),icon:"ticket.fill")
                         MetricTile(name:"إعلانات نشطة",count:fmt("ads"),icon:"megaphone.fill")
                         MetricTile(name:"المعلمون",count:fmt("teachers"),icon:"person.crop.rectangle.stack")
                     }
-                    HStack {
-                        Text("الوصول السريع").font(.title3.bold())
-                        Spacer()
-                        Image(systemName:"bolt.fill").foregroundStyle(Ink.gold)
+                    AdminSection(title:"ابدأ إجراءً",detail:"وصول سريع")
+                    LazyVGrid(columns:grids,spacing:10) {
+                        quick("أكواد التفعيل","ticket",detail:"إنشاء وإدارة"){tab = .codes}
+                        quick("إعلانات المدارس","megaphone",detail:"نشر ومتابعة"){tab = .ads}
+                        quick("حسابات الطلاب","person.2",detail:"بحث وإدارة"){tab = .students}
+                        quick("أدوات المنصة","slider.horizontal.3",detail:"الاشتراكات والمحتوى"){tab = .more}
                     }
-                    GlassBox{
-                        VStack(spacing:5){
-                            quick("إنشاء أكواد الاشتراك","ticket.fill"){tab = .codes}
-                            Divider().overlay(Ink.blue2)
-                            quick("إدارة إعلانات المدارس","megaphone.fill"){tab = .ads}
-                            Divider().overlay(Ink.blue2)
-                            quick("البحث عن الطلاب","magnifyingglass"){tab = .students}
-                        }
-                    }
-                }.padding(16)
+                    NavigationLink{MillionScheduleAdminScreen(state:state).toolbar(.visible,for:.navigationBar)}label:{
+                        HStack(spacing:12) {
+                            Image(systemName:"trophy.fill").foregroundStyle(Ink.gold).font(.title3)
+                            VStack(alignment:.leading,spacing:4){Text("تحدي المليون").font(.subheadline.bold());Text("إدارة مواعيد المنافسة").font(.caption).foregroundStyle(Ink.faded)}
+                            Spacer();Image(systemName:"chevron.left").font(.caption).foregroundStyle(Ink.faded)
+                        }.padding(16).background(Ink.blue,in:RoundedRectangle(cornerRadius:18))
+                    }.buttonStyle(AdminPressStyle())
+                }.padding(18).frame(maxWidth:700).frame(maxWidth:.infinity)
             }.adminBG().refreshable{await state.refresh("dashboard")}
-            .task {await state.refresh("dashboard")}
-            .toolbar {ToolbarItem(placement:.topBarTrailing){Button{Task{await state.refresh("dashboard")}}label:{Image(systemName:"arrow.clockwise")}}}
+                .task{await state.refreshIfStale("dashboard")}
+                .toolbar(.hidden,for:.navigationBar)
         }
     }
-    private func fmt(_ key:String)->String {
-        let v=state.dashboard["stats"] as? J ?? [:]
-        return v[key] == nil || v[key] is NSNull ? "—" : s(v,key)
+    private var updateLabel:String {
+        guard let date=state.updatedAt["dashboard"] else{return "اسحب للأسفل لتحديث الإحصائيات"}
+        return "آخر تحديث \(date.formatted(date:.omitted,time:.shortened))"
     }
-    private func quick(_ label:String,_ icon:String,action:@escaping ()->Void)->some View {
-        Button(action:action){HStack{Image(systemName:icon).foregroundStyle(Ink.gold).frame(width:30);Text(label);Spacer();Image(systemName:"chevron.left").foregroundStyle(Ink.faded)}.padding(.vertical,8)}
-            .buttonStyle(.plain)
+    private func fmt(_ key:String)->String {
+        let stats=state.dashboard["stats"] as? J ?? [:]
+        guard stats[key] != nil,!(stats[key] is NSNull) else{return "—"}
+        let formatter=NumberFormatter();formatter.locale=Locale(identifier:"ar_IQ");formatter.numberStyle = .decimal
+        return formatter.string(from:NSNumber(value:num(stats,key))) ?? s(stats,key)
+    }
+    private func quick(_ title:String,_ icon:String,detail:String,action:@escaping ()->Void)->some View {
+        Button(action:action) {
+            VStack(alignment:.leading,spacing:10) {
+                Image(systemName:icon).font(.title3).foregroundStyle(Ink.gold)
+                Text(title).font(.subheadline.bold())
+                Text(detail).font(.caption).foregroundStyle(Ink.faded)
+            }.frame(maxWidth:.infinity,alignment:.leading).padding(16)
+                .background(Ink.gold.opacity(0.055),in:RoundedRectangle(cornerRadius:18))
+                .overlay(RoundedRectangle(cornerRadius:18).stroke(Ink.blue2,lineWidth:0.7))
+        }.buttonStyle(AdminPressStyle())
     }
 }
 private struct CodesScreen:View {
     @ObservedObject var state:AdminState
+    @State private var codeFilter="all"
+    private var visibleCodes:[J] {state.codes.filter{codeFilter=="all" || s($0,"status")==codeFilter}}
     @State private var showCreate=false
     @State private var editing:J?
     @State private var toRevoke:J?
@@ -594,7 +689,7 @@ private struct CodesScreen:View {
             content
                 .adminBG()
                 .refreshable{await state.refresh("codes")}
-                .task{await state.refresh("codes")}
+                .task{await state.refreshIfStale("codes")}
                 .sheet(isPresented:$showCreate,onDismiss:{if !issued.isEmpty {showIssued=true}}) {
                     CodeCreate(state:state,onIssued:{newCodes in issued=newCodes})
                 }
@@ -623,9 +718,24 @@ private struct CodesScreen:View {
                 }
                 Note(state:state)
                 if state.codes.isEmpty {GlassBox{Text("لا توجد أكواد، أو لم تتصل الخدمة بعد.").foregroundStyle(Ink.faded)}}
-                ForEach(state.codes){code in codeCard(code)}
+                ScrollView(.horizontal,showsIndicators:false) {
+                    HStack(spacing:8) {
+                        filterChip("الكل","all")
+                        filterChip("متاحة","available")
+                        filterChip("مستخدمة","redeemed")
+                        filterChip("ملغاة","revoked")
+                    }.padding(.vertical,2)
+                }
+                if visibleCodes.isEmpty && !state.codes.isEmpty {AdminEmpty(title:"لا توجد أكواد بهذه الحالة",detail:"اختر تصنيفاً آخر من الأعلى.")}
+                ForEach(visibleCodes){code in codeCard(code)}
             }.padding(16)
         }
+    }
+    private func filterChip(_ title:String,_ value:String)->some View {
+        Button{codeFilter=value}label:{Text(title).font(.caption.bold()).padding(.horizontal,16).frame(minHeight:40)
+            .foregroundStyle(codeFilter==value ? Ink.navy:Ink.faded)
+            .background(codeFilter==value ? Ink.gold:Ink.blue,in:Capsule())}
+            .buttonStyle(AdminPressStyle()).accessibilityAddTraits(codeFilter==value ? .isSelected:[])
     }
     private func codeCard(_ code:J)->some View {
         GlassBox {
@@ -656,7 +766,11 @@ private struct CodesScreen:View {
     }
 }
 extension Dictionary: @retroactive Identifiable where Key==String, Value==Any {
-    public var id:String {String(describing:self["id"] ?? UUID().uuidString)}
+    public var id:String {
+        if let value=self["id"] {return String(describing:value)}
+        if JSONSerialization.isValidJSONObject(self),let data=try? JSONSerialization.data(withJSONObject:self,options:[.sortedKeys]),let text=String(data:data,encoding:.utf8){return text}
+        return self.keys.sorted().map{"\($0)=\(String(describing:self[$0]!))"}.joined(separator:"|")
+    }
 }
 private struct CodeCreate:View {
     @Environment(\.dismiss) private var dismiss
@@ -744,7 +858,7 @@ private struct AdsScreen:View {
     var body:some View {
         NavigationStack{
             ScrollView{
-                VStack(alignment:.leading,spacing:16){
+                LazyVStack(alignment:.leading,spacing:16){
                     ScreenTitle(text:"إعلانات المدارس",detail:"إعلان 24 ساعة • 5,000 دينار عراقي")
                     HStack{
                         Text("\(state.ads.count) إعلان").foregroundStyle(Ink.faded)
@@ -752,7 +866,7 @@ private struct AdsScreen:View {
                         Button{showNew=true}label:{Label("إعلان جديد",systemImage:"plus.circle.fill")}.buttonStyle(.borderedProminent).tint(Ink.gold).foregroundStyle(Ink.navy)
                     }
                     Note(state:state)
-                    if state.ads.isEmpty {GlassBox{Text("لا توجد إعلانات بعد.").foregroundStyle(Ink.faded)}}
+                    if state.ads.isEmpty && !state.busy {AdminEmpty(title:"لا توجد إعلانات",detail:"اضغط إعلان جديد لإضافة إعلان مدرسة.")}
                     ForEach(state.ads){ad in
                         GlassBox{
                             VStack(alignment:.leading,spacing:10){
@@ -771,7 +885,7 @@ private struct AdsScreen:View {
                         }
                     }
                 }.padding(16)
-            }.adminBG().refreshable{await state.refresh("ads")}.task{await state.refresh("ads")}
+            }.adminBG().refreshable{await state.refresh("ads")}.task{await state.refreshIfStale("ads")}
             .sheet(isPresented:$showNew){AdEditor(state:state,row:nil)}
             .sheet(item:$editing){row in AdEditor(state:state,row:row)}
             .confirmationDialog("حذف الإعلان نهائياً؟",isPresented:Binding(get:{deleting != nil},set:{if !$0{deleting=nil}}),titleVisibility:.visible){
@@ -834,14 +948,15 @@ private struct StudentsScreen:View {
     var body:some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment:.leading,spacing:15){
+                LazyVStack(alignment:.leading,spacing:15){
                     ScreenTitle(text:"الطلاب",detail:"بحث مباشر في بيانات حسابات الموقع")
                     HStack {
                         Image(systemName:"magnifyingglass").foregroundStyle(Ink.gold)
-                        TextField("ابحث بالاسم أو الهاتف أو البريد",text:$search).textInputAutocapitalization(.never)
-                        Button("بحث"){Task{await state.refresh("students",search:search)}}
+                        TextField("الاسم، الهاتف أو البريد",text:$search).textInputAutocapitalization(.never).autocorrectionDisabled().submitLabel(.search).onSubmit{Task{await state.refresh("students",search:search)}}
+                        Button("بحث"){Task{await state.refresh("students",search:search)}}.disabled(state.busy)
                     }.padding(13).background(Ink.blue,in:RoundedRectangle(cornerRadius:15))
                     Note(state:state)
+                    if state.students.isEmpty && !state.busy {AdminEmpty(title:"لا توجد نتائج",detail:"ابحث بالاسم أو رقم الهاتف أو البريد الإلكتروني.")}
                     ForEach(state.students){row in
                         GlassBox{
                             HStack(spacing:13){
@@ -859,7 +974,7 @@ private struct StudentsScreen:View {
                     }
                 }.padding(16)
             }.adminBG().refreshable{await state.refresh("students",search:search)}
-            .task{await state.refresh("students")}
+            .task{await state.refreshIfStale("students")}
             .confirmationDialog("تعديل حالة حساب الطالب؟",isPresented:Binding(get:{confirm != nil},set:{if !$0{confirm=nil}}),titleVisibility:.visible){
                 Button("تأكيد تغيير الحالة"){if let row=confirm{Task{_ = await state.mutation("toggle_student",["id":num(row,"id")],refresh:"students")}};confirm=nil}
             }
@@ -869,83 +984,99 @@ private struct StudentsScreen:View {
 private struct MoreScreen:View {
     @ObservedObject var state:AdminState
     @AppStorage("admin_palette") private var paletteID="aurora"
+    @State private var search=""
+    @State private var logoutConfirm=false
+    private let tools:[AdminTool]=[
+        .init(id:0,title:"اشتراكات الطلاب",detail:"متابعة الاشتراكات والطلبات",icon:"creditcard.fill",group:"الاشتراكات"),
+        .init(id:1,title:"مصادر الاشتراكات",detail:"كود • عرض • دفع",icon:"chart.pie.fill",group:"الاشتراكات"),
+        .init(id:2,title:"المقاعد المجانية",detail:"إعداد حملة الاشتراك المجاني",icon:"gift.fill",group:"الاشتراكات"),
+        .init(id:3,title:"تحدي المليون",detail:"تحديد بداية المنافسة ونهايتها",icon:"trophy.fill",group:"المحتوى"),
+        .init(id:4,title:"بنك الأسئلة",detail:"إضافة الأسئلة وتحريرها",icon:"text.book.closed.fill",group:"المحتوى"),
+        .init(id:5,title:"إدارة المرشحات",detail:"المواد والأسئلة المختارة",icon:"scope",group:"المحتوى"),
+        .init(id:6,title:"المواد والفصول",detail:"تنظيم المنهج الدراسي",icon:"books.vertical.fill",group:"المحتوى")
+    ]
+    private var filtered:[AdminTool] {tools.filter{safe(search).isEmpty || ($0.title+" "+$0.detail).localizedStandardContains(safe(search))}}
     var body:some View {
-        NavigationStack{
+        NavigationStack {
             ScrollView {
-                VStack(alignment:.leading,spacing:16) {
-                    ScreenTitle(text:"إدارة المنصة",detail:"جميع الأدوات • تطبيق أصلي للآيفون")
+                LazyVStack(alignment:.leading,spacing:16) {
+                    ScreenTitle(text:"مساحة الإدارة",detail:"كل أدواتك في مكان واحد")
+                    HStack(spacing:10) {
+                        Image(systemName:"magnifyingglass").foregroundStyle(Ink.gold)
+                        TextField("ابحث عن أداة…",text:$search).autocorrectionDisabled()
+                        if !search.isEmpty {Button{search=""}label:{Image(systemName:"xmark.circle.fill")}.accessibilityLabel("مسح البحث")}
+                    }.padding(14).background(Ink.blue,in:RoundedRectangle(cornerRadius:13))
                     Note(state:state)
-                    GlassBox {
-                        VStack(alignment:.leading,spacing:14) {
-                            HStack {
-                                VStack(alignment:.leading,spacing:5) {
-                                    Label("مظهر تطبيق الإدارة",systemImage:"paintpalette.fill")
-                                        .font(.headline).foregroundStyle(Ink.gold)
-                                    Text("اختر الألوان التي تناسب ذوقك، ويمكنك تغييرها بأي وقت")
-                                        .font(.caption).foregroundStyle(Ink.faded)
-                                }
-                                Spacer(minLength:0)
-                                Image(systemName:"sparkles").foregroundStyle(Ink.secondary)
-                            }
-                            HStack(spacing:9) {
-                                ForEach(AdminPalette.allCases) { palette in
-                                    Button {
-                                        paletteID=palette.rawValue
-                                        UISelectionFeedbackGenerator().selectionChanged()
-                                    } label: {
-                                        VStack(spacing:7) {
-                                            Image(systemName:paletteID==palette.rawValue ? "checkmark" : "paintbrush.pointed.fill")
-                                                .font(.system(size:16,weight:.bold))
-                                                .foregroundStyle(palette.background)
-                                                .frame(width:47,height:47)
-                                                .background(LinearGradient(colors:[palette.accent,palette.second],startPoint:.topLeading,endPoint:.bottomTrailing),in:RoundedRectangle(cornerRadius:16))
-                                            Text(palette.name).font(.caption.bold()).foregroundStyle(.white)
-                                            Text(palette.caption).font(.system(size:9,weight:.medium))
-                                                .foregroundStyle(Ink.faded).lineLimit(1).minimumScaleFactor(0.8)
-                                        }
-                                        .frame(maxWidth:.infinity)
-                                        .padding(.vertical,12).padding(.horizontal,4)
-                                        .background(paletteID==palette.rawValue ? Ink.gold.opacity(0.10) : Ink.navy.opacity(0.25),in:RoundedRectangle(cornerRadius:17))
-                                        .overlay(RoundedRectangle(cornerRadius:17).stroke(paletteID==palette.rawValue ? Ink.gold : Ink.blue2,lineWidth:paletteID==palette.rawValue ? 1.7 : 1))
-                                    }.buttonStyle(.plain)
+                    ForEach(["الاشتراكات","المحتوى"],id:\.self){group in
+                        let rows=filtered.filter{$0.group==group}
+                        if !rows.isEmpty {
+                            AdminSection(title:group)
+                            GlassBox {
+                                VStack(spacing:0) {
+                                    ForEach(rows){tool in
+                                        NavigationLink{destination(tool.id)}label:{entry(tool)}.buttonStyle(AdminPressStyle())
+                                        if tool.id != rows.last?.id {Divider().overlay(Ink.blue2)}
+                                    }
                                 }
                             }
                         }
                     }
-                    GlassBox{
-                        VStack(spacing:14){
-                            NavigationLink{SubscriptionsScreen(state:state)}label:{entry("اشتراكات الطلاب","creditcard.fill")}
-                            Divider().overlay(Ink.blue2)
-                            NavigationLink{SubscriptionSourcesHome(state:state)}label:{entry("مصادر الاشتراكات الثلاثة","person.crop.rectangle.stack.fill")}
-                            Divider().overlay(Ink.blue2)
-                            NavigationLink{FreeMonthCampaignScreen(state:state)}label:{entry("إدارة المقاعد المجانية","gift.fill")}
-                            Divider().overlay(Ink.blue2)
-                            NavigationLink{MillionScheduleAdminScreen(state:state)}label:{entry("موعد تحدي المليون","trophy.fill")}
-                            Divider().overlay(Ink.blue2)
-                            NavigationLink{QuestionsScreen(state:state)}label:{entry("بنك الأسئلة","doc.text.fill")}
-                            Divider().overlay(Ink.blue2)
-                            NavigationLink{PredictionsAdminScreen(state:state)}label:{entry("إدارة المرشحات","scope")}
-                            Divider().overlay(Ink.blue2)
-                            NavigationLink{CurriculumScreen(state:state)}label:{entry("المواد والفصول","books.vertical.fill")}
-                        }
-                    }
-                    GlassBox{
-                        VStack(alignment:.leading,spacing:12){
-                            Label("الأمان",systemImage:"lock.shield.fill").foregroundStyle(Ink.gold).font(.headline)
-                            Text("كل تغيير يتم داخل قاعدة بيانات الموقع بعد التحقق من حساب المدير وصلاحياته.").font(.footnote).foregroundStyle(Ink.faded)
-                            Primary(title:"تسجيل الخروج",symbol:"rectangle.portrait.and.arrow.right"){
-                                Task{await state.logout()}
+                    if filtered.isEmpty {AdminEmpty(title:"لا توجد أداة بهذا الاسم",detail:"جرّب البحث عن الاشتراكات أو الأسئلة أو المرشحات.")}
+                    if safe(search).isEmpty {
+                        AdminSection(title:"مظهر الإدارة",detail:"يُحفظ على جهازك")
+                        HStack(spacing:10) {
+                            ForEach(AdminPalette.allCases){palette in
+                                Button {
+                                    paletteID=palette.rawValue
+                                    UISelectionFeedbackGenerator().selectionChanged()
+                                }label:{
+                                    VStack(spacing:10) {
+                                        HStack(spacing:4){Circle().fill(palette.accent).frame(width:18,height:18);Circle().fill(palette.second).frame(width:18,height:18)}
+                                        Text(palette.name).font(.caption.bold())
+                                        Image(systemName:paletteID==palette.rawValue ? "checkmark.circle.fill":"circle").foregroundStyle(paletteID==palette.rawValue ? palette.accent:Ink.faded)
+                                    }.frame(maxWidth:.infinity).padding(.vertical,16)
+                                        .background(palette.surface,in:RoundedRectangle(cornerRadius:16))
+                                        .overlay(RoundedRectangle(cornerRadius:16).stroke(paletteID==palette.rawValue ? palette.accent:Ink.blue2,lineWidth:1))
+                                }.buttonStyle(AdminPressStyle()).accessibilityLabel("مظهر \(palette.name)")
+                                    .accessibilityAddTraits(paletteID==palette.rawValue ? .isSelected:[])
                             }
                         }
+                        Button(role:.destructive){logoutConfirm=true}label:{Label("تسجيل الخروج",systemImage:"rectangle.portrait.and.arrow.right").frame(maxWidth:.infinity,minHeight:48)}
+                            .buttonStyle(.bordered).padding(.top,8)
+                        Text("المرشد الوزاري • الإدارة 5.1").font(.caption2).foregroundStyle(Ink.faded).frame(maxWidth:.infinity)
                     }
-                }.padding(16)
-            }.adminBG()
+                }.padding(18).frame(maxWidth:700).frame(maxWidth:.infinity)
+            }.adminBG().toolbar(.hidden,for:.navigationBar)
+                .confirmationDialog("تسجيل الخروج من حساب الإدارة؟",isPresented:$logoutConfirm,titleVisibility:.visible){
+                    Button("تسجيل الخروج",role:.destructive){Task{await state.logout()}}
+                }
         }
     }
-    private func entry(_ title:String,_ icon:String)->some View{
-        HStack{Image(systemName:icon).frame(width:32).foregroundStyle(Ink.gold);Text(title).fontWeight(.medium);Spacer();Image(systemName:"chevron.left").foregroundStyle(Ink.faded)}.padding(.vertical,9)
+    private func entry(_ tool:AdminTool)->some View {
+        HStack(spacing:12) {
+            Image(systemName:tool.icon).foregroundStyle(Ink.gold).frame(width:40,height:40).background(Ink.gold.opacity(0.08),in:RoundedRectangle(cornerRadius:12))
+            VStack(alignment:.leading,spacing:5){Text(tool.title).font(.subheadline.bold());Text(tool.detail).font(.caption).foregroundStyle(Ink.faded)}
+            Spacer(minLength:4);Image(systemName:"chevron.left").font(.caption2.bold()).foregroundStyle(Ink.faded)
+        }.padding(.vertical,12).contentShape(Rectangle())
+    }
+    @ViewBuilder private func destination(_ id:Int)->some View {
+        Group {
+        switch id {
+        case 0: SubscriptionsScreen(state:state)
+        case 1: SubscriptionSourcesHome(state:state)
+        case 2: FreeMonthCampaignScreen(state:state)
+        case 3: MillionScheduleAdminScreen(state:state)
+        case 4: QuestionsScreen(state:state)
+        case 5: PredictionsAdminScreen(state:state)
+        default: CurriculumScreen(state:state)
+        }
+        }.toolbar(.visible,for:.navigationBar)
     }
 }
+private struct AdminTool:Identifiable {
+    let id:Int;let title:String;let detail:String;let icon:String;let group:String
+}
+
 
 // MARK: - Million contest schedule: single source of truth on production server.
 private struct MillionScheduleAdminScreen: View {
@@ -1078,7 +1209,7 @@ private struct SubscriptionsScreen:View{
                 }
             }.padding(16)
         }.adminBG().navigationTitle("اشتراكات الطلاب").navigationBarTitleDisplayMode(.inline)
-            .task{await state.refresh("subscriptions")}.refreshable{await state.refresh("subscriptions")}
+            .task{await state.refreshIfStale("subscriptions")}.refreshable{await state.refresh("subscriptions")}
             .confirmationDialog("اختر إجراء الاشتراك",isPresented:$showAction,titleVisibility:.visible){
                 Button("تفعيل شهر واحد"){mutate(1)}
                 Button("تفعيل 3 أشهر"){mutate(3)}
@@ -1455,7 +1586,7 @@ private struct QuestionsScreen:View{
     @State private var deleting:J?
     var body:some View {
         ScrollView{
-            VStack(alignment:.leading,spacing:14){
+            LazyVStack(alignment:.leading,spacing:14){
                 ScreenTitle(text:"بنك الأسئلة",detail:"إضافة أسئلة اختيارية وتعديل الإجابات وشرحها")
                 HStack{
                     TextField("بحث عن سؤال",text:$search)
@@ -1481,7 +1612,7 @@ private struct QuestionsScreen:View{
                 }
             }.padding(16)
         }.adminBG().navigationTitle("الأسئلة").navigationBarTitleDisplayMode(.inline)
-            .task{await state.refresh("questions")}.refreshable{await state.refresh("questions",search:search)}
+            .task{await state.refreshIfStale("questions")}.refreshable{await state.refresh("questions",search:search)}
             .sheet(item:$chosen){row in QuestionEditor(state:state,row:row)}
             .sheet(isPresented:$newQuestion){QuestionEditor(state:state,row:nil)}
             .confirmationDialog("هل تريد حذف هذا السؤال نهائياً؟",isPresented:Binding(get:{deleting != nil},set:{if !$0{deleting=nil}}),titleVisibility:.visible){
@@ -1576,7 +1707,7 @@ private struct CurriculumScreen:View {
                 }
             }.padding(16)
         }.adminBG().navigationTitle("المنهج").navigationBarTitleDisplayMode(.inline)
-            .task{await state.refresh("curriculum")}.refreshable{await state.refresh("curriculum")}
+            .task{await state.refreshIfStale("curriculum")}.refreshable{await state.refresh("curriculum")}
             .sheet(item:$selected){row in CurriculumEditor(state:state,row:row,kind:s(row,"_type"))}
             .sheet(item:Binding(get:{newKind.map{KindItem(name:$0)}},set:{if $0 == nil{newKind=nil}})){kind in
                 CurriculumEditor(state:state,row:nil,kind:kind.name)
@@ -1810,3 +1941,4 @@ private struct PredictionEditor: View {
         }
     }
 }
+
