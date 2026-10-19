@@ -1,0 +1,90 @@
+name: Android iPhone parity preview 4.8.39
+on:
+  push:
+    branches: [work/android-iphone-parity-20261019]
+    paths: ['android-parity/**', '.github/workflows/android-parity-preview.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-parity-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore the reviewed Android source
+        run: |
+          rm -rf android-native
+          mkdir android-native
+          unzip -q android-parity/source.zip -d android-native
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+      - name: Test rules, build real-service preview and loopback-only QA app
+        working-directory: android-native
+        run: gradle --no-daemon --max-workers=2 testDebugUnitTest assemblePreview assembleQa lintPreview
+      - name: Verify preview signature and archive integrity
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose android-native/app/build/outputs/apk/preview/app-preview.apk
+          unzip -t android-native/app/build/outputs/apk/preview/app-preview.apk >/dev/null
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Murshid-4.8.39-Build49823-Preview-and-QA
+          path: |
+            android-native/app/build/outputs/apk/preview/app-preview.apk
+            android-native/app/build/outputs/apk/qa/app-qa.apk
+            android-native/app/build/test-results/
+            android-native/app/build/reports/
+  native-ui:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 35]
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          rm -rf android-native
+          mkdir android-native
+          unzip -q android-parity/source.zip -d android-native
+      - uses: actions/download-artifact@v4
+        with:
+          name: Murshid-4.8.39-Build49823-Preview-and-QA
+          path: android-native/app/build
+      - name: Enable emulator virtualization
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Native UI pages and question flows
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: |
+            python3 android-native/scripts/screen_parity_qa.py --output "$RUNNER_TEMP/parity/pages"
+            python3 android-native/scripts/phone_verification_qa.py --output "$RUNNER_TEMP/parity/verification"
+            python3 android-native/scripts/specialized_exam_qa.py --output "$RUNNER_TEMP/parity/specialized"
+            python3 android-native/scripts/matching_qa.py --output "$RUNNER_TEMP/parity/matching"
+            python3 android-native/scripts/offline_exam_qa.py --output "$RUNNER_TEMP/parity/offline"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Murshid-iPhone-Parity-UI-API${{ matrix.api }}
+          path: ${{ runner.temp }}/parity/
