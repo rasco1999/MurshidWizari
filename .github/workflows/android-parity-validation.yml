@@ -1,4 +1,4 @@
-name: Final APK native validation
+name: Validate final direct-entry payment APK
 on:
   push:
     branches: [work/android-iphone-parity-20261019]
@@ -15,21 +15,21 @@ jobs:
       fail-fast: false
       matrix:
         api: [26, 35]
-        suite: [specialized]
     steps:
       - uses: actions/checkout@v4
       - run: |
           rm -rf android-native
           mkdir android-native
           unzip -q android-parity/source.zip -d android-native
-          cp qa-parity/*.py android-native/scripts/
+          unzip -oq android-parity/payment-direct-4.8.40.zip -d android-native
+          cp qa-parity/anonymous_emulator_qa.py qa-parity/payment_direct_qa.py android-native/scripts/
       - uses: actions/download-artifact@v4
         with:
-          name: Murshid-4.8.39-Build49823-Preview-and-QA
-          run-id: 39210262035
+          name: Murshid-4.8.40-Build49824-Preview-and-QA
+          run-id: 39216122053
           github-token: ${{ github.token }}
           path: android-native/app/build
-      - name: Enable emulator virtualization
+      - name: Enable virtualization
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
@@ -44,9 +44,9 @@ jobs:
           heap-size: 256M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: bash qa-parity/run_validation.sh "$RUNNER_TEMP/validation" '${{ matrix.suite }}'
+          script: python3 android-native/scripts/payment_direct_qa.py --output "$RUNNER_TEMP/payment-direct"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Murshid-Final-API${{ matrix.api }}-${{ matrix.suite }}
-          path: ${{ runner.temp }}/validation/
+          name: Murshid-4.8.40-Final-API-${{ matrix.api }}
+          path: ${{ runner.temp }}/payment-direct/

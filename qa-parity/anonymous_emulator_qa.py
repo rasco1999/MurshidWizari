@@ -58,6 +58,18 @@ def ui_tree() -> tuple[ET.Element, bytes]:
             print("RETRY native accessibility snapshot while emulator settles", flush=True)
             time.sleep(.8)
             continue
+        # Recover only named Android system processes on disposable emulators.
+        # An ANR belonging to Murshid remains a failure and is never dismissed.
+        launcher=find(root,"Pixel Launcher isn't responding")
+        system=find(root,"System UI isn't responding")
+        if launcher is not None or system is not None:
+            control=find(root,"Close app") if launcher is not None else find(root,"Wait")
+            if control is None or attempt>=2:
+                raise AssertionError("Emulator system process did not recover")
+            tap_node(control)
+            print("RECOVER Android emulator "+("Pixel Launcher" if launcher is not None else "System UI"),flush=True)
+            time.sleep(1.5)
+            continue
         # Some API-26 Google emulator images ship a crashing Gboard. ADB
         # injects key events directly, so disable only that failed emulator
         # keyboard and dismiss its system dialog. App crashes remain failures.
@@ -232,52 +244,12 @@ def enter_login(width: int, height: int) -> None:
 
 
 def launch_native() -> None:
-    for attempt in range(2):
-        adb("shell", "am", "force-stop", PACKAGE)
-        adb("shell", "am", "start", "-n", f"{PACKAGE}/{MAIN_ACTIVITY}")
-        try:
-            deadline = time.monotonic() + 30
-            while True:
-                root, _ = ui_tree()
-                if (find(root, "الخصوصية والفئة العمرية") is not None or
-                        find(root, "تعلّم بتركيز. تقدّم بثقة.") is not None): break
-                if time.monotonic() >= deadline: raise AssertionError("Initial native screen did not settle")
-                time.sleep(.6)
-            if find(root, "الخصوصية والفئة العمرية") is not None:
-                for picker_attempt in range(3):
-                    tap_node(wait_for("الفئة العمرية")[0])
-                    try:
-                        adult = wait_for("١٨ سنة فأكثر", seconds=7)[0]
-                        tap_node(adult)
-                        wait_for("١٨ سنة فأكثر", seconds=7)
-                        break
-                    except AssertionError:
-                        if picker_attempt == 2: raise
-                        print("RETRY age selector tap while native launch settles", flush=True)
-                # Exercise the same privacy controls as a new adult student.
-                import struct
-                png=adb('exec-out','screencap','-p')
-                width,height=struct.unpack('>II',png[16:24])
-                checkbox=reveal('قرأت سياسة الخصوصية، وإذا كنت دون ١٨ سنة فقد راجعتها مع ولي أمري.',width,height)
-                if checkbox.attrib.get('checked') != 'true': tap_node(checkbox)
-                wait_for('قرأت سياسة الخصوصية، وإذا كنت دون ١٨ سنة فقد راجعتها مع ولي أمري.', checked='true')
-                tap_node(reveal("متابعة", width, height))
-                tap_node(wait_for("بدء طلب جديد")[0])
-            wait_for("تعلّم بتركيز. تقدّم بثقة.")
-            return
-        except AssertionError:
-            # A freshly booted API-33 emulator may show a *system launcher* ANR
-            # over our Activity. Dismiss only this known OS dialog, once.
-            if attempt != 0:
-                raise
-            root, _ = ui_tree()
-            launcher = find(root, "Pixel Launcher isn't responding")
-            close = find(root, "Close app")
-            if launcher is None or close is None:
-                raise
-            tap_node(close)
-            print("RECOVER dismissed emulator Pixel Launcher ANR before app launch", flush=True)
-            time.sleep(1.5)
+    adb("shell","am","force-stop",PACKAGE)
+    adb("shell","am","start","-n",f"{PACKAGE}/{MAIN_ACTIVITY}")
+    wait_for("تعلّم بتركيز. تقدّم بثقة.")
+    root,_=ui_tree()
+    for label in ("الخصوصية والفئة العمرية","موافقة ولي الأمر","تأكيد الوصول","بدء طلب جديد"):
+        assert find(root,label) is None, "Blocking startup approval returned: "+label
 
 
 def test_size(directory: Path, name: str, width: int, height: int, scale: float) -> None:
