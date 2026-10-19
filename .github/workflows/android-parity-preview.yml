@@ -53,6 +53,7 @@ jobs:
       fail-fast: false
       matrix:
         api: [26, 35]
+        suite: [pages, learning]
     steps:
       - uses: actions/checkout@v4
       - run: |
@@ -78,13 +79,9 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
-            python3 android-native/scripts/screen_parity_qa.py --output "$RUNNER_TEMP/parity/pages"
-            python3 android-native/scripts/phone_verification_qa.py --output "$RUNNER_TEMP/parity/verification"
-            python3 android-native/scripts/specialized_exam_qa.py --output "$RUNNER_TEMP/parity/specialized"
-            python3 android-native/scripts/matching_qa.py --output "$RUNNER_TEMP/parity/matching"
-            python3 android-native/scripts/offline_exam_qa.py --output "$RUNNER_TEMP/parity/offline"
+            bash android-native/scripts/run_parity_suite.sh "$RUNNER_TEMP/parity" '${{ matrix.suite }}' '${{ matrix.api }}'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Murshid-iPhone-Parity-UI-API${{ matrix.api }}
+          name: Murshid-iPhone-Parity-UI-API${{ matrix.api }}-${{ matrix.suite }}
           path: ${{ runner.temp }}/parity/
