@@ -1,0 +1,49 @@
+name: Validate final Android offline APK
+on:
+  push:
+    branches: [work/android-iphone-parity-20261019]
+    paths: ['qa-parity/**', '.github/workflows/android-parity-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 35]
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          rm -rf android-native
+          mkdir android-native
+          unzip -q android-parity/source.zip -d android-native
+          cp qa-parity/offline_exam_qa.py android-native/scripts/offline_exam_qa.py
+      - uses: actions/download-artifact@v4
+        with:
+          name: Murshid-4.8.39-Build49823-Preview-and-QA
+          run-id: 39210262035
+          github-token: ${{ github.token }}
+          path: android-native/app/build
+      - name: Enable emulator virtualization
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: python3 android-native/scripts/offline_exam_qa.py --output "$RUNNER_TEMP/offline"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Murshid-Final-Offline-API${{ matrix.api }}
+          path: ${{ runner.temp }}/offline/
