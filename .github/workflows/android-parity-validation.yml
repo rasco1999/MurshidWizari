@@ -1,4 +1,4 @@
-name: Validate final Android offline APK
+name: Final APK native validation
 on:
   push:
     branches: [work/android-iphone-parity-20261019]
@@ -8,20 +8,21 @@ permissions:
   contents: read
   actions: read
 jobs:
-  offline:
+  native:
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 22
     strategy:
       fail-fast: false
       matrix:
         api: [26, 35]
+        suite: [pages, specialized, offline]
     steps:
       - uses: actions/checkout@v4
       - run: |
           rm -rf android-native
           mkdir android-native
           unzip -q android-parity/source.zip -d android-native
-          cp qa-parity/offline_exam_qa.py android-native/scripts/offline_exam_qa.py
+          cp qa-parity/*.py android-native/scripts/
       - uses: actions/download-artifact@v4
         with:
           name: Murshid-4.8.39-Build49823-Preview-and-QA
@@ -39,11 +40,13 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
+          ram-size: 2048M
+          heap-size: 256M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: python3 android-native/scripts/offline_exam_qa.py --output "$RUNNER_TEMP/offline"
+          script: bash qa-parity/run_validation.sh "$RUNNER_TEMP/validation" '${{ matrix.suite }}'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Murshid-Final-Offline-API${{ matrix.api }}
-          path: ${{ runner.temp }}/offline/
+          name: Murshid-Final-API${{ matrix.api }}-${{ matrix.suite }}
+          path: ${{ runner.temp }}/validation/

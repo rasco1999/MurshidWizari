@@ -26,14 +26,20 @@ def main():
         fixture.button('موضوع فحص افتراضي')
         ui.wait_for('ما حاصل جمع اثنين وثلاثة؟')
 
+    def set_online(enabled):
+        # Use the emulator's system airplane-mode control on both API levels.
+        # Android 8's standalone svc app_process is killed on some Google images.
+        ui.adb('shell', 'settings', 'put', 'global', 'airplane_mode_on', '0' if enabled else '1')
+        ui.adb('shell', 'am', 'broadcast', '-a', 'android.intent.action.AIRPLANE_MODE', '--ez', 'state', 'false' if enabled else 'true')
+        time.sleep(2)
     try:
+        ui.adb('root'); ui.adb('wait-for-device')
         qa_apk = Path(__file__).resolve().parents[1] / 'app/build/outputs/apk/qa/app-qa.apk'
         ui.adb('install', '-r', str(qa_apk))
         ui.adb('shell', 'wm', 'size', '393x852')
         ui.adb('shell', 'wm', 'density', '160')
         ui.adb('shell', 'settings', 'put', 'system', 'font_scale', '1.0')
-        ui.adb('shell', 'svc', 'wifi', 'enable')
-        ui.adb('shell', 'svc', 'data', 'enable')
+        set_online(True)
         ui.adb('shell', 'am', 'force-stop', ui.PACKAGE)
         ui.adb('shell', 'pm', 'clear', ui.PACKAGE)
         ui.adb('reverse', 'tcp:8765', 'tcp:8765')
@@ -43,7 +49,7 @@ def main():
         fixture.button('الاختبارات'); fixture.button('الرياضيات')
         fixture.button('موضوع فحص افتراضي'); ui.wait_for('ما حاصل جمع اثنين وثلاثة؟')
         assert not fixture.STATE['answers'], 'Download consumed an answer'
-        ui.adb('shell', 'svc', 'wifi', 'disable'); ui.adb('shell', 'svc', 'data', 'disable')
+        set_online(False)
         time.sleep(1)
         ui.adb('shell', 'am', 'force-stop', ui.PACKAGE)
         ui.adb('shell', 'am', 'start', '-n', f'{ui.PACKAGE}/{ui.MAIN_ACTIVITY}')
@@ -66,7 +72,7 @@ def main():
         # must remain a draft and never be graded against the new revision.
         fixture.QUESTIONS[1]['text'] = 'مسألة تغيرت بعد تنزيلها'
         fixture.STATE['lose_grade_reply_once'] = True
-        ui.adb('shell', 'svc', 'wifi', 'enable'); ui.adb('shell', 'svc', 'data', 'enable')
+        set_online(True)
         time.sleep(2)
         ui.adb('shell', 'am', 'force-stop', ui.PACKAGE)
         ui.adb('shell', 'am', 'start', '-n', f'{ui.PACKAGE}/{ui.MAIN_ACTIVITY}')
@@ -96,7 +102,7 @@ def main():
         fixture.screenshot(out, 'offline-exam-failure')
         raise
     finally:
-        ui.adb('shell', 'svc', 'wifi', 'enable'); ui.adb('shell', 'svc', 'data', 'enable')
+        set_online(True)
         server.shutdown(); server.server_close()
 
 
