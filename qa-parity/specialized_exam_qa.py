@@ -30,8 +30,8 @@ QUESTIONS = [
      'correct_answer': encoded({'stages': {'value': '12', 'operation': 'add'}}),
      'explanation': 'نجمع سبعة وخمسة فنحصل على اثني عشر.'},
     {'id': 203, 'type': 'text', 'text': 'صل كل كلمة إنجليزية بمعناها المناسب.',
-     'english_match': {'left': {'1': 'Sun', '2': 'Earth'}, 'right': {'A': 'Star', 'B': 'Planet'}},
-     'correct_answer': '1-A, 2-B', 'explanation': 'الشمس نجم والأرض كوكب.'},
+     'english_match': {'left': {'1': 'Sun', '2': 'Earth'}, 'right': {'a': 'Star', 'b': 'Planet'}},
+     'correct_answer': '1-a, 2-b', 'explanation': 'الشمس نجم والأرض كوكب.'},
     {'id': 204, 'type': 'match', 'text': 'حدد نوع المد في الكلمة واكتب السبب.',
      'match_items': [{'id': 71, 'mad_word': 'قال'}],
      'correct_answer': encoded({'items': {'71': {'type': 'مد طبيعي', 'reason': 'madd_letter'}}}),
@@ -150,18 +150,18 @@ def run(out):
     submit(202, {'stages': {'value': '12', 'operation': 'add'}})
 
     next_question('صِل كل عنصر من القائمة A بما يناسبه من القائمة B.')
-    tap_match('A1:');tap_match('BA:')
-    tap_match('A2:');tap_match('BA:')
+    tap_match('A1:');tap_match('Ba:')
+    tap_match('A2:');tap_match('Ba:')
     # Reusing B moves its connection; the incomplete board must not submit.
     ui.wait_for('تم توصيل 1 من 2')
     fixture.button('إرسال الإجابة')
     assert request_count() == 2, 'Incomplete/duplicate match destinations cannot be sent'
     top()
-    tap_match('A1:');tap_match('BA:')
-    tap_match('A2:');tap_match('BB:')
+    tap_match('A1:');tap_match('Ba:')
+    tap_match('A2:');tap_match('Bb:')
     ui.wait_for('تم توصيل 2 من 2')
     fixture.screenshot(out, 'english-matching-selected')
-    submit(203, '1-A, 2-B')
+    submit(203, '1-a, 2-b')
 
     next_question(QUESTIONS[3]['text'])
     pick('نوع المد: قال', 'مد طبيعي')
