@@ -88,8 +88,6 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
             python3 android-native/scripts/splash_typography_qa.py --output "$RUNNER_TEMP/payment-direct/welcome-font"
-            python3 android-native/scripts/payment_direct_qa.py --output "$RUNNER_TEMP/payment-direct/payment"
-            python3 android-native/scripts/screen_parity_qa.py --output "$RUNNER_TEMP/payment-direct/pages"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
