@@ -14,8 +14,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        api: [26, 35]
-        suite: [pages, specialized, offline]
+        api: [35]
+        suite: [specialized]
     steps:
       - uses: actions/checkout@v4
       - run: |

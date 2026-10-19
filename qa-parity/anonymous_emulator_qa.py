@@ -49,9 +49,15 @@ def adb(*args: str) -> bytes:
 
 def ui_tree() -> tuple[ET.Element, bytes]:
     for attempt in range(6):
-        adb("shell", "uiautomator", "dump", DEVICE_XML)
-        raw = adb("exec-out", "cat", DEVICE_XML)
-        root = ET.fromstring(raw)
+        try:
+            adb("shell", "uiautomator", "dump", DEVICE_XML)
+            raw = adb("exec-out", "cat", DEVICE_XML)
+            root = ET.fromstring(raw)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ET.ParseError):
+            if attempt == 5: raise
+            print("RETRY native accessibility snapshot while emulator settles", flush=True)
+            time.sleep(.8)
+            continue
         # Some API-26 Google emulator images ship a crashing Gboard. ADB
         # injects key events directly, so disable only that failed emulator
         # keyboard and dismiss its system dialog. App crashes remain failures.
