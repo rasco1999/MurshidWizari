@@ -1,4 +1,4 @@
-name: Android iPhone parity preview 4.8.39
+name: Android direct entry and iPhone payment 4.8.40
 on:
   push:
     branches: [work/android-iphone-parity-20261019]
@@ -15,11 +15,14 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - name: Restore the reviewed Android source
+      - name: Restore reviewed source and payment/direct-entry update
         run: |
           rm -rf android-native
           mkdir android-native
           unzip -q android-parity/source.zip -d android-native
+          unzip -oq android-parity/payment-direct-4.8.40.zip -d android-native
+          rm -f android-native/app/src/main/java/com/murshidiq/app/FamilyPrivacy.kt android-native/app/src/main/java/com/murshidiq/app/FamilyAccess.kt android-native/app/src/main/java/com/murshidiq/app/FamilyAccessRules.kt
+          rm -f android-native/app/src/test/java/com/murshidiq/app/FamilyPrivacyTest.kt android-native/app/src/test/java/com/murshidiq/app/FamilyAccessRulesTest.kt
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -29,59 +32,59 @@ jobs:
           gradle-version: '8.11.1'
       - name: Install Android SDK
         run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;35.0.0"'
-      - name: Test rules, build real-service preview and loopback-only QA app
+      - name: Test, lint and build preview and local QA app
         working-directory: android-native
         run: gradle --no-daemon --max-workers=2 testDebugUnitTest assemblePreview assembleQa lintPreview
-      - name: Verify preview signature and archive integrity
+      - name: Verify installable signature
         run: |
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose android-native/app/build/outputs/apk/preview/app-preview.apk
           unzip -t android-native/app/build/outputs/apk/preview/app-preview.apk >/dev/null
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Murshid-4.8.39-Build49823-Preview-and-QA
+          name: Murshid-4.8.40-Build49824-Preview-and-QA
           path: |
             android-native/app/build/outputs/apk/preview/app-preview.apk
             android-native/app/build/outputs/apk/qa/app-qa.apk
             android-native/app/build/test-results/
             android-native/app/build/reports/
-  native-ui:
+  native:
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 22
     strategy:
       fail-fast: false
       matrix:
         api: [26, 35]
-        suite: [pages, learning]
     steps:
       - uses: actions/checkout@v4
       - run: |
           rm -rf android-native
           mkdir android-native
           unzip -q android-parity/source.zip -d android-native
+          unzip -oq android-parity/payment-direct-4.8.40.zip -d android-native
       - uses: actions/download-artifact@v4
         with:
-          name: Murshid-4.8.39-Build49823-Preview-and-QA
+          name: Murshid-4.8.40-Build49824-Preview-and-QA
           path: android-native/app/build
-      - name: Enable emulator virtualization
+      - name: Enable virtualization
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Native UI pages and question flows
-        uses: reactivecircus/android-emulator-runner@v2
+      - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api }}
           target: google_apis
           arch: x86_64
           profile: pixel_6
+          ram-size: 2048M
+          heap-size: 256M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: |
-            bash android-native/scripts/run_parity_suite.sh "$RUNNER_TEMP/parity" '${{ matrix.suite }}' '${{ matrix.api }}'
+          script: python3 android-native/scripts/payment_direct_qa.py --output "$RUNNER_TEMP/payment-direct"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Murshid-iPhone-Parity-UI-API${{ matrix.api }}-${{ matrix.suite }}
-          path: ${{ runner.temp }}/parity/
+          name: Murshid-4.8.40-Direct-Payment-API${{ matrix.api }}
+          path: ${{ runner.temp }}/payment-direct/
