@@ -71,6 +71,20 @@ def pick(description, choice):
     time.sleep(.25)
 
 
+def tap_match(prefix):
+    for direction in ('up', 'down', 'up'):
+        for _ in range(8):
+            tree, _ = ui.ui_tree()
+            node = next((n for n in tree.iter('node') if n.attrib.get('content-desc', '').startswith(prefix)), None)
+            if node is not None:
+                l,t,r,b = map(int, ui.BOUNDS.fullmatch(node.attrib['bounds']).groups())
+                if r>l and b>t and t>40 and b<782:
+                    ui.tap_node(node);time.sleep(.2);return
+            a,b = (680,280) if direction == 'up' else (280,680)
+            ui.adb('shell','input','swipe','196',str(a),'196',str(b),'250')
+    raise AssertionError('Native matching control missing: '+prefix)
+
+
 def request_count():
     return sum(path == '/api/progress.php' for _, path in fixture.STATE['calls'])
 
@@ -135,13 +149,17 @@ def run(out):
     fixture.screenshot(out, 'calculation-draft-restored')
     submit(202, {'stages': {'value': '12', 'operation': 'add'}})
 
-    next_question(QUESTIONS[2]['text'])
-    pick('مطابقة العبارة 1', 'A : Star')
-    pick('مطابقة العبارة 2', 'A : Star')
+    next_question('صِل كل عنصر من القائمة A بما يناسبه من القائمة B.')
+    tap_match('A1:');tap_match('BA:')
+    tap_match('A2:');tap_match('BA:')
+    # Reusing B moves its connection; the incomplete board must not submit.
+    ui.wait_for('تم توصيل 1 من 2')
     fixture.button('إرسال الإجابة')
-    assert request_count() == 2, 'Duplicate match destinations cannot be sent'
+    assert request_count() == 2, 'Incomplete/duplicate match destinations cannot be sent'
     top()
-    pick('مطابقة العبارة 2', 'B : Planet')
+    tap_match('A1:');tap_match('BA:')
+    tap_match('A2:');tap_match('BB:')
+    ui.wait_for('تم توصيل 2 من 2')
     fixture.screenshot(out, 'english-matching-selected')
     submit(203, '1-A, 2-B')
 
