@@ -1,4 +1,4 @@
-name: Android direct entry and iPhone payment 4.8.40
+name: Android animated welcome and Tajawal 4.8.41
 on:
   push:
     branches: [work/android-iphone-parity-20261019]
@@ -21,6 +21,8 @@ jobs:
           mkdir android-native
           unzip -q android-parity/source.zip -d android-native
           unzip -oq android-parity/payment-direct-4.8.40.zip -d android-native
+          unzip -oq android-parity/welcome-tajawal-4.8.41.zip -d android-native
+          rm -f android-native/app/src/main/res/font/cairo.ttf
           rm -f android-native/app/src/main/java/com/murshidiq/app/FamilyPrivacy.kt android-native/app/src/main/java/com/murshidiq/app/FamilyAccess.kt android-native/app/src/main/java/com/murshidiq/app/FamilyAccessRules.kt
           rm -f android-native/app/src/test/java/com/murshidiq/app/FamilyPrivacyTest.kt android-native/app/src/test/java/com/murshidiq/app/FamilyAccessRulesTest.kt
       - uses: actions/setup-java@v4
@@ -42,7 +44,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Murshid-4.8.40-Build49824-Preview-and-QA
+          name: Murshid-4.8.41-Build49825-Preview-and-QA
           path: |
             android-native/app/build/outputs/apk/preview/app-preview.apk
             android-native/app/build/outputs/apk/qa/app-qa.apk
@@ -51,7 +53,7 @@ jobs:
   native:
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 22
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -63,9 +65,11 @@ jobs:
           mkdir android-native
           unzip -q android-parity/source.zip -d android-native
           unzip -oq android-parity/payment-direct-4.8.40.zip -d android-native
+          unzip -oq android-parity/welcome-tajawal-4.8.41.zip -d android-native
+          rm -f android-native/app/src/main/res/font/cairo.ttf
       - uses: actions/download-artifact@v4
         with:
-          name: Murshid-4.8.40-Build49824-Preview-and-QA
+          name: Murshid-4.8.41-Build49825-Preview-and-QA
           path: android-native/app/build
       - name: Enable virtualization
         run: |
@@ -80,11 +84,14 @@ jobs:
           profile: pixel_6
           ram-size: 2048M
           heap-size: 256M
-          disable-animations: true
+          disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: python3 android-native/scripts/payment_direct_qa.py --output "$RUNNER_TEMP/payment-direct"
+          script: |
+            python3 android-native/scripts/splash_typography_qa.py --output "$RUNNER_TEMP/payment-direct/welcome-font"
+            python3 android-native/scripts/payment_direct_qa.py --output "$RUNNER_TEMP/payment-direct/payment"
+            python3 android-native/scripts/screen_parity_qa.py --output "$RUNNER_TEMP/payment-direct/pages"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Murshid-4.8.40-Direct-Payment-API${{ matrix.api }}
+          name: Murshid-4.8.41-Direct-Payment-API${{ matrix.api }}
           path: ${{ runner.temp }}/payment-direct/
