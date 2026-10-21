@@ -94,7 +94,10 @@ final class V498QAURLProtocol: URLProtocol, @unchecked Sendable {
                         "subjects": [], "plans": [], "ads": ads, "subscribed": false,
                         "free_limit": 15, "free_used": 0, "free_remaining": 15, "stats": [:]]
         }
-        let injected = Self.verificationReply(request)
+        var injected = Self.verificationReply(request)
+        if ProcessInfo.processInfo.arguments.contains("V507_QA_GUEST"), path == "/mobile/bootstrap.php" {
+            injected = (["ok": false, "message": "Guest fixture"], 401)
+        }
         if let injected { response = injected.0 }
         let data = try! JSONSerialization.data(withJSONObject: response)
         let http = HTTPURLResponse(url: request.url!, statusCode: injected?.1 ?? 200, httpVersion: "HTTP/1.1",
@@ -114,6 +117,12 @@ struct V498QATools: ViewModifier {
     private struct VerificationSheet: Identifiable { let kind: String; var id: String { kind } }
     func body(content: Content) -> some View {
         content
+            .onAppear {
+                if ProcessInfo.processInfo.arguments.contains("V507_QA_GUEST") {
+                    UserDefaults.standard.removeObject(forKey: V507AgePolicy.blockKey)
+                    UserDefaults.standard.set(ProcessInfo.processInfo.arguments.contains("V507_QA_DARK") ? "dark" : "light", forKey: "appearance")
+                }
+            }
             .onAppear { if ProcessInfo.processInfo.arguments.contains("V53_QA_MATCHING") { showMatching = true } }
             .sheet(isPresented: $showMatching) { V53MatchingFixtureView() }
             .safeAreaInset(edge: .top) {

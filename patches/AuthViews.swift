@@ -627,12 +627,7 @@ struct GuestLandingView: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
 
-            HStack(spacing: 6) {
-                Link("الخصوصية", destination: URL(string: "https://mur-iq.com/privacy.php")!)
-                Text("·").foregroundStyle(.secondary)
-                Link("شروط الاستخدام", destination: URL(string: "https://mur-iq.com/terms.php")!)
-            }
-            .font(.caption)
+            V507LegalFooter()
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
@@ -684,6 +679,9 @@ struct LoginView: View {
     @State private var password = ""
     @State private var remember = true
     @State private var revealPassword = false
+    @State private var ageBand = 0
+    @State private var termsAccepted = false
+    @State private var guardianAccepted = false
     @State private var loading = false
     @State private var error = ""
 
@@ -718,6 +716,8 @@ struct LoginView: View {
 
                         Toggle("تذكرني على هذا الجهاز", isOn: $remember)
                             .tint(.murshidBlue)
+
+                        V507AgeConsentCard(ageBand: $ageBand, termsAccepted: $termsAccepted, guardianAccepted: $guardianAccepted)
 
                         if !error.isEmpty {
                             AuthMessage(text: error, kind: .error)
@@ -766,7 +766,10 @@ struct LoginView: View {
                 let response = try await APIClient.shared.login(
                     identifier: normalizedIdentifier(identifier),
                     password: password,
-                    remember: remember
+                    remember: remember,
+                    ageBand: ageBand,
+                    termsAccepted: termsAccepted,
+                    guardianAccepted: guardianAccepted
                 )
 
                 if jBool(response["email_verification_required"]) {
@@ -808,6 +811,9 @@ struct RegisterView: View {
     @State private var confirm = ""
     @State private var revealPassword = false
     @State private var revealConfirm = false
+    @State private var ageBand = 0
+    @State private var termsAccepted = false
+    @State private var guardianAccepted = false
     @State private var loading = false
     @State private var gradesLoading = true
 
@@ -942,6 +948,8 @@ struct RegisterView: View {
 
                         if !confirmError.isEmpty { FieldError(confirmError) }
 
+                        V507AgeConsentCard(ageBand: $ageBand, termsAccepted: $termsAccepted, guardianAccepted: $guardianAccepted)
+
                         if !generalError.isEmpty {
                             AuthMessage(text: generalError, kind: .error)
                         }
@@ -1036,6 +1044,10 @@ struct RegisterView: View {
         Task {
             do {
                 let data = try await APIClient.shared.register([
+                    "age_band": ageBand,
+                    "policy_version": V507AgeRules.policyVersion,
+                    "terms_accepted": termsAccepted,
+                    "guardian_acknowledged": guardianAccepted,
                     "full_name": name,
                     "name": name,
                     "fullName": name,
@@ -4702,6 +4714,9 @@ struct RegisterV3View: View {
     @State private var confirm = ""
     @State private var revealPassword = false
     @State private var revealConfirm = false
+    @State private var ageBand = 0
+    @State private var termsAccepted = false
+    @State private var guardianAccepted = false
     @State private var loading = false
     @State private var gradesLoading = true
     @State private var fieldError = ""
@@ -4737,7 +4752,9 @@ struct RegisterV3View: View {
                             }
 
                             switch step {
-                            case 1: studentStep
+                            case 1:
+                                studentStep
+                                V507AgeConsentCard(ageBand: $ageBand, termsAccepted: $termsAccepted, guardianAccepted: $guardianAccepted)
                             case 2: contactStep
                             default: passwordStep
                             }
@@ -4991,6 +5008,11 @@ struct RegisterV3View: View {
         fieldError = ""
         generalError = ""
         if step == 1 {
+            if let message = V507AgeRules.validationError(band: ageBand, terms: termsAccepted, guardian: guardianAccepted, blocked: V507AgePolicy.blocked) {
+                fieldError = message
+                haptic(.error)
+                return false
+            }
             let name = v3NormalizePersonName(fullName)
             if name.split(separator: " ").count < 3 {
                 fieldError = "اكتب الاسم الثلاثي على الأقل، مثل: يونس محمد عباس."
@@ -5038,6 +5060,10 @@ struct RegisterV3View: View {
         Task {
             do {
                 let data = try await APIClient.shared.register([
+                    "age_band": ageBand,
+                    "policy_version": V507AgeRules.policyVersion,
+                    "terms_accepted": termsAccepted,
+                    "guardian_acknowledged": guardianAccepted,
                     "full_name": name,
                     "name": name,
                     "fullName": name,
@@ -5355,3 +5381,4 @@ enum V515MathBidi {
         return result
     }
 }
+

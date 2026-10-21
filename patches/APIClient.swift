@@ -457,8 +457,9 @@ final class APIClient {
 
     func bootstrap() async throws -> JSON { try await request("mobile/bootstrap.php") }
 
-    func login(identifier: String, password: String, remember: Bool) async throws -> JSON {
-        let result = try await request("api/login.php", method: "POST", body: ["identifier": identifier, "password": password, "remember_me": remember])
+    func login(identifier: String, password: String, remember: Bool, ageBand: Int, termsAccepted: Bool, guardianAccepted: Bool) async throws -> JSON {
+        try V507AgePolicy.validate(band: ageBand, terms: termsAccepted, guardian: guardianAccepted)
+        let result = try await request("api/login.php", method: "POST", body: ["identifier": identifier, "password": password, "remember_me": remember, "age_band": ageBand, "policy_version": V507AgeRules.policyVersion, "terms_accepted": termsAccepted, "guardian_acknowledged": guardianAccepted])
         if remember { KeychainVault.shared.set(Data(identifier.utf8), for: "last_identifier") }
         return result
     }
@@ -468,7 +469,8 @@ final class APIClient {
     }
 
     func register(_ body: JSON) async throws -> JSON {
-        try await request("api/register.php", method: "POST", body: body)
+        try V507AgePolicy.validate(band: jInt(body["age_band"]), terms: jBool(body["terms_accepted"]), guardian: jBool(body["guardian_acknowledged"]))
+        return try await request("api/register.php", method: "POST", body: body)
     }
 
     func heartbeat() async throws {
@@ -533,3 +535,4 @@ final class APIClient {
         return (text, type.contains("error") || type.contains("bad"))
     }
 }
+

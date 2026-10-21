@@ -1,6 +1,63 @@
 import XCTest
 
 final class V498FinalUITests: XCTestCase {
+    @MainActor
+    func testLegalFooterAndAgeDetailsInLightAppearance() {
+        checkLegalFooter(dark: false)
+    }
+
+    @MainActor
+    func testLegalFooterAndAgeDetailsInDarkAppearance() {
+        checkLegalFooter(dark: true)
+    }
+
+    @MainActor
+    private func checkLegalFooter(dark: Bool) {
+        let app = XCUIApplication()
+        app.launchArguments = ["V507_QA_GUEST"] + (dark ? ["V507_QA_DARK"] : [])
+        app.launch()
+        XCTAssertTrue(app.buttons["تسجيل الدخول"].firstMatch.waitForExistence(timeout: 25), "Public entry must open directly")
+        let age = app.buttons["legal-age"].firstMatch
+        for _ in 0..<14 {
+            if age.exists && age.isHittable { break }
+            app.swipeUp(velocity: .fast)
+        }
+        XCTAssertTrue(age.isHittable)
+        for id in ["legal-terms", "legal-privacy", "legal-guardian"] {
+            XCTAssertTrue(app.descendants(matching: .any)[id].firstMatch.exists)
+        }
+        screenshot(dark ? "legal-footer-dark" : "legal-footer-light")
+        age.tap()
+        XCTAssertTrue(app.staticTexts["دراسة آمنة وواضحة للجميع"].waitForExistence(timeout: 5))
+        screenshot(dark ? "legal-age-dark" : "legal-age-light")
+        app.buttons["legal-close"].tap()
+        XCTAssertTrue(age.waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testLoginHasNeutralAgeChoiceAndRejectsUnderTen() {
+        let app = XCUIApplication()
+        app.launchArguments = ["V507_QA_GUEST"]
+        app.launch()
+        let login = app.buttons["تسجيل الدخول"].firstMatch
+        XCTAssertTrue(login.waitForExistence(timeout: 25))
+        login.tap()
+        let age = app.buttons["legal-age-picker"].firstMatch
+        for _ in 0..<6 {
+            if age.exists && age.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(age.isHittable)
+        XCTAssertTrue(age.label.contains("اختر الفئة العمرية"), "Age must not be preselected")
+        age.tap()
+        app.buttons["أقل من ١٠ سنوات"].tap()
+        XCTAssertTrue(app.staticTexts["الخدمة مخصصة لعمر ١٠ سنوات فأكثر."].waitForExistence(timeout: 5))
+        screenshot("legal-under10-block")
+        age.tap()
+        app.buttons["١٨ سنة فأكثر"].tap()
+        XCTAssertTrue(app.staticTexts["الخدمة مخصصة لعمر ١٠ سنوات فأكثر."].exists, "Changing to an adult age must not clear the cooldown")
+    }
+
     @MainActor func testEmailConfirmationRejectsWrongCodeAndAcceptsCorrectCode() { checkVerification("EMAIL") }
     @MainActor func testPhoneConfirmationRejectsWrongCodeAndAcceptsCorrectCode() { checkVerification("PHONE") }
 

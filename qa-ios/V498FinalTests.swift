@@ -2,6 +2,52 @@ import XCTest
 @testable import MurshidWizari
 
 final class V498FinalTests: XCTestCase {
+    func testAgePolicyRejectsUnselectedAndUnderTenEvenWithConsent() {
+        for band in [-1, 0, 1, 6] {
+            XCTAssertNotNil(V507AgeRules.validationError(band: band, terms: true, guardian: true))
+        }
+    }
+
+    func testMinorBandsRequireBothTermsAndGuardianAcknowledgement() {
+        for band in 2...4 {
+            XCTAssertNotNil(V507AgeRules.validationError(band: band, terms: true, guardian: false))
+            XCTAssertNotNil(V507AgeRules.validationError(band: band, terms: false, guardian: true))
+            XCTAssertNil(V507AgeRules.validationError(band: band, terms: true, guardian: true))
+        }
+        XCTAssertNil(V507AgeRules.validationError(band: 5, terms: true, guardian: false))
+        XCTAssertNotNil(V507AgeRules.validationError(band: 5, terms: false, guardian: false))
+    }
+
+    @MainActor
+    func testUnderageCooldownSurvivesChoosingAnAdultBand() {
+        let defaults = UserDefaults.standard
+        let previous = defaults.object(forKey: V507AgePolicy.blockKey)
+        defer {
+            if let previous { defaults.set(previous, forKey: V507AgePolicy.blockKey) }
+            else { defaults.removeObject(forKey: V507AgePolicy.blockKey) }
+        }
+        V507AgePolicy.recordUnderage()
+        XCTAssertTrue(V507AgePolicy.blocked)
+        XCTAssertThrowsError(try V507AgePolicy.validate(band: 5, terms: true, guardian: true))
+    }
+
+    @MainActor
+    func testAccountRequestsCannotSendWithoutAgeAndTerms() async {
+        // The fixture transport returns success for account paths: these failures
+        // must therefore happen in the real API client before a request is sent.
+        do {
+            _ = try await APIClient.shared.login(identifier: "age-fixture@example.invalid", password: "fixture", remember: false,
+                ageBand: 0, termsAccepted: false, guardianAccepted: false)
+            XCTFail("Missing age must prevent a login request")
+        } catch let error as APIError { XCTAssertEqual(error.status, 422) }
+        catch { XCTFail("Unexpected error: \(error)") }
+        do {
+            _ = try await APIClient.shared.register(["full_name": "طالب اختبار محلي"])
+            XCTFail("Missing age and terms must prevent registration")
+        } catch let error as APIError { XCTAssertEqual(error.status, 422) }
+        catch { XCTFail("Unexpected error: \(error)") }
+    }
+
     @MainActor
     private func assertVerificationFailure(kind: String, mode: String, code: String = "123456", status: Int, posts: Int) async {
         V498QAURLProtocol.configureVerification(kind: kind, mode: mode)
@@ -282,3 +328,4 @@ final class V498FinalTests: XCTestCase {
     }
 
 }
+

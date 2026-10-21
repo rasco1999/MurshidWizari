@@ -62,6 +62,7 @@ struct V31HomeView: View {
                 quickTools
                 if !error.isEmpty { V3InlineMessage(text: error, icon: "wifi.exclamationmark", tone: .warning) }
                 socialLinksFooter
+                V507LegalFooter()
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 30)
@@ -1139,6 +1140,7 @@ struct V31AccountView: View {
                 appearanceSection
                 securitySection
                 logoutSection
+                V507LegalFooter()
                 if !avatarMessage.isEmpty { V3InlineMessage(text: avatarMessage, icon: "person.crop.circle.badge.checkmark", tone: .success) }
                 if !faceIDMessage.isEmpty { V3InlineMessage(text: faceIDMessage, icon: "faceid", tone: .info) }
                 if !error.isEmpty { V3InlineMessage(text: error, icon: "exclamationmark.triangle.fill", tone: .warning) }
@@ -1698,4 +1700,5 @@ enum V31PushRegistrar {
         MurshidSchoolAdPush.shared.activate()
     }
 }
+
 
